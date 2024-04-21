@@ -1,0 +1,16 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "anki_lang_cards"
+version = "0.0.1"
+description = "Automatically generate Anki cards given a word list"
+authors = [{name = "Paul Ganssle", email = "paul@ganssle.io"}]
+license = {file = "LICENSE"}
+classifiers = ["License :: OSI Approved :: Apache Software License"]
+dependencies = [
+    "aiohttp",
+    "attrs",
+]
+
