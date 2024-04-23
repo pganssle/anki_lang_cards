@@ -2,8 +2,10 @@ import argparse
 import asyncio
 import csv
 import json
+import operator
 import pathlib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from typing import Any
 
 from . import _types as types
 from . import prompts, query
@@ -76,6 +78,21 @@ def word_to_csv_line(w: types.Word) -> Sequence[str]:
     )
 
 
+def _unique(s: Sequence[str], key: Callable[[str], Any] | None = None) -> Sequence[str]:
+    seen: set = set()
+    out: list[str] = []
+    if key is None:
+
+        def key(x: str) -> str:
+            return x
+
+    for entry in s:
+        if (entry_key := key(entry)) not in seen:
+            seen.add(entry_key)
+            out.append(entry)
+    return out
+
+
 async def main():
     parser = argparse.ArgumentParser(description="My Application")
     parser.add_argument(
@@ -97,14 +114,16 @@ async def main():
     )
     args = parser.parse_args()
 
+    word_getter = operator.attrgetter("word")
+
     words = load_words(args.inputs)
     if args.output.exists():
         existing_words = load_words(args.output)
     else:
         existing_words = []
-    done = {word.word for word in existing_words}
 
-    words = [word for word in words if word.word not in done]
+    done = set(map(word_getter, existing_words))
+    words = _unique([word for word in words if word.word not in done], key=word_getter)
 
     start_rank_at = args.start_rank_at or 0
     for word in existing_words:
