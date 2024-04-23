@@ -3,6 +3,7 @@ from collections.abc import Sequence
 
 @attrs.define
 class Word:
+    rank: int | None
     word: str
     meaning: str
     part_of_speech: str

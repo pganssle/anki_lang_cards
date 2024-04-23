@@ -23,8 +23,14 @@ def load_words(csv_path: pathlib.Path) -> Sequence[types.Word]:
             else:
                 example_sentences = ()
 
+            if "rank" not in line or not line["rank"]:
+                rank: int | None = None
+            else:
+                rank = int(line["rank"])
+
             out.append(
                 types.Word(
+                    rank=rank,
                     word=line["word"],
                     meaning=line["meaning"],
                     part_of_speech=line["part_of_speech"],
@@ -58,6 +64,7 @@ def word_to_csv_line(w: types.Word) -> Sequence[str]:
         example_sentences = ""
 
     return (
+        w.rank,
         w.word,
         w.meaning,
         w.part_of_speech,
@@ -83,6 +90,11 @@ async def main():
         default="output/output.csv",
         help="Path to an output CSV file",
     )
+    parser.add_argument(
+        "--start-rank-at",
+        type=int,
+        default=None,
+    )
     args = parser.parse_args()
 
     words = load_words(args.inputs)
@@ -93,6 +105,13 @@ async def main():
     done = {word.word for word in existing_words}
 
     words = [word for word in words if word.word not in done]
+
+    start_rank_at = args.start_rank_at or 0
+    for word in existing_words:
+        if word.rank and word.rank >= start_rank_at:
+            start_rank_at = word.rank + 1
+
+    rank = start_rank_at or 5001
 
     # TODO: Check size here as well
     needs_header = not args.output.exists()
@@ -106,8 +125,10 @@ async def main():
 
         async for word in query_results:
             print(f"Adding {word.word}")
+            word.rank = rank
             writer.writerow(word_to_csv_line(word))
             f.flush()
+            rank += 1
 
 
 if __name__ == "__main__":
