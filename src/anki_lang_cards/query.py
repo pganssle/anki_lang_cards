@@ -8,11 +8,31 @@ import aiohttp
 from . import _types as types
 
 # Define the API endpoint and headers
-LOCAL_API_ENDPOINT: Final[str] = "https://tgw-api.a23.x78.be/v1/completions"
+LOCAL_API_ENDPOINT: Final[str] = "https://tgw-api.a23.x78.be/v1/"
+
 HEADERS = {"Content-Type": "application/json"}
 
 # Semaphore to limit concurrent requests
 API_SEMAPHORE: Final[asyncio.Semaphore] = asyncio.Semaphore(1)
+
+
+async def change_model(
+    session: aiohttp.ClientSession,
+    model_name: str,
+) -> None:
+    async with API_SEMAPHORE:
+        async with session.get(LOCAL_API_ENDPOINT + "internal/model/info") as resp:
+            resp.raise_for_status()
+            model_info = await resp.json()
+            if model_info["model_name"] == model_name:
+                return
+
+        async with session.post(
+            LOCAL_API_ENDPOINT + "internal/model/load", json={"model_name": model_name}
+        ) as resp:
+            resp.raise_for_status()
+            json_resp = await resp.json()
+            print(json_resp)
 
 
 async def query_model(
@@ -29,7 +49,7 @@ async def query_model(
     data = {"prompt": prompt, **params}
     async with API_SEMAPHORE:
         async with session.post(
-            LOCAL_API_ENDPOINT, headers=HEADERS, json=data
+            LOCAL_API_ENDPOINT + "completions", headers=HEADERS, json=data
         ) as response:
             response.raise_for_status()
             return await response.json()
@@ -64,6 +84,7 @@ async def make_queries(
     words: Sequence[types.Word], prompt: str
 ) -> AsyncIterable[types.Word]:
     async with aiohttp.ClientSession() as session:
+        await change_model(session, model_name="mixtral-8x7b-instruct")
         query_futures = {}
         for word in words:
             c_prompt = prompt % {
@@ -78,7 +99,9 @@ async def make_queries(
 
         pending = set(query_futures)
         while pending:
-            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            done, pending = await asyncio.wait(
+                pending, return_when=asyncio.FIRST_COMPLETED
+            )
 
             for future in done:
                 word = query_futures[future]
