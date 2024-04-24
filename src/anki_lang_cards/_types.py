@@ -1,5 +1,8 @@
 import attrs
 from collections.abc import Sequence
+from typing import NewType
+
+Url = NewType("Url", str)
 
 @attrs.define
 class Word:

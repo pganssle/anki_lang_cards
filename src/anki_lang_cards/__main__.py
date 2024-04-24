@@ -134,20 +134,29 @@ async def main():
 
     # TODO: Check size here as well
     needs_header = not args.output.exists()
+    prompt_handler = query.SentencePromptHandler(prompts.SENTENCE_PROMPT)
 
-    with open(args.output, "at") as f:
-        query_results = query.make_queries(words, prompts.SENTENCE_PROMPT)
-        writer = csv.writer(f)
+    if not words:
+        print("No new words found.")
+        return
 
-        if needs_header:
-            writer.writerow(make_csv_header())
+    async with query.TGWModelAPI(api_base_url=types.Url("https://tgw-api.a23.x78.be/v1/")) as api:
+        query_results = api.make_queries(
+            words, prompt=prompt_handler, model_name="mixtral-8x7b-instruct"
+        )
 
-        async for word in query_results:
-            print(f"Adding {word.word}")
-            word.rank = rank
-            writer.writerow(word_to_csv_line(word))
-            f.flush()
-            rank += 1
+        with open(args.output, "at") as f:
+            writer = csv.writer(f)
+
+            if needs_header:
+                writer.writerow(make_csv_header())
+
+            async for word in query_results:
+                print(f"Adding {word.word}")
+                word.rank = rank
+                writer.writerow(word_to_csv_line(word))
+                f.flush()
+                rank += 1
 
 
 if __name__ == "__main__":
