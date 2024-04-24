@@ -93,8 +93,8 @@ OUTPUT:
     "meaning": "apartment",
     "examples": [
         {
-            "spanish": "Vivo en un piso en el centro de la ciudad.",
-            "english": "I live in an apartment in the city center."
+            "spanish": "\\"Vivo en un piso en el centro de la ciudad.\\", dijo María",
+            "english": "\\"I live in an apartment in the city center.\\", said Maria."
         },
         {
             "spanish": "El piso de mi hermano tiene tres dormitorios.",
