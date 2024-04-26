@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import csv
+import itertools
 import json
 import operator
 import pathlib
@@ -40,6 +41,7 @@ def load_words(csv_path: pathlib.Path) -> Sequence[types.Word]:
                     spanish_sentence=line["spanish_sentence"] or None,
                     english_sentence=line["english_sentence"] or None,
                     example_sentences=example_sentences,
+                    model_used=line["model_used"] or None,
                 )
             )
 
@@ -48,6 +50,7 @@ def load_words(csv_path: pathlib.Path) -> Sequence[types.Word]:
 
 def make_csv_header() -> Sequence[str]:
     return (
+        "rank",
         "word",
         "meaning",
         "part_of_speech",
@@ -112,6 +115,18 @@ async def main():
         type=int,
         default=None,
     )
+    parser.add_argument(
+        "--exported-deck",
+        type=pathlib.Path,
+        default=None,
+        help="Path to a text export of the deck.",
+    )
+    parser.add_argument(
+        "--diff-output",
+        type=pathlib.Path,
+        default="output/diff_from_existing.csv",
+        help="Path to output a CSV only including new and updated words."
+    )
     args = parser.parse_args()
 
     word_getter = operator.attrgetter("word")
@@ -122,13 +137,45 @@ async def main():
     else:
         existing_words = []
 
-    done = set(map(word_getter, existing_words))
-    words = _unique([word for word in words if word.word not in done], key=word_getter)
+    if args.exported_deck is not None:
+        from . import anki_import
+
+        current_deck = anki_import.load_anki_words(args.exported_deck)
+    else:
+        current_deck = []
 
     start_rank_at = args.start_rank_at or 0
-    for word in existing_words:
+    done: set[str] = set()
+    all_words = {}
+    diff_words = []
+
+    for word in itertools.chain(current_deck, existing_words):
         if word.rank and word.rank >= start_rank_at:
             start_rank_at = word.rank + 1
+        if word.example_sentences:
+            done.add(word.word)
+
+        if word.word in all_words:
+            existing = all_words[word.word]
+            if (word.rank and word.rank < 5000) and (
+                existing.rank and existing.rank < 5000
+            ):
+                continue
+
+            sentences = tuple(existing.example_sentences)
+            existing.update(word)
+            if not sentences:
+                diff_words.append(existing)
+        else:
+            all_words[word.word] = word
+
+    words = _unique([word for word in words if word.word not in done], key=word_getter)
+    for i in range(len(words)):
+        if words[i].word in all_words:
+            print(f"Word exists in deck: {words[i].word}")
+            existing = all_words[words[i].word]
+            existing.update(words[i])
+            words[i] = existing
 
     rank = start_rank_at or 5001
 
@@ -136,27 +183,48 @@ async def main():
     needs_header = not args.output.exists()
     prompt_handler = query.SentencePromptHandler(prompts.SENTENCE_PROMPT)
 
-    if not words:
-        print("No new words found.")
-        return
-
-    async with query.TGWModelAPI(api_base_url=types.Url("https://tgw-api.a23.x78.be/v1/")) as api:
-        query_results = api.make_queries(
-            words, prompt=prompt_handler, model_name="mixtral-8x7b-instruct"
+    diff_words.extend(
+        map(
+            all_words.get,
+            set(map(word_getter, existing_words)) - set(map(word_getter, current_deck)),
         )
+    )
+    diff_words = _unique(diff_words, key=id)
 
-        with open(args.output, "at") as f:
-            writer = csv.writer(f)
+    if words:
+        async with query.TGWModelAPI(
+            api_base_url=types.Url("https://tgw-api.a23.x78.be/v1/")
+        ) as api:
+            query_results = api.make_queries(
+                words, prompt=prompt_handler, model_name="mixtral-8x7b-instruct"
+            )
 
-            if needs_header:
-                writer.writerow(make_csv_header())
+            with open(args.output, "at") as f:
+                writer = csv.writer(f)
 
-            async for word in query_results:
-                print(f"Adding {word.word}")
-                word.rank = rank
-                writer.writerow(word_to_csv_line(word))
-                f.flush()
-                rank += 1
+                if needs_header:
+                    writer.writerow(make_csv_header())
+
+                async for word in query_results:
+                    print(f"Adding {word.word}")
+                    if not word.rank:
+                        word.rank = rank
+                    if word.word in all_words:
+                        existing = all_words[word.word]
+                        if existing is not word:
+                            existing.update(word)
+                        word = existing
+
+                    diff_words.append(word)
+                    writer.writerow(word_to_csv_line(word))
+                    f.flush()
+                    rank += 1
+
+    else:
+        print("No new words found.")
+
+    print(f"Found {len(diff_words)} new or updated words.")
+    print("\n".join(map(word_getter, diff_words)))
 
 
 if __name__ == "__main__":

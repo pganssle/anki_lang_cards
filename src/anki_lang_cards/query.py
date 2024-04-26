@@ -1,5 +1,6 @@
 import asyncio
 import json
+import random
 import urllib.parse
 from collections.abc import AsyncIterable, Mapping, Sequence
 from typing import Any, ClassVar, Final, Protocol, Self
@@ -175,7 +176,9 @@ def result_to_word(
     word: types.Word, parsed: Mapping[str, str | list[str]]
 ) -> types.Word:
     if not word.spanish_sentence:
-        example_sentences = parsed["examples"].pop()
+        example_sentence = parsed["examples"].pop(
+            random.randint(0, len(parsed["examples"]) - 1)
+        )
         word.spanish_sentence = example_sentence["spanish"]
         word.english_sentence = example_sentence["english"]
     word.example_sentences = parsed["examples"]
