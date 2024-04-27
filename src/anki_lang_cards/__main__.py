@@ -16,7 +16,6 @@ def load_words(csv_path: pathlib.Path) -> Sequence[types.Word]:
     out = []
     with open(csv_path, "rt") as f:
         reader = csv.DictReader(f)
-        header = next(reader, None)
         for line in reader:
             if not (line["word"] and line["meaning"]):
                 continue
@@ -225,6 +224,11 @@ async def main():
 
     print(f"Found {len(diff_words)} new or updated words.")
     print("\n".join(map(word_getter, diff_words)))
+    if diff_words:
+        with open(args.diff_output, "wt") as f:
+            writer = csv.writer(f)
+            for word in diff_words:
+                writer.writerow(word_to_csv_line(word))
 
 
 if __name__ == "__main__":
