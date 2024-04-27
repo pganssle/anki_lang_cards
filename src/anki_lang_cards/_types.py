@@ -18,8 +18,29 @@ def _non_nulls(v1: _T | None, v2: _T | None) -> Sequence[_T]:
     return (v1, v2)
 
 
+def _normalize_str(s: str) -> str:
+    return s.strip().casefold()
+
+
 def _compare_normalized(s1: str, s2: str) -> bool:
-    return s1.strip().casefold() == s2.strip().casefold()
+    return _normalize_str(s1) == _normalize_str(s2)
+
+
+def _compare_normalized_sequences(seq1: Sequence[str], seq2: Sequence[str]) -> bool:
+    if isinstance(seq1, str) or isinstance(seq2, str):
+        raise TypeError("Cannot compare strings")
+
+    for s1, s2 in zip(seq1, seq2, strict=True):
+        if not _compare_normalized(s1, s2):
+            return False
+    return True
+
+
+def _base_pos(s: str) -> str:
+    if s[0] in "nv":
+        return s[0]
+
+    return s
 
 
 @attrs.define
@@ -34,13 +55,39 @@ class Word:
     example_sentences: Sequence[dict[str, str]]
     model_used: str | None = None
 
+    def __eq__(self, other):
+        return _compare_normalized_sequences(
+            (self.word, _base_pos(self.part_of_speech), self.meaning),
+            (other.word, _base_pos(other.part_of_speech), other.meaning),
+        )
+
+    def __hash__(self):
+        return hash((self.word, _base_pos(self.part_of_speech)))
+
     def update(self, other: Self) -> None:
         """Update the current word with the contents of `other`."""
         if self is other:
             return
-        for attr in ("word", "meaning", "part_of_speech"):
-            if not _compare_normalized(getattr(self, attr), getattr(other, attr)):
-                raise ValueError(f"{self!r} is not the same word as {other!r}")
+        if self != other:
+            raise ValueError(f"{self!r} is not the same word as {other!r}")
+
+        if self.part_of_speech != other.part_of_speech:
+            if _base_pos(self.part_of_speech) == "v":
+                if self.part_of_speech == "v":
+                    self.part_of_speech = other.part_of_speech
+                    should_raise = False
+                elif other.part_of_speech == "v":
+                    should_raise = False
+                else:
+                    should_raise = True
+            else:
+                should_raise = True
+
+            if should_raise:
+                raise ValueError(
+                    f"Part of speech does not match: {self.part_of_speech} != "
+                    f"{other.part_of_speech} for word {self.word}"
+                )
 
         ranks = _non_nulls(self.rank, other.rank)
         if ranks:
