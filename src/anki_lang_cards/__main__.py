@@ -51,13 +51,18 @@ def make_csv_header() -> Sequence[str]:
     return (
         "rank",
         "word",
-        "meaning",
         "part_of_speech",
-        "article",
+        "meaning",
         "spanish_sentence",
         "english_sentence",
+        "frequency",
+        "image",
+        "article",
+        "spanish_audio",
+        "note",
         "example_sentences",
         "model_used",
+        "tags",
     )
 
 
@@ -68,15 +73,20 @@ def word_to_csv_line(w: types.Word) -> Sequence[str]:
         example_sentences = ""
 
     return (
-        w.rank,
+        str(w.rank),
         w.word,
-        w.meaning,
         w.part_of_speech,
-        w.article or "",
+        w.meaning,
         w.spanish_sentence or "",
         w.english_sentence or "",
+        "",  # Frequency
+        "",  # Image
+        w.article or "",
+        "",  # Spanish Audio
+        "",  # Note
         example_sentences,
         w.model_used or "",
+        "",
     )
 
 
