@@ -9,7 +9,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from . import _types as types
-from . import prompts, query
+from . import config, prompts, query
 
 
 def load_words(csv_path: pathlib.Path) -> Sequence[types.Word]:
@@ -95,6 +95,34 @@ def _unique(s: Sequence[str], key: Callable[[str], Any] | None = None) -> Sequen
     return out
 
 
+def _make_api_obj(
+    conf_obj: config.Config, service: str, model_name: str | None
+) -> query.ModelAPIBase:
+    if service == "anthropic":
+        if conf_obj.anthropic is None:
+            raise ValueError("tgw model selected but no config found.")
+        model_api = query.AnthropicAPI(
+            api_key=conf_obj.anthropic.api_key,
+            model_name=model_name,
+            max_connections=1,
+        )
+    elif service == "tgw":
+        if conf_obj.tgw is None:
+            raise ValueError("tgw model selected but no config found.")
+
+        model_api = query.TGWModelAPI(
+            api_base_url=conf_obj.tgw.api_base_url,
+            request_timeout=conf_obj.tgw.request_timeout,
+            max_connections=conf_obj.tgw.max_connections,
+            max_tokens=conf_obj.tgw.max_tokens,
+            model_name=model_name,
+        )
+    else:
+        raise ValueError(f"Unknown model service: {service}")
+
+    return model_api
+
+
 async def main():
     parser = argparse.ArgumentParser(description="My Application")
     parser.add_argument(
@@ -108,6 +136,29 @@ async def main():
         type=pathlib.Path,
         default="output/output.csv",
         help="Path to an output CSV file",
+    )
+    parser.add_argument(
+        "--model-service",
+        type=str,
+        default="tgw",
+        help="Which model service to use. Options are:\n"
+        "    tgw: Text Generation Web\n"
+        "    anthropic: Anthropic",
+    )
+    parser.add_argument(
+        "--model-name",
+        type=str,
+        default=None,
+        help="The specific model to use. If unspecified, the default value "
+        "for the chosen model is selected, which is:\n"
+        f"    tgw: {query.TGWModelAPI.DEFAULT_MODEL}\n"
+        + f"    anthropic: {query.AnthropicAPI.DEFAULT_MODEL}",
+    )
+    parser.add_argument(
+        "--config",
+        type=pathlib.Path,
+        default="config.toml",
+        help="Config file location",
     )
     parser.add_argument(
         "--start-rank-at",
@@ -124,7 +175,7 @@ async def main():
         "--diff-output",
         type=pathlib.Path,
         default="output/diff_from_existing.csv",
-        help="Path to output a CSV only including new and updated words."
+        help="Path to output a CSV only including new and updated words.",
     )
     args = parser.parse_args()
 
@@ -147,6 +198,13 @@ async def main():
     done: set[str] = set()
     all_words = {}
     diff_words = []
+
+    config_file = pathlib.Path(args.config)
+    if not config_file.exists():
+        print(f"Config file {config.abs()} does not exist.")
+        raise IOError("At least one model config is required.")
+    else:
+        conf_obj = config.Config.from_file(config_file)
 
     for word in itertools.chain(current_deck, existing_words):
         if word.rank and word.rank >= start_rank_at:
@@ -191,12 +249,14 @@ async def main():
     diff_words = _unique(diff_words, key=id)
 
     if words:
-        async with query.TGWModelAPI(
-            api_base_url=types.Url("https://tgw-api.a23.x78.be/v1/")
-        ) as api:
-            query_results = api.make_queries(
-                words, prompt=prompt_handler, model_name="mixtral-8x7b-instruct"
-            )
+        model_api = _make_api_obj(
+            conf_obj=conf_obj,
+            service=args.model_service,
+            model_name=args.model_name,
+        )
+
+        async with model_api as api:
+            query_results = api.make_queries(words, prompt=prompt_handler)
 
             with open(args.output, "at") as f:
                 writer = csv.writer(f)
