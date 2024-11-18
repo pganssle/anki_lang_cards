@@ -16,7 +16,7 @@ def _load_anki_word(row: Sequence[str]) -> types.Word:
         english_sentence,
         frequency,
         _image,
-        _word_audio,
+        article,
         _spanish_audio,
         _note,
         extra_sentences,
@@ -25,7 +25,14 @@ def _load_anki_word(row: Sequence[str]) -> types.Word:
     ) = row
 
     if extra_sentences:
-        extra_sentences = tuple(json.loads(extra_sentences))
+        try:
+            extra_sentences = extra_sentences.replace("\"\"", "\"")
+            extra_sentences = extra_sentences.replace("&quot;", "\"")
+            extra_sentences = extra_sentences.replace("&nbsp;", " ")
+            extra_sentences = tuple(json.loads(extra_sentences))
+        except:
+            print(f"Failed to load {row}")
+            raise
     return types.Word(
         rank=int(rank),
         word=word,
