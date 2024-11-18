@@ -100,7 +100,7 @@ def _make_api_obj(
 ) -> query.ModelAPIBase:
     if service == "anthropic":
         if conf_obj.anthropic is None:
-            raise ValueError("tgw model selected but no config found.")
+            raise ValueError("Anthropic model selected but no config found.")
         model_api = query.AnthropicAPI(
             api_key=conf_obj.anthropic.api_key,
             model_name=model_name,
@@ -227,18 +227,35 @@ async def main():
             all_words[word.word] = word
 
     words = _unique([word for word in words if word.word not in done], key=word_getter)
+    errors = 0
     for i in range(len(words)):
         if words[i].word in all_words:
             print(f"Word exists in deck: {words[i].word}")
             existing = all_words[words[i].word]
-            existing.update(words[i])
-            words[i] = existing
+            try:
+                existing.update(words[i])
+            except ValueError as e:
+                errors += 1
+                print(
+                    f"{existing.rank} {existing.word} != {words[i].word}:\n"
+                    + f"    {existing.meaning}\n"
+                    + f"    {words[i].meaning}"
+                )
+            else:
+                words[i] = existing
+            if errors > 20:
+                break
+    if errors:
+        raise ValueError(f"Found {errors} non-matching duplicates, stopping")
 
     rank = start_rank_at or 5001
 
     # TODO: Check size here as well
     needs_header = not args.output.exists()
-    prompt_handler = query.SentencePromptHandler(prompts.SENTENCE_PROMPT)
+    prompt_handler = query.MultiSentencePromptHandler(
+        prompts.MULTI_SENTENCE_PROMPT_TEMPLATE,
+        system_prompt=prompts.MULTI_SENTENCE_SYSTEM_PROMPT,
+    )
 
     diff_words.extend(
         map(
