@@ -6,8 +6,22 @@ from collections.abc import AsyncIterable, Mapping, Sequence
 from typing import Any, ClassVar, Final, Protocol, Self
 
 import aiohttp
+import backoff
 
 from . import _types as types
+
+
+def _backoff_word_logger(details: Mapping[str, Any]) -> None:
+    prompt: str = details["kwargs"].get("prompt", "")
+    if len(prompt) > 100:
+        prompt = "..." + prompt[-100:]
+
+    print(
+        "Backing off {wait:0.1f} seconds after {tries} tries "
+        "calling function {target} and prompt:\n{prompt}".format(
+            **details, prompt=prompt
+        )
+    )
 
 
 class PromptHandler(Protocol):
@@ -43,14 +57,23 @@ class ModelAPIBase(Protocol):
         """
         raise OperationNotSupported("Model changes not supported by this server.")
 
-    async def query_model(self, prompt: str) -> Mapping:
+    def batch_words(
+        self, words: Iterable[types.Word]
+    ) -> Iterable[Iterable[types.Word]]: ...
+
+    @backoff.on_exception(
+        backoff.expo,
+        aiohttp.client_exceptions.ClientResponseError,
+        on_backoff=[_backoff_word_logger],
+    )
+    async def query_model(self, prompt: str, system_prompt: str) -> Mapping:
         """Fetch data from the API endpoint.
 
-        :param propmt: The prompt to send to the model.
+        :param prompt: The prompt to send to the model.
 
         :return: Returns the request response as a decoded JSON object.
         """
-        data = {"prompt": prompt, **self.params}
+        data = {"prompt": system_prompt + prompt, **self.params}
         async with self.semaphore:
             async with self.session.post(
                 self.api_endpoint("completions"), headers=self.headers, json=data

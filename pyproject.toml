@@ -12,5 +12,6 @@ classifiers = ["License :: OSI Approved :: Apache Software License"]
 dependencies = [
     "aiohttp",
     "attrs",
+    "backoff",
 ]
 
