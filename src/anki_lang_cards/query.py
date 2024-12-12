@@ -213,7 +213,7 @@ class TGWModelAPI(ModelAPIBase):
 
 
 class AnthropicAPI(ModelAPIBase):
-    DEFAULT_MODEL: str = "claude-3-5-sonnet-20240620"
+    DEFAULT_MODEL: str = "claude-3-5-sonnet-20241022"
 
     def __init__(
         self,
