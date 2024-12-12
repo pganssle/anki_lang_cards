@@ -272,3 +272,61 @@ INPUT:
 OUTPUT:
 --------------
 """
+
+ORG_TO_CSV_PROMPT_TEMPLATE: Final[
+    str
+] = """\
+Task:
+
+Translate notes on Spanish words into well-formatted CSVs with the definition, part of speech and (if applicable), article.
+
+Details:
+
+I take notes in org mode on Spanish words I encounter. Sometimes the note is a word in English or Spanish, sometimes it is spanish and the english translation I am expecting.
+
+- If the word is a valid Spanish word and there is no English definition, please use the most common English definition, or if more than one definition is very common, include as many as 3.
+- If the word is not a valid Spanish word and there is no English definition, please try to choose a Spanish word that is most likely to sound like the word I've written; prefer common words over uncommon ones.
+- If the word is not a valid Spanish word and an English definition is present, try to choose a Spanish word that sounds like the Spanish word I've included and has a definition matching the English word.
+- If there is a Spanish word with a definition and the definition of the Spanish word is not correct, please correct the definition, but include an asterisk followed by the original, erroneous English defintiion in parentheses.
+
+Output format:
+
+The output format should be a CSV with the following header:
+
+word,meaning,part_of_speech,article
+
+Only populate "article" for nouns. Valid parts of speech are:
+
+nm = masculine noun
+nf = feminine noun
+nm/f = masculine/feminine noun (varies depending on the gender of the subject)
+vtr = transitive verb
+vi = intransitive verb
+v phr = verbal phrase
+adv = adverb
+adj = adjective
+adj mf = adjective using one form for both masculine and feminine
+
+Output the words in the same order that they came in. Do not skip any rows. If there is more than one Spanish word on a row, split it into multiple definitions. If there is a slight difference between the words on a given word, try to add a *terse* note about what the difference is in the English defintion, e.g.:
+
+gemelo / mellizo = twin
+
+Would turn into:
+
+gemelo/a,"twin (identical)",nm/f,el/la
+mellizo/a,"twin, fraternal twin",nm/f,el/la
+
+If a word is only commonly used in Latin America, append (LatAm) after the English definition. If it is only commonly used in Spain, append (Spain) after the English definition.
+
+ONLY OUTPUT THE WELL-FORMATTED CSV. Do not give any explanations or other extraneous text.
+
+Examples:
+
+---
+
+INPUT:
+
+%(org_text)s
+
+OUTPUT:
+"""

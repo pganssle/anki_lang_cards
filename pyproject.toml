@@ -14,5 +14,7 @@ dependencies = [
     "attrs",
     "anthropic",
     "backoff",
+    "llm",
+    "llm-claude-3",
 ]
 
