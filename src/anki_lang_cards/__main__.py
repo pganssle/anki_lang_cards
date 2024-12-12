@@ -190,6 +190,7 @@ async def main():
     args = parser.parse_args()
 
     word_getter = operator.attrgetter("word")
+    wk_getter = operator.attrgetter("word", "part_of_speech")
 
     words = load_words(args.inputs)
     if args.output.exists():
@@ -222,8 +223,8 @@ async def main():
         if word.example_sentences:
             done.add(word.word)
 
-        if word.word in all_words:
-            existing = all_words[word.word]
+        if (word.word, word.part_of_speech) in all_words:
+            existing = all_words[(word.word, word.part_of_speech)]
             if (word.rank and word.rank < 5000) and (
                 existing.rank and existing.rank < 5000
             ):
@@ -234,14 +235,14 @@ async def main():
             if not sentences:
                 diff_words.append(existing)
         else:
-            all_words[word.word] = word
+            all_words[(word.word, word.part_of_speech)] = word
 
     words = _unique([word for word in words if word.word not in done], key=word_getter)
     errors = 0
     for i in range(len(words)):
-        if words[i].word in all_words:
+        if (words[i].word, words[i].part_of_speech) in all_words:
             print(f"Word exists in deck: {words[i].word}")
-            existing = all_words[words[i].word]
+            existing = all_words[(words[i].word, words[i].part_of_speech)]
             try:
                 existing.update(words[i])
             except ValueError as e:
@@ -270,7 +271,7 @@ async def main():
     diff_words.extend(
         map(
             all_words.get,
-            set(map(word_getter, existing_words)) - set(map(word_getter, current_deck)),
+            set(map(wk_getter, existing_words)) - set(map(wk_getter, current_deck)),
         )
     )
     diff_words = _unique(diff_words, key=id)

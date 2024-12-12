@@ -69,7 +69,7 @@ class Word:
         if self is other:
             return
         if self != other:
-            raise ValueError(f"{self!r} is not the same word as {other!r}")
+            raise ValueError(f"{self!r}\n\n is not the same word as\n\n{other!r}")
 
         if self.part_of_speech != other.part_of_speech:
             if _base_pos(self.part_of_speech) == "v":
