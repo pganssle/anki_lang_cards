@@ -7,6 +7,8 @@ You are an expert Spanish teacher and lexicographer, whose specialty is designin
 
 I am going to give you valid JSON representing a term ("term") in Spanish and its meaning in English ("meaning"). I would like you to generate valid JSON containing 4 example sentences in idiomatic Spanish that use the term accompanied by a translation from the original Spanish into English; the example sentences should use the sense of the term that has the meaning specified by the English meaning. When the word is a verb, select different moods and tenses in the different sentences. The translations do not need to be word-for-word translations, it is more important that they capture the general spirit of the original Spanish.
 
+In some of your example sentences, it would be a bonus if they contain useful or interesting facts.
+
 After you have come up with the example sentences, look over your work and see if you can make the original sentences more creative or interesting.
 
 Example:
@@ -38,8 +40,8 @@ OUTPUT:
             "english": "I like to spend time at my parents' house."
         },
         {
-            "spanish": "Mi casa es azul con una puerta roja.",
-            "english": "My house is blue with a red door."
+            "spanish": "En la Edad Media, las casas se construían a menudo con bahareque, que consistía en revestir ramas y paja con arcilla, barro y estiércol.",
+            "english": "In the Middle Ages, houses were often made of wattle and daub, which involved plastering branches and straw with clay, mud and dung."
         }
     ]
 }
@@ -65,6 +67,10 @@ OUTPUT:
             "english": "The ball is bouncing on the ground."
         },
         {
+            "spanish": "Los delfines pueden «ver» rebotando ondas sonoras en su entorno."
+            "english": "Dolphins can 'see' by bouncing sound waves off their surroundings."
+        },
+        {
             "spanish": "¡Rebota más alto!",
             "english": "Bounce higher!"
         },
@@ -72,10 +78,6 @@ OUTPUT:
             "spanish": "Rebotaremos la luz en la luna.",
             "english": "We will bounce the light off the moon."
         },
-        {
-            "spanish": "Las ondas se han rebotan en la pared.",
-            "english": "The waves bounces off the wall."
-        }
     ]
 }
 
@@ -135,6 +137,8 @@ You are an expert Spanish teacher and lexicographer, whose specialty is designin
 
 I am going to give you valid JSON representing a list of mappings containing terms ("term") in Spanish and their meaning in English ("meaning"). For each term, I would like you to generate valid JSON containing 4 example sentences in idiomatic Spanish that use the term accompanied by a translation from the original Spanish into English; the example sentences should use the sense of the term that has the meaning specified by the English meaning. If multiple English meanings are provided, provide sentences that sample all the meanings. When the word is a verb, select different moods and tenses in the different sentences. The translations do not need to be word-for-word translations, it is more important that they capture the general spirit of the original Spanish.
 
+In some of your example sentences, it would be a bonus if they contain useful or interesting facts.
+
 After you have come up with the example sentences, look over your work and see if you can make the original sentences more creative or interesting.
 
 Remember that you must include ONLY valid JSON, and nothing else. Do not explain your choices.
@@ -178,6 +182,10 @@ OUTPUT:
                 "english": "My grandmother's house is in the country."
             },
             {
+                "spanish": "En la Edad Media, las casas se construían a menudo con bahareque, que consistía en revestir ramas y paja con arcilla, barro y estiércol.",
+                "english": "In the Middle Ages, houses were often made of wattle and daub, which involved plastering branches and straw with clay, mud and dung."
+            },
+            {
                 "spanish": "Voy a limpiar mi casa este fin de semana.",
                 "english": "I am going to clean my house this weekend."
             },
@@ -185,10 +193,6 @@ OUTPUT:
                 "spanish": "Me gusta pasar tiempo en casa de mis padres.",
                 "english": "I like to spend time at my parents' house."
             },
-            {
-                "spanish": "Mi casa es azul con una puerta roja.",
-                "english": "My house is blue with a red door."
-            }
         ]
     },
     {
@@ -226,13 +230,13 @@ OUTPUT:
                 "english": "Bounce higher!"
             },
             {
+                "spanish": "Los delfines pueden «ver» rebotando ondas sonoras en su entorno."
+                "english": "Dolphins can 'see' by bouncing sound waves off their surroundings."
+            },
+            {
                 "spanish": "Rebotaremos la luz en la luna.",
                 "english": "We will bounce the light off the moon."
             },
-            {
-                "spanish": "Las ondas se han rebotan en la pared.",
-                "english": "The waves bounces off the wall."
-            }
         ]
     }
     {
