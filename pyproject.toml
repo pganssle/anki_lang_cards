@@ -12,9 +12,16 @@ classifiers = ["License :: OSI Approved :: Apache Software License"]
 dependencies = [
     "aiohttp",
     "attrs",
-    "anthropic",
     "backoff",
     "llm",
     "llm-claude-3",
+    "anthropic",
+]
+
+[project.optional-dependencies]
+books = [
+    "ebooklib",
+    "lxml",
+    "regex",
 ]
 
