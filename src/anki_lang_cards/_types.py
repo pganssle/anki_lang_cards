@@ -1,6 +1,7 @@
 import functools
 from collections.abc import Sequence
-from typing import NewType, Self, TypeVar
+from pathlib import Path
+from typing import NewType, Self, TypedDict, TypeVar
 
 import attrs
 
@@ -123,3 +124,36 @@ class Word:
                 self.example_sentences.append(example_sentence)
 
         self.model_used = ", ".join(set(_non_nulls(self.model_used, other.model_used)))
+
+
+#####
+# Annotation-related types
+class BookData(TypedDict):
+    title: str
+    author: str
+    path: Path
+    language: str
+
+
+class Annotation(TypedDict, total=False):
+    text: str
+    context: str
+    note: str | None
+    chapter: str
+    page_number: int
+
+
+class CombinedAnnotation(TypedDict, total=False):
+    highlights: Sequence[str]
+    context: str
+    chapters: Sequence[str]
+    page_numbers: Sequence[int]
+
+
+class BookAnnotations(TypedDict):
+    book: BookData
+    annotations: Sequence[Annotation]
+
+class CombinedBookAnnotations(TypedDict):
+    book: BookData
+    annotations: Sequence[CombinedAnnotation]

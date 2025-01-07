@@ -6,40 +6,13 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, TypedDict
 
-
-class Book(TypedDict):
-    title: str
-    author: str
-    path: str
-    language: str
+from ._types import (Annotation, BookAnnotations, BookData, CombinedAnnotation,
+                     CombinedBookAnnotations)
 
 
-class Annotation(TypedDict, total=False):
-    text: str
-    context: str
-    note: str | None
-    chapter: str
-    page_number: int
-
-
-class CombinedAnnotation(TypedDict, total=False):
-    highlights: Sequence[str]
-    context: str
-    chapters: Sequence[str]
-    page_numbers: Sequence[int]
-
-
-class Entry(TypedDict):
-    book: Book
-    annotations: Sequence[Annotation]
-
-
-class CombinedEntry(TypedDict):
-    book: Book
-    annotations: Sequence[CombinedAnnotation]
-
-
-def combine_highlights(input_data: Sequence[Entry]) -> Sequence[CombinedEntry]:
+def combine_highlights(
+    input_data: Sequence[BookAnnotations],
+) -> Sequence[CombinedBookAnnotations]:
     """
     Combine consecutive annotations with overlapping contexts.
 
@@ -86,7 +59,7 @@ def combine_highlights(input_data: Sequence[Entry]) -> Sequence[CombinedEntry]:
                 return context1 + context2[len(overlap) :]
         return context1 + " " + context2
 
-    output: list[CombinedEntry] = []
+    output: list[CombinedBookAnnotations] = []
 
     for book_entry in input_data:
         annotations = book_entry["annotations"]

@@ -17,6 +17,8 @@ import regex
 from ebooklib import epub
 from lxml import etree
 
+from ._types import Annotation, BookAnnotations, BookData
+
 LANGUAGE_MAPPINGS: Final[Mapping[str, str]] = {
     "spa": "spa",
     "es": "spa",
@@ -157,26 +159,6 @@ class AnnotationData(TypedDict):
     pos0: str
     pos1: str
     text: str
-
-
-class BookData(TypedDict):
-    title: str
-    author: str
-    path: Path
-    language: str
-
-
-class Annotation(TypedDict):
-    text: str
-    context: str
-    note: str
-    chapter: str
-    page_number: int
-
-
-class BookAnnotations(TypedDict):
-    book: BookData
-    annotations: Sequence[Annotation]
 
 
 class DatabaseQueries:
