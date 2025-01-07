@@ -13,6 +13,7 @@ dependencies = [
     "aiohttp",
     "attrs",
     "backoff",
+    "cattrs",
     "llm",
     "llm-claude-3",
     "anthropic",

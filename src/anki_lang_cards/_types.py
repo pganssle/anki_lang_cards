@@ -1,9 +1,11 @@
 import functools
+import json
 from collections.abc import Sequence
 from pathlib import Path
-from typing import NewType, Self, TypedDict, TypeVar
+from typing import Any, NewType, Protocol, Self, TypedDict, TypeVar
 
 import attrs
+import cattrs
 
 Url = NewType("Url", str)
 _T = TypeVar("_T")
@@ -128,32 +130,65 @@ class Word:
 
 #####
 # Annotation-related types
-class BookData(TypedDict):
+class CattrsSerializable(Protocol):
+    def to_dict(self) -> dict:
+        return _cattrs_converter().unstructure(self)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> Self:
+        return _cattrs_converter().structure(data, cls)
+
+    @classmethod
+    def sequence_from_json(cls, path: Path) -> Sequence[Self]:
+        json_dict = json.loads(path.read_text())
+        return tuple(map(cls.from_dict, json_dict))
+
+    @classmethod
+    def sequence_to_serializable(cls, sequence: Sequence[Self]) -> Sequence[dict]:
+        return [obj.to_dict() for obj in sequence]
+
+
+@attrs.frozen
+class BookData:
     title: str
     author: str
     path: Path
     language: str
 
 
-class Annotation(TypedDict, total=False):
+@attrs.frozen(kw_only=True)
+class Annotation:
     text: str
     context: str
-    note: str | None
     chapter: str
     page_number: int
+    note: str | None = None
 
 
-class CombinedAnnotation(TypedDict, total=False):
+@attrs.frozen
+class CombinedAnnotation:
     highlights: Sequence[str]
     context: str
     chapters: Sequence[str]
     page_numbers: Sequence[int]
 
 
-class BookAnnotations(TypedDict):
+@attrs.frozen
+class BookAnnotations(CattrsSerializable):
     book: BookData
     annotations: Sequence[Annotation]
 
-class CombinedBookAnnotations(TypedDict):
+
+@attrs.frozen
+class CombinedBookAnnotations(CattrsSerializable):
     book: BookData
     annotations: Sequence[CombinedAnnotation]
+
+
+@functools.cache
+def _cattrs_converter() -> cattrs.Converter:
+    converter = cattrs.Converter()
+    converter.register_structure_hook(Path, lambda d, _: Path(d))
+    converter.register_unstructure_hook(Path, lambda p: str(p))
+
+    return converter

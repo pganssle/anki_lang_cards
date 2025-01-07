@@ -4,7 +4,7 @@ import argparse
 import json
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 from ._types import (Annotation, BookAnnotations, BookData, CombinedAnnotation,
                      CombinedBookAnnotations)
@@ -62,58 +62,64 @@ def combine_highlights(
     output: list[CombinedBookAnnotations] = []
 
     for book_entry in input_data:
-        annotations = book_entry["annotations"]
+        annotations = book_entry.annotations
         combined_annotations: list[CombinedAnnotation] = []
         current_highlight_group: list[str] = []
         current_context = ""
         current_chapters: set[str] = set()
-        current_page_numbers: set[int] = set()
+        current_page_numbers: set[int | None] = set()
 
         for annotation in annotations:
-            if annotation.get("note"):
+            if annotation.note:
+                # Skip anything with a note, since that signals that it was highlighted
+                # for a reason other than it being a vocabulary word.
                 continue
 
             if not current_context:
                 # Start a new group
-                current_highlight_group = [annotation["text"]]
-                current_context = annotation["context"]
-                current_chapters.add(annotation.get("chapter", ""))
-                current_page_numbers.add(annotation.get("page_number", -1))
-            elif has_overlap(current_context, annotation["context"]):
+                current_highlight_group = [annotation.text]
+                current_context = annotation.context
+                current_chapters.add(annotation.chapter or "")
+                current_page_numbers.add(annotation.page_number)
+            elif has_overlap(current_context, annotation.context):
                 # Merge overlapping contexts
-                current_context = combine_contexts(
-                    current_context, annotation["context"]
-                )
-                current_highlight_group.append(annotation["text"])
-                current_chapters.add(annotation.get("chapter", ""))
-                current_page_numbers.add(annotation.get("page_number", -1))
+                current_context = combine_contexts(current_context, annotation.context)
+                current_highlight_group.append(annotation.text)
+                current_chapters.add(annotation.chapter or "")
+                current_page_numbers.add(annotation.page_number)
             else:
                 # Save the current group and start a new one
                 combined_annotations.append(
-                    {
-                        "highlights": current_highlight_group,
-                        "context": current_context,
-                        "chapters": sorted(filter(None, current_chapters)),
-                        "page_numbers": sorted(current_page_numbers - {-1}),
-                    }
+                    CombinedAnnotation(
+                        highlights=current_highlight_group,
+                        context=current_context,
+                        chapters=sorted(filter(None, current_chapters)),
+                        page_numbers=sorted(
+                            cast(set[int], current_page_numbers - {None})
+                        ),
+                    )
                 )
-                current_highlight_group = [annotation["text"]]
-                current_context = annotation["context"]
-                current_chapters = {annotation.get("chapter", "")}
-                current_page_numbers = {annotation.get("page_number", -1)}
+                current_highlight_group = [annotation.text]
+                current_context = annotation.context
+                current_chapters = {annotation.chapter or ""}
+                current_page_numbers = {annotation.page_number}
 
         # Save any remaining annotations
         if current_highlight_group:
             combined_annotations.append(
-                {
-                    "highlights": current_highlight_group,
-                    "context": current_context,
-                    "chapters": sorted(filter(None, current_chapters)),
-                    "page_numbers": sorted(current_page_numbers - {-1}),
-                }
+                CombinedAnnotation(
+                    highlights=current_highlight_group,
+                    context=current_context,
+                    chapters=sorted(filter(None, current_chapters)),
+                    page_numbers=sorted(cast(set[int], current_page_numbers - {None})),
+                )
             )
 
-        output.append({"book": book_entry["book"], "annotations": combined_annotations})
+        output.append(
+            CombinedBookAnnotations(
+                book=book_entry.book, annotations=combined_annotations
+            )
+        )
 
     return output
 
@@ -130,14 +136,16 @@ def main() -> None:
     args = parser.parse_args()
 
     # Read input data from file
-    input_data = json.loads(args.input.read_text())
+    # input_data = json.loads(args.input.read_text())
+    input_data = BookAnnotations.sequence_from_json(args.input)
 
     # Process the highlights
     result = combine_highlights(input_data)
+    serializable_highlights = CombinedBookAnnotations.sequence_to_serializable(result)
 
     # Write combined output to file
     with open(args.output, "wt") as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
+        json.dump(serializable_highlights, f, ensure_ascii=False, indent=2)
 
 
 if __name__ == "__main__":

@@ -477,8 +477,9 @@ def process_annotations(
 
 
 def export_to_json(data: Sequence[BookAnnotations], output_path: Path) -> None:
+    serializable_data = BookAnnotations.sequence_to_serializable(data)
     with output_path.open("w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+        json.dump(serializable_data, f, ensure_ascii=False, indent=2)
 
 
 def export_to_csv(data: Sequence[BookAnnotations], output_path: Path) -> None:
@@ -500,18 +501,18 @@ def export_to_csv(data: Sequence[BookAnnotations], output_path: Path) -> None:
         writer.writeheader()
 
         for book_data in data:
-            book = book_data["book"]
-            for annotation in book_data["annotations"]:
+            book = book_data.book
+            for annotation in book_data.annotations:
                 writer.writerow(
                     {
-                        "book_title": book["title"],
-                        "book_author": book["author"],
-                        "book_language": book["language"],
-                        "text": annotation["text"],
-                        "context": annotation["context"],
-                        "note": annotation["note"],
-                        "chapter": annotation["chapter"],
-                        "page_number": annotation["page_number"],
+                        "book_title": book.title,
+                        "book_author": book.author,
+                        "book_language": book.language,
+                        "text": annotation.text,
+                        "context": annotation.context,
+                        "note": annotation.note,
+                        "chapter": annotation.chapter,
+                        "page_number": annotation.page_number,
                     }
                 )
 
@@ -563,7 +564,7 @@ def main() -> None:
             for book in books_data
         ]
 
-        results = [result for result in results if result["annotations"]]
+        results = [result for result in results if result.annotations]
 
         # Export results
         if args.json:
