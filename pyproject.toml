@@ -24,5 +24,7 @@ books = [
     "ebooklib",
     "lxml",
     "regex",
+    "hunspell",
+    "pystardict",
 ]
 
