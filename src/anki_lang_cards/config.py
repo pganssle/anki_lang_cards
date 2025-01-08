@@ -2,7 +2,7 @@
 
 import pathlib
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any, Self
 
 import attrs
@@ -32,7 +32,24 @@ class TGWConfig:
 
 
 @attrs.frozen
+class AnnotationsConfig:
+    """Default config options for annotations."""
+
+    dictionaries: Sequence[pathlib.Path] = ()
+
+    @classmethod
+    def from_values(cls, vals: Mapping[str, Any]) -> Self:
+        if "dictionaries" in vals:
+            new_vals = {**vals}
+            dictionaries = tuple(map(pathlib.Path, vals["dictionaries"]))
+            new_vals["dictionaries"] = dictionaries
+            vals = new_vals
+        return cls(**vals)
+
+
+@attrs.frozen
 class Config:
+    annotations: AnnotationsConfig
     tgw: TGWConfig | None = None
     anthropic: AnthropicConfig | None = None
 
@@ -50,4 +67,14 @@ class Config:
             anthropic_config = AnthropicConfig.from_values(anthropic_config_values)
         else:
             anthropic_config = None
-        return cls(tgw=tgw_config, anthropic=anthropic_config)
+
+        if (annotations_values := config.get("annotations", None)) is not None:
+            annotations_config = AnnotationsConfig.from_values(annotations_values)
+        else:
+            annotations_config = AnnotationsConfig()
+
+        return cls(
+            tgw=tgw_config,
+            anthropic=anthropic_config,
+            annotations=annotations_config,
+        )

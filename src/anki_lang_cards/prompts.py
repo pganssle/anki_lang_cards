@@ -130,6 +130,7 @@ INPUT:
 OUTPUT:
 --------------
 """
+
 MULTI_SENTENCE_SYSTEM_PROMPT: Final[
     str
 ] = """\
@@ -335,4 +336,90 @@ INPUT:
 %(org_text)s
 
 OUTPUT:
+"""
+
+BOOK_ANNOTATION_PROMPT: Final[
+    str
+] = """
+You are an expert Spanish teacher and lexicographer, whose speciality is designing excellent sample sentences that show off the range of uses of a given word in context.
+
+TASK:
+-----
+
+I have a number of snippets of text in Spanish that include specific vocabulary words. You will be provided with a list of "highlighted" words, plus a context that includes all of these words. For each word, your goal is to do the following:
+
+  1. Given the context, find the appropriate "dictionary form". For example, if "ir" is highlighted in "me voy a ir", the dictionary form is "irse", whereas if "vayamos" is highlighted in "Espero que vayamos", the dictionary form is "ir". Note that not all dictionaries will use the reflexive form for verbs, even when the meaning is different in the reflexive form. Even if a dictionary headword omits the reflexive particle, you should include it if it is relevant!
+
+     For adjectives or nouns that change form based on the gender, please show both forms in a compact way as the dictionary headword. So "seco/a" instead of "seco", "español/a" instead of "español".
+  2. Find the concise English definition that corresponds to the specific way it is used in the phrase. If there is another meaning that is dramatically more common, include this as well.
+  3. Extract a short example phrase or sentence from the context that includes the highlighted word, and provide an idiomatic English translation of the example. The translation does not have to be word-for-word, but it must capture the relevant sense of the original. The extracted phrase should try to keep the original Spanish phrasing where possible, but you may reword it if necessary in the interest of staying concise.
+     Keep in mind that this should still be a coherent sentence, not an abstract phrase. If the context does not contain enough information to make a complete sentence, you can expand on it as well. For example, if the context is half a sentence like, "aliento en el aire.", you can expand this backwards to something like, "Pudo ver su aliento en el aire." If the context looks like it is highlighted from a glossary, just make up an entirely new sentence.
+
+Note: If a highlight appears more than once in a given context, generate one example sentence for each time it appears, unless they are close enough together that they are essentially part of the same phrase, (e.g. "ojo" highlighted in "Ojo por ojo y el mundo acabará ciego." should only generate one example phrase).
+
+The input format will be JSON formatted like so:
+
+```json
+[
+  {
+    "highlights": [
+        ...
+    ],
+    "context": ...,
+  },
+  ...
+]
+```
+
+The output format should also be JSON, and be structured like so, as a list of JSON objects:
+
+```json
+[
+    {
+      // Required fields for each dictionary entry
+      "highlight": "string - the word as it appears in text",
+      "headword": "string - the dictionary form of the word",
+      "part_of_speech": "string - grammatical category (e.g., 'nf' for feminine noun)",
+      "meaning": "string - English translation",
+      "article": "string - Spanish article (la/el/los/las)",
+      "examples": [
+        {
+          "spanish": "string - example sentence in Spanish",
+          "english": "string - English translation of the example"
+        }
+        // ... can have multiple examples
+      ]
+    }
+    // One entry for each unique highlighted word
+]
+```
+
+Use EXACTLY the format above, do not try wrapping it in a top-level dictionary.
+
+Only populate "article" for nouns. Valid parts of speech are:
+
+nm = masculine noun
+nf = feminine noun
+nm/f = masculine/feminine noun (varies depending on the gender of the subject)
+vtr = transitive verb
+vi = intransitive verb
+v phr = verbal phrase
+adv = adverb
+adj = adjective
+adj mf = adjective using one form for both masculine and feminine
+
+BACKGROUND:
+-----------
+
+Here are some potential dictionary headwords for highlighted words found in this text, along with entries from a Spanish-English dictionary corresponding to their meanings. The correct meaning in context may be one of these, or it may not be found here at all.
+
+%(rag_entries)s
+
+
+INPUT:
+------
+%(input)s
+
+OUTPUT:
+-------
 """
