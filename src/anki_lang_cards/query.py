@@ -332,7 +332,10 @@ def result_to_words(
 ) -> Iterable[types.Word]:
     word_map = {word.word: word for word in words}
     for parsed_word in parsed:
-        yield result_to_word(word_map[parsed_word["term"]], parsed_word)
+        try:
+            yield result_to_word(word_map[parsed_word["term"]], parsed_word)
+        except KeyError:
+            print(f"Term mismatch for {parsed_word}, skipping.")
 
 
 class OperationUnsupported(NotImplementedError):
