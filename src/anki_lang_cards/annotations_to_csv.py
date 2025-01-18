@@ -119,9 +119,9 @@ def handle_book_skipping(
             compiled_regex = re.compile(pattern["pattern"])
             return lambda value, cr=compiled_regex: cr.match(value) is not None
         else:
-            return lambda value, pattern=pattern: value == pattern
+            return lambda value, pattern=pattern: str(value) == pattern
 
-    def compile_range_matcher(num: int, ranges: RangePattern) -> Callable[[int], bool]:
+    def compile_range_matcher(ranges: RangePattern) -> Callable[[int], bool]:
         def make_match_range(start: int, end: int) -> Callable[[int], bool]:
             if start == 0 and end == -1:
 
@@ -175,7 +175,9 @@ def handle_book_skipping(
                 string_match = compile_string_match(rule[field])
 
                 def rule_matcher(
-                    book_annotations: CombinedBookAnnotations, match=string_match
+                    book_annotations: CombinedBookAnnotations,
+                    match=string_match,
+                    field=field,
                 ) -> bool:
                     return match(getattr(book_annotations.book, field))
 
@@ -252,11 +254,11 @@ def handle_book_skipping(
             filtered_annotations = [
                 annotation
                 for annotation in book_annotations.annotations
-                if compiled_subset_rule(annotation)
+                if not compiled_subset_rule(annotation)
             ]
             if not filtered_annotations:
                 return None
-            return attrs.evolve(book_annotations, "annotations", filtered_annotations)
+            return attrs.evolve(book_annotations, annotations=filtered_annotations)
 
         return filter_annotations
 
