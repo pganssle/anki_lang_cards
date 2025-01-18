@@ -127,6 +127,53 @@ class Word:
 
         self.model_used = ", ".join(set(_non_nulls(self.model_used, other.model_used)))
 
+    def to_csv_line(self, require_rank: bool = False) -> Sequence[str]:
+        if self.example_sentences:
+            example_sentences = json.dumps(self.example_sentences)
+        else:
+            example_sentences = ""
+
+        if not require_rank:
+            rank = self.rank or ""
+        elif not self.rank:
+            raise ValueError(f"Rank required but not specified for {self}")
+
+        return (
+            rank,
+            self.word,
+            self.part_of_speech,
+            self.meaning,
+            self.spanish_sentence or "",
+            self.english_sentence or "",
+            "",  # Frequency
+            "",  # Image
+            self.article or "",
+            "",  # Spanish Audio
+            "",  # Note
+            example_sentences,
+            self.model_used or "",
+            "",
+        )
+
+    @classmethod
+    def make_csv_header(cls) -> Sequence[str]:
+        return (
+            "rank",
+            "word",
+            "part_of_speech",
+            "meaning",
+            "spanish_sentence",
+            "english_sentence",
+            "frequency",
+            "image",
+            "article",
+            "spanish_audio",
+            "note",
+            "example_sentences",
+            "model_used",
+            "tags",
+        )
+
 
 #####
 # Annotation-related types

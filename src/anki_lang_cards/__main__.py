@@ -47,49 +47,6 @@ def load_words(csv_path: pathlib.Path) -> Sequence[types.Word]:
     return out
 
 
-def make_csv_header() -> Sequence[str]:
-    return (
-        "rank",
-        "word",
-        "part_of_speech",
-        "meaning",
-        "spanish_sentence",
-        "english_sentence",
-        "frequency",
-        "image",
-        "article",
-        "spanish_audio",
-        "note",
-        "example_sentences",
-        "model_used",
-        "tags",
-    )
-
-
-def word_to_csv_line(w: types.Word) -> Sequence[str]:
-    if w.example_sentences:
-        example_sentences = json.dumps(w.example_sentences)
-    else:
-        example_sentences = ""
-
-    return (
-        str(w.rank),
-        w.word,
-        w.part_of_speech,
-        w.meaning,
-        w.spanish_sentence or "",
-        w.english_sentence or "",
-        "",  # Frequency
-        "",  # Image
-        w.article or "",
-        "",  # Spanish Audio
-        "",  # Note
-        example_sentences,
-        w.model_used or "",
-        "",
-    )
-
-
 def _unique(s: Sequence[str], key: Callable[[str], Any] | None = None) -> Sequence[str]:
     seen: set = set()
     out: list[str] = []
@@ -290,7 +247,7 @@ async def main():
                 writer = csv.writer(f)
 
                 if needs_header:
-                    writer.writerow(make_csv_header())
+                    writer.writerow(types.Word.make_csv_header())
 
                 async for word in query_results:
                     print(f"Adding {word.word}")
@@ -303,7 +260,7 @@ async def main():
                         word = existing
 
                     diff_words.append(word)
-                    writer.writerow(word_to_csv_line(word))
+                    writer.writerow(word.to_csv_line(require_rank=True))
                     f.flush()
                     rank += 1
 

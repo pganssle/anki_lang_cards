@@ -471,50 +471,6 @@ def parse_llm_response(response_text: str, model_used: str) -> Sequence[Word]:
     return output
 
 
-# TODO: Move make_csv_header and word_to_csv_line into _types
-def make_csv_header() -> Sequence[str]:
-    return (
-        "rank",
-        "word",
-        "part_of_speech",
-        "meaning",
-        "spanish_sentence",
-        "english_sentence",
-        "frequency",
-        "image",
-        "article",
-        "spanish_audio",
-        "note",
-        "example_sentences",
-        "model_used",
-        "tags",
-    )
-
-
-def word_to_csv_line(w: Word) -> Sequence[str]:
-    if w.example_sentences:
-        example_sentences = json.dumps(w.example_sentences)
-    else:
-        example_sentences = ""
-
-    return (
-        str(w.rank or ""),
-        w.word,
-        w.part_of_speech,
-        w.meaning,
-        w.spanish_sentence or "",
-        w.english_sentence or "",
-        "",  # Frequency
-        "",  # Image
-        w.article or "",
-        "",  # Spanish Audio
-        "",  # Note
-        example_sentences,
-        w.model_used or "",
-        "",
-    )
-
-
 async def main() -> None:
     parser = argparse.ArgumentParser(
         description="Convert extracted and combined annotations into Anki cards"
@@ -631,9 +587,9 @@ async def main() -> None:
     print(f"Generated {len(existing)} entries.")
     with open(args.output, "wt") as f:
         writer = csv.writer(f)
-        writer.writerow(make_csv_header())
+        writer.writerow(Word.make_csv_header())
         for word in existing.values():
-            writer.writerow(word_to_csv_line(word))
+            writer.writerow(word.to_csv_line())
 
     print(f"Written to {args.output}")
 
