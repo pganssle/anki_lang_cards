@@ -1,8 +1,11 @@
+import datetime
 import functools
 import json
-from collections.abc import Sequence
+import threading
+from collections.abc import Sequence, Mapping
 from pathlib import Path
-from typing import Any, NewType, Protocol, Self, TypedDict, TypeVar
+import typing
+from typing import Any, Final, NewType, Protocol, Self, TypedDict, TypeVar
 
 import attrs
 import cattrs
@@ -46,6 +49,78 @@ def _base_pos(s: str) -> str:
     return s
 
 
+ID_LOCK = threading.Lock()
+
+
+def _get_next_id() -> int:
+    with ID_LOCK:
+        if getattr(_get_next_id, "_last_id", None) is None:
+            _get_next_id._last_id = 0
+
+        _get_next_id._last_id += 1
+        return _get_next_id._last_id
+
+
+@attrs.frozen
+class Citation(Protocol):
+    id: int = attrs.field(factory=_get_next_id, kw_only=True)
+
+    @property
+    def source_type(self) -> str:
+        raise NotImplementedError
+
+    def to_dict(self) -> dict:
+        return _cattrs_converter().unstructure(self)
+
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), indent=2, ensure_ascii=False)
+
+    @classmethod
+    def from_json(cls, json_str: str) -> Self:
+        data = json.loads(json_str)
+        return cls.from_dict(data)
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> Self:
+
+        source_type = data.get("source_type")
+        if source_type == "book":
+            klass: type = BookCitation
+        elif source_type == "model":
+            klass = ModelCitation
+        else:
+            if source_type is None:
+                message_preamble = "Source type not found in citation:\n"
+            else:
+                message_preamble = (
+                    f"Unknown citation source type {source_type} in citation:\n"
+                )
+            raise ValueError(f"{message_preamble}{data}")
+        return _cattrs_converter().structure(data, klass)
+
+
+@attrs.frozen(slots=True)
+class BookCitation(Citation):
+    title: str
+    authors: Sequence[str]
+    pages: Sequence[int] | None = None
+    chapters: Sequence[str] | None = None
+
+    source_type: Final[str] = attrs.field(
+        default="book", validator=attrs.validators.in_(("book",))
+    )
+
+
+@attrs.frozen(slots=True)
+class ModelCitation(Citation):
+    model: str
+    date: datetime.date = attrs.field(factory=lambda: datetime.datetime.now().date())
+
+    source_type: Final[str] = attrs.field(
+        default="model", validator=attrs.validators.in_(("model",))
+    )
+
+
 @attrs.define
 class Word:
     rank: int | None
@@ -57,6 +132,7 @@ class Word:
     english_sentence: str | None
     example_sentences: Sequence[dict[str, str]]
     model_used: str | None = None
+    sentence_source: Citation | None = None
 
     def __eq__(self, other):
         return _compare_normalized_sequences(
@@ -107,12 +183,17 @@ class Word:
         # The complicated part: Merge the two sets of example sentences,
         # without adding any duplicates.
         if self.spanish_sentence and other.spanish_sentence:
-            example_sentences.append(
-                {"english": other.english_sentence, "spanish": other.spanish_sentence}
-            )
+            sentence_obj = {
+                "english": other.english_sentence,
+                "spanish": other.spanish_sentence,
+            }
+            if other.sentence_source:
+                sentence_obj["source"] = other.sentence_source
+            example_sentences.append(sentence_obj)
         elif other.spanish_sentence:
             self.spanish_sentence = other.spanish_sentence
             self.english_sentence = other.english_sentence
+            self.sentence_source = other.sentence_source
 
         spanish_examples = set()
         if self.spanish_sentence:
@@ -129,7 +210,9 @@ class Word:
 
     def to_csv_line(self, require_rank: bool = False) -> Sequence[str]:
         if self.example_sentences:
-            example_sentences = json.dumps(self.example_sentences)
+            example_sentences = json.dumps(
+                _cattrs_converter().unstructure(self.example_sentences)
+            )
         else:
             example_sentences = ""
 
@@ -137,6 +220,13 @@ class Word:
             rank = self.rank or ""
         elif not self.rank:
             raise ValueError(f"Rank required but not specified for {self}")
+        else:
+            rank = self.rank
+
+        if self.sentence_source is not None:
+            sentence_source = self.sentence_source.to_json()
+        else:
+            sentence_source = ""
 
         return (
             rank,
@@ -148,7 +238,7 @@ class Word:
             "",  # Frequency
             "",  # Image
             self.article or "",
-            "",  # Spanish Audio
+            sentence_source,  # Citation for sentence
             "",  # Note
             example_sentences,
             self.model_used or "",
@@ -167,7 +257,7 @@ class Word:
             "frequency",
             "image",
             "article",
-            "spanish_audio",
+            "sentence_source",
             "note",
             "example_sentences",
             "model_used",
@@ -237,5 +327,16 @@ def _cattrs_converter() -> cattrs.Converter:
     converter = cattrs.Converter()
     converter.register_structure_hook(Path, lambda d, _: Path(d))
     converter.register_unstructure_hook(Path, lambda p: str(p))
+
+    converter.register_unstructure_hook_factory(
+        lambda cl: cl in (Citation, ModelCitation, BookCitation),
+        lambda cl: cattrs.gen.make_dict_unstructure_fn(
+            cl, converter, id=cattrs.gen.override(omit=True))
+    )
+
+    converter.register_unstructure_hook(datetime.date, lambda d: d.isoformat())
+    converter.register_structure_hook(
+        datetime.date, lambda s, _: datetime.date.fromisoformat(s)
+    )
 
     return converter

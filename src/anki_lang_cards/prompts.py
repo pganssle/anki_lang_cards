@@ -366,6 +366,7 @@ The input format will be JSON formatted like so:
         ...
     ],
     "context": ...,
+    "source_id": ...,
   },
   ...
 ]
@@ -386,6 +387,7 @@ The output format should also be JSON, and be structured like so, as a list of J
         {
           "spanish": "string - example sentence in Spanish",
           "english": "string - English translation of the example"
+          "source_id": "int - The source_id value for the input word"
         }
         // ... can have multiple examples
       ]

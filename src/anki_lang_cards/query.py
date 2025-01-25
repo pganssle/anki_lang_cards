@@ -7,6 +7,7 @@ from collections.abc import AsyncIterable, Iterable, Mapping, Sequence
 from typing import Any, ClassVar, Final, Protocol, Self
 
 import aiohttp
+import attrs
 import backoff
 
 from . import _types as types
@@ -132,7 +133,17 @@ class ModelAPIBase(Protocol):
                         print(f"Skipping {key} after {retries[key]} retries.")
                     continue
 
-                for word in result_to_words(word_subset, parsed):
+                citation = types.ModelCitation(model=model)
+                def _add_citation(response_data: dict) -> dict:
+                    new_examples = []
+                    for example in response_data["examples"]:
+                        new_example = {**example, "source": citation}
+                        new_examples.append(new_example)
+                    return {**response_data, "examples": new_examples}
+
+                parsed_with_sources = [_add_citation(entry) for entry in parsed]
+
+                for word in result_to_words(word_subset, parsed_with_sources):
                     word.model_used = model
                     yield word
                 # for word in word_subset:
@@ -317,18 +328,21 @@ class MultiSentencePromptHandler(PromptHandler):
 def result_to_word(
     word: types.Word, parsed: Mapping[str, str | list[str]]
 ) -> types.Word:
+
     if not word.spanish_sentence:
         example_sentence = parsed["examples"].pop(
             random.randint(0, len(parsed["examples"]) - 1)
         )
         word.spanish_sentence = example_sentence["spanish"]
         word.english_sentence = example_sentence["english"]
+        word.sentence_source = example_sentence["source"]
     word.example_sentences = parsed["examples"]
     return word
 
 
 def result_to_words(
-    words: Sequence[types.Word], parsed: Mapping[str, str | list[str]]
+    words: Sequence[types.Word],
+    parsed: Sequence[Mapping[str, Any]]
 ) -> Iterable[types.Word]:
     word_map = {word.word: word for word in words}
     for parsed_word in parsed:

@@ -26,8 +26,8 @@ def _load_anki_word(row: Sequence[str]) -> types.Word:
 
     if extra_sentences:
         try:
-            extra_sentences = extra_sentences.replace("\"\"", "\"")
-            extra_sentences = extra_sentences.replace("&quot;", "\"")
+            extra_sentences = extra_sentences.replace('""', '"')
+            extra_sentences = extra_sentences.replace("&quot;", '"')
             extra_sentences = extra_sentences.replace("&nbsp;", " ")
             extra_sentences = tuple(json.loads(extra_sentences))
         except:

@@ -18,7 +18,8 @@ import attrs
 import llm
 
 from . import config, dictionary_entries, prompts
-from ._types import CombinedAnnotation, CombinedBookAnnotations, Word
+from ._types import (BookCitation, CombinedAnnotation, CombinedBookAnnotations,
+                     Word)
 
 WordMap: TypeAlias = Mapping[str, Sequence[dictionary_entries.DictionaryEntry]]
 
@@ -26,12 +27,14 @@ WordMap: TypeAlias = Mapping[str, Sequence[dictionary_entries.DictionaryEntry]]
 class AnnotationEntry(TypedDict):
     highlights: Sequence[str]
     context: str
+    source_id: int
 
 
 @attrs.frozen
 class PromptInput:
     rag_entries: Mapping[str, str]
     annotation_entry: AnnotationEntry
+    source: BookCitation
 
 
 CACHE_LOC: Final[Path] = Path(".cache")
@@ -277,14 +280,26 @@ def handle_book_skipping(
 
 
 def _prepare_prompt_inputs(
-    combined_annotations: Sequence[CombinedAnnotation], word_map: WordMap
+    combined_annotations: Sequence[CombinedAnnotation],
+    word_map: WordMap,
+    book_title: str,
+    book_authors: Sequence[str],
 ) -> Iterable[PromptInput]:
     for annotation in combined_annotations:
+        citation = BookCitation(
+            source_type="book",
+            title=book_title,
+            authors=book_authors,
+            pages=annotation.page_numbers,
+            chapters=annotation.chapters,
+        )
+
         highlights = sorted(set(annotation.highlights), key=annotation.highlights.index)
 
         annotation_entry = {
             "highlights": annotation.highlights,
             "context": annotation.context,
+            "source_id": citation.id,
         }
 
         rag_entries = {}
@@ -298,7 +313,9 @@ def _prepare_prompt_inputs(
 
                 rag_entries[entry.headword] = dictionary_entry_to_rag_input(entry)
 
-        yield PromptInput(rag_entries=rag_entries, annotation_entry=annotation_entry)
+        yield PromptInput(
+            rag_entries=rag_entries, annotation_entry=annotation_entry, source=citation
+        )
 
 
 def prepare_prompt_inputs(
@@ -306,7 +323,14 @@ def prepare_prompt_inputs(
 ) -> Sequence[PromptInput]:
     output: list[PromptInput] = []
     for book_annotations in combined_book_annotations:
-        output.extend(_prepare_prompt_inputs(book_annotations.annotations, word_map))
+        output.extend(
+            _prepare_prompt_inputs(
+                book_annotations.annotations,
+                word_map,
+                book_title=book_annotations.book.title,
+                book_authors=[book_annotations.book.author],
+            )
+        )
     return output
 
 
@@ -359,6 +383,14 @@ def generate_prompts(
             last_prompt = prompt
 
     yield prompt
+
+
+def _prepare_source_mapping(
+    prompt_inputs: Sequence[PromptInput],
+) -> Mapping[int, BookCitation]:
+    return {
+        prompt_input.source.id: prompt_input.source for prompt_input in prompt_inputs
+    }
 
 
 def _get_llm_cache_file_loc(
@@ -441,7 +473,21 @@ async def process_input_with_llm(
     return response_data["text"]
 
 
-def parse_llm_response(response_text: str, model_used: str) -> Sequence[Word]:
+def _sentence_to_citation(
+    sentence: dict[str, str | int], source_mapping: Mapping[int, BookCitation]
+) -> BookCitation | None:
+    if "source_id" not in sentence:
+        return None
+    source_id = sentence["source_id"]
+    if source_id not in source_mapping:
+        print(f"Unknown citation id {source_id} for sentence:\n{sentence}")
+        return None
+    return source_mapping[source_id]
+
+
+def parse_llm_response(
+    response_text: str, model_used: str, source_mapping: Mapping[int, BookCitation]
+) -> Sequence[Word]:
     response_data = json.loads(response_text)
     output: list[Word] = []
     for highlight in response_data:
@@ -455,6 +501,12 @@ def parse_llm_response(response_text: str, model_used: str) -> Sequence[Word]:
         del example_sentences[0]
         english_sentence = first_example["english"]
         spanish_sentence = first_example["spanish"]
+        sentence_source = _sentence_to_citation(first_example, source_mapping)
+
+        for example in example_sentences:
+            if (source := _sentence_to_citation(example, source_mapping)) is not None:
+                example["source"] = source.to_dict()
+            del example["source_id"]
 
         output.append(
             Word(
@@ -465,6 +517,7 @@ def parse_llm_response(response_text: str, model_used: str) -> Sequence[Word]:
                 article=article,
                 spanish_sentence=spanish_sentence,
                 english_sentence=english_sentence,
+                sentence_source=sentence_source,
                 example_sentences=example_sentences,
                 model_used=model_used,
             )
@@ -565,10 +618,12 @@ async def main() -> None:
     )
 
     word_map = lookup_words(engine, combined_annotations)
-    prompt_inputs = prepare_prompt_inputs(combined_annotations, word_map)
+    prompt_inputs = list(prepare_prompt_inputs(combined_annotations, word_map))
+    source_mapping = _prepare_source_mapping(prompt_inputs)
 
     existing: dict[Word, Word] = {}
     print(f"Generating prompts for {len(prompt_inputs)} combined annotations.")
+    i = 0
     for prompt in generate_prompts(prompt_inputs):
         # TODO: Run these queries in parallel
         response = await process_input_with_llm(
@@ -580,7 +635,9 @@ async def main() -> None:
             skip_cache=args.skip_response_cache,
         )
 
-        for word in parse_llm_response(response, model_used=model_name):
+        for word in parse_llm_response(
+            response, model_used=model_name, source_mapping=source_mapping
+        ):
             if word in existing:
                 existing[word].update(word)
             else:

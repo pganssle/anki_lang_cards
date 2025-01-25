@@ -30,6 +30,11 @@ def load_words(csv_path: pathlib.Path) -> Sequence[types.Word]:
             else:
                 rank = int(line["rank"])
 
+            if "sentence_source" in line and line["sentence_source"]:
+                sentence_source = types.Citation.from_json(line["sentence_source"])
+            else:
+                sentence_source = None
+
             out.append(
                 types.Word(
                     rank=rank,
@@ -39,6 +44,7 @@ def load_words(csv_path: pathlib.Path) -> Sequence[types.Word]:
                     article=line["article"] or None,
                     spanish_sentence=line["spanish_sentence"] or None,
                     english_sentence=line["english_sentence"] or None,
+                    sentence_source=sentence_source,
                     example_sentences=example_sentences,
                     model_used=line["model_used"] or None,
                 )
@@ -273,7 +279,7 @@ async def main():
         with open(args.diff_output, "wt") as f:
             writer = csv.writer(f)
             for word in diff_words:
-                writer.writerow(word_to_csv_line(word))
+                writer.writerow(word.to_csv_line(word))
 
 
 if __name__ == "__main__":
