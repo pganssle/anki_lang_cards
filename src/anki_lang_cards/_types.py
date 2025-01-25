@@ -2,9 +2,9 @@ import datetime
 import functools
 import json
 import threading
-from collections.abc import Sequence, Mapping
-from pathlib import Path
 import typing
+from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Any, Final, NewType, Protocol, Self, TypedDict, TypeVar
 
 import attrs
@@ -331,7 +331,8 @@ def _cattrs_converter() -> cattrs.Converter:
     converter.register_unstructure_hook_factory(
         lambda cl: cl in (Citation, ModelCitation, BookCitation),
         lambda cl: cattrs.gen.make_dict_unstructure_fn(
-            cl, converter, id=cattrs.gen.override(omit=True))
+            cl, converter, id=cattrs.gen.override(omit=True)
+        ),
     )
 
     converter.register_unstructure_hook(datetime.date, lambda d: d.isoformat())

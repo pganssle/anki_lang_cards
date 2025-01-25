@@ -9,7 +9,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from . import _types as types
-from . import config, prompts, query
+from . import anki_import, config, prompts, query
 
 
 def load_words(csv_path: pathlib.Path) -> Sequence[types.Word]:
@@ -150,7 +150,11 @@ async def main():
         default="output/diff_from_existing.csv",
         help="Path to output a CSV only including new and updated words.",
     )
+
+    parser.add_argument("--deck-name", type=str, default="Spanish::Vocab by Frequency")
     args = parser.parse_args()
+
+    deck_name = args.deck_name
 
     word_getter = operator.attrgetter("word")
     wk_getter = operator.attrgetter("word", "part_of_speech")
@@ -162,13 +166,27 @@ async def main():
         existing_words = []
 
     if args.exported_deck is not None:
-        from . import anki_import
-
         current_deck = anki_import.load_anki_words(args.exported_deck)
+        start_rank_at = args.start_rank_at
+        if start_rank_at is None:
+            start_rank_at = max(word.rank for word in current_deck) + 1
     else:
-        current_deck = []
+        print("Loading words from Anki Connect")
+        async with anki_import.create_client() as client:
+            current_deck_notes = await client.retrieve_matching_words(deck_name, words)
+            current_deck = list(current_deck_notes.values())
+        print(f"Loaded {len(current_deck)} words")
 
-    start_rank_at = args.start_rank_at or 0
+        async with anki_import.create_client() as client:
+            if not args.start_rank_at:
+                print("Determining next rank")
+                start_rank_at = (
+                    await client.find_highest_rank(deck_name, max_range=len(words)) + 1
+                )
+                print(f"Starting with {start_rank_at}")
+            else:
+                start_rank_at = args.start_rank_at
+
     done: set[str] = set()
     all_words = {}
     diff_words = []
