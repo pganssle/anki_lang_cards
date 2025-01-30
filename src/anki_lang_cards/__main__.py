@@ -100,7 +100,7 @@ def _make_api_obj(
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="My Application")
+    parser = argparse.ArgumentParser(description="Anki Language Card Creator")
     parser.add_argument(
         "--inputs",
         type=pathlib.Path,
