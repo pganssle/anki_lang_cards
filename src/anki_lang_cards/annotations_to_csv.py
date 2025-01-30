@@ -623,25 +623,38 @@ async def main() -> None:
 
     existing: dict[Word, Word] = {}
     print(f"Generating prompts for {len(prompt_inputs)} combined annotations.")
-    i = 0
     for prompt in generate_prompts(prompt_inputs):
-        # TODO: Run these queries in parallel
-        response = await process_input_with_llm(
-            prompt,
-            model_service=args.model_service,
-            model_name=model_name,
-            conf_obj=conf,
-            invalidate_cache=args.invalidate_response_cache,
-            skip_cache=args.skip_response_cache,
-        )
-
-        for word in parse_llm_response(
-            response, model_used=model_name, source_mapping=source_mapping
-        ):
-            if word in existing:
-                existing[word].update(word)
+        for i in range(1, 4):
+            if i > 1:
+                invalidate_cache = True
             else:
-                existing[word] = word
+                invalidate_cache = args.invalidate_response_cache
+
+            # TODO: Run these queries in parallel
+            response = await process_input_with_llm(
+                prompt,
+                model_service=args.model_service,
+                model_name=model_name,
+                conf_obj=conf,
+                invalidate_cache=invalidate_cache,
+                skip_cache=args.skip_response_cache,
+            )
+
+            try:
+                words = parse_llm_response(
+                    response, model_used=model_name, source_mapping=source_mapping)
+            except ValueError as e:
+                print(f"Failed to parse LLM response {i} times, retrying. Error:\n{e}")
+                continue
+
+            for word in words:
+                if word in existing:
+                    existing[word].update(word)
+                else:
+                    existing[word] = word
+            break
+        else:
+            print(f"Failed to parse response for prompt: {prompt}")
 
     print(f"Generated {len(existing)} entries.")
     with open(args.output, "wt") as f:
