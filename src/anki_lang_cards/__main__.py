@@ -54,7 +54,7 @@ def load_words(csv_path: pathlib.Path) -> Sequence[types.Word]:
 
 
 def _unique(s: Sequence[str], key: Callable[[str], Any] | None = None) -> Sequence[str]:
-    seen: set = set()
+    seen: dict = {}
     out: list[str] = []
     if key is None:
 
@@ -63,8 +63,11 @@ def _unique(s: Sequence[str], key: Callable[[str], Any] | None = None) -> Sequen
 
     for entry in s:
         if (entry_key := key(entry)) not in seen:
-            seen.add(entry_key)
             out.append(entry)
+        else:
+            existing_entry = seen[entry_key]
+            existing_entry.update(entry)
+
     return out
 
 
@@ -187,7 +190,8 @@ async def main():
             else:
                 start_rank_at = args.start_rank_at
 
-    done: set[str] = set()
+    done: set[tuple[str, str]] = set()
+    to_update: set[str] = set()
     all_words = {}
     diff_words = []
 
@@ -201,8 +205,9 @@ async def main():
     for word in itertools.chain(current_deck, existing_words):
         if word.rank and word.rank >= start_rank_at:
             start_rank_at = word.rank + 1
+
         if word.example_sentences:
-            done.add(word.word)
+            done.add((word.word, word.part_of_speech))
 
         if (word.word, word.part_of_speech) in all_words:
             existing = all_words[(word.word, word.part_of_speech)]
@@ -218,7 +223,17 @@ async def main():
         else:
             all_words[(word.word, word.part_of_speech)] = word
 
-    words = _unique([word for word in words if word.word not in done], key=word_getter)
+    unique_words = []
+    for word in words:
+        if (word.word, word.part_of_speech) in done:
+            if word.example_sentences or word.spanish_sentence:
+                existing = all_words[(word.word, word.part_of_speech)]
+                existing.update(word)
+                to_update.add((word.word, word.part_of_speech))
+        else:
+            unique_words.append(word)
+
+    words = unique_words
     errors = 0
     for i in range(len(words)):
         if (words[i].word, words[i].part_of_speech) in all_words:
@@ -287,6 +302,11 @@ async def main():
                     writer.writerow(word.to_csv_line(require_rank=True))
                     f.flush()
                     rank += 1
+
+                for term, pos in to_update:
+                    word = all_words[(term, pos)]
+                    writer.writerow(word.to_csv_line(require_rank=True))
+                    f.flush()
 
     else:
         print("No new words found.")
