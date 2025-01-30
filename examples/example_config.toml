@@ -1,0 +1,11 @@
+[tgw]
+api_base_url="https://my-tgw.example.com/v1/"
+request_timeout=720
+
+[anthropic]
+api_key="sk-ant-...."
+
+[annotations]
+dictionaries = [
+    "input/dicts/sp-en-wik/sp-en-wik"
+]
