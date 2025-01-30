@@ -27,4 +27,8 @@ books = [
     "hunspell",
     "pystardict",
 ]
+testing = [
+    "pytest",
+    "hypothesis",
+]
 

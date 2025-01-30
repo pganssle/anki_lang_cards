@@ -326,7 +326,7 @@ class AnkiConnectClient:
         end = lower_bound + batch_size
 
         while True:
-            regex_pattern = _generate_regex_patterns(start, end)
+            regex_pattern = _generate_regex_pattern(start, end)
             query = f'"Rank:re:{regex_pattern}"'
             note_ids = await self.get_note_ids(deck_name, query=query)
             if largest_rank and not len(note_ids) and end >= largest_rank + max_range:
@@ -418,49 +418,9 @@ def load_anki_words(in_path: pathlib.Path) -> Sequence[types.Word]:
         return out
 
 
-def _generate_regex_patterns(start: int, end: int) -> str:
+def _generate_regex_pattern(start: int, end: int) -> str:
     """Generate a single regex pattern for matching numbers within a range."""
-
-    def _floor_to(number: int, digit: int) -> int:
-        m = 10 ** (digit - 1)
-        return m * (number // m)
-
-    def _ceil_to(number: int, digit: int) -> int:
-        m = 10 ** (digit - 1)
-        return m * int(math.ceil(number / m))
-
-    def helper(left: int, right: int) -> list[tuple[int, int]]:
-        if left > right:
-            raise ValueError(
-                f"End of range must be greater than beginning ({left}, {right})"
-            )
-
-        digits = int(math.log10(right))
-        new_right = None
-        for i in range(1, digits + 1):
-            if right % 10**i:
-                potential_new_right = _floor_to(right, i + 1)
-                if potential_new_right > left:
-                    new_right = potential_new_right
-                else:
-                    digits = i - 1
-                break
-
-        # Now we want to start looking at ceilings from the left
-        if new_right is None:
-            for i in range(digits - 1, 0, -1):
-                if (left % 10**i) - (left % 10 ** (i - 1)):
-                    potential_new_right = _ceil_to(left, i + 1)
-                    if potential_new_right < right:
-                        new_right = potential_new_right
-                    break
-
-        if new_right is not None:
-            return helper(left, new_right) + [(new_right, right)]
-        else:
-            return [(left, right)]
-
-    ranges = helper(start, end)
+    ranges = _generate_regex_ranges(start, end)
     regexes = []
     for left, right in ranges:
         if right - left == 1:
@@ -475,13 +435,73 @@ def _generate_regex_patterns(start: int, end: int) -> str:
                     if c1 == "0":
                         regex_components.append("[0-9]")
                     elif c2 == "0":
-                        regex_components.append(f"[{c1}-9]")
+                        if c1 == "9":
+                            regex_components.append("9")
+                        else:
+                            regex_components.append(f"[{c1}-9]")
                         all_zeros = False
-                elif c1 == c2 or int(c1) == int(c2) - 1:
+                elif c1 == c2 or int(c1) == (int(c2) - 1) % 10:
                     regex_components.append(c1)
-                    all_zeros=False
+                    all_zeros = False
                 else:
                     regex_components.append(f"[{c1}-{int(c2)-1}]")
-                    all_zeros=False
+                    all_zeros = False
             regexes.append("".join(reversed(regex_components)))
-    return "(" + "|".join(regexes) + ")"
+    if len(regexes) > 1:
+        return "(" + "|".join(regexes) + ")"
+    elif len(regexes) == 1:
+        return regexes[0]
+    else:
+        return ""
+
+
+def _generate_regex_ranges(start: int, end: int) -> list[tuple[int, int]]:
+    def _get_lsd(n: int) -> int:
+        """Retrieves the position of the least significant digit."""
+        assert n != 0
+        str_n = str(n)
+        lsd = len(str_n)
+        for i, c in enumerate(reversed(str_n)):
+            if c != "0":
+                return i
+
+    def _floor_to(number: int, digit: int) -> int:
+        m = 10 ** (digit - 1)
+        return m * (number // m)
+
+    def _ceil_to(number: int, digit: int) -> int:
+        m = 10 ** (digit - 1)
+        return m * int(math.ceil(number / m))
+
+    # We need to take our `start` and `end` and break them into three
+    # sections: 1, round up to the next least significant digit on the
+    # left, round down to the next least significant digit to the right,
+    # then repeat for the range in the middle. Rounding up or down by exactly
+    # one always lets us generate a regex.
+    range_stack = []
+    left, right = start, end
+    left_done = False
+    right_done = False
+    while not (right_done and left_done):
+        if not left_done:
+            l_lsd = _get_lsd(left)
+            potential_new_left = _ceil_to(left, l_lsd + 2)
+            if potential_new_left > right or left == potential_new_left:
+                left_done = True
+            else:
+                range_stack.append((left, potential_new_left))
+                left = potential_new_left
+
+        if not right_done:
+            r_lsd = _get_lsd(right)
+            potential_new_right = _floor_to(right, r_lsd + 2)
+            if potential_new_right < left or right == potential_new_right:
+                right_done = True
+            else:
+                range_stack.append((potential_new_right, right))
+                right = potential_new_right
+
+        if left_done and right_done and left != right:
+            range_stack.append((left, right))
+
+    return range_stack
