@@ -1,0 +1,110 @@
+<script>let IS_BACK = true;</script>
+
+{{FrontSide}}
+
+<hr id=answer>
+{{#Image}}
+    <div class="image">{{Image}}</div>
+{{/Image}}
+<div class="definition">{{Definition}}</div>
+<div class="english" id="english-sentence">{{English}}</div>
+<div class="note">{{Note}}</div>
+<div class="source" id="sentence-source">
+    <br/><br/>
+    <div class="book_source">
+        <span class="author"></span>
+        <span class="title"></span>
+        <span class="chapters"></span>
+        <span class="pages"></span>
+    </div>
+    <div class="model_source">
+        <span class="model"></span>
+        <span class="date"><span>
+    </div>
+</div>
+
+<script>
+    document.getElementById("english-sentence").textContent = currentSentence.english;
+    // Show the source data
+    current_source = currentSentence.source;
+    base_source_element = document.getElementById("sentence-source");
+    if (current_source) {
+        if (current_source.source_type === "book") {
+            let source_element = base_source_element.querySelector("div.book_source");
+            source_element.style.display = "block";
+            source_element.hidden = false;
+            if (current_source.title) {
+                let title_elem = source_element.querySelector("span.title");
+                title_elem.innerHTML = current_source.title;
+            }
+            if (current_source.authors) {
+                let author_elem = source_element.querySelector("span.author");
+                author_elem.innerHTML = current_source.authors.join(" and ");
+            }
+
+            if (current_source.chapters) {
+                let chapters_elem = source_element.querySelector("span.chapters");
+                chapters_elem.innerHTML = current_source.chapters.join(", ");
+            }
+
+            if (current_source.pages) {
+                let pages_elem = source_element.querySelector("span.pages");
+                let page_ranges = [];
+                // We want to compact all the page ranges, so that [1, 3, 4, 5, 9]
+                // turns into [1, [3-5], 9] for better display.
+                const add_page = page => {
+                    if (page_ranges.length === 0) {
+                        page_ranges.push(page);
+                        return;
+                    }
+                    last_page = page_ranges.pop();
+                    if (typeof last_page === "array") {
+                        // This will always be an array of size 2.
+                        if (last_page[1] === page-1) {
+                            page_ranges.push([last_page[0], page])
+                        } else {
+                            page_ranges.push(last_page);
+                            page_ranges.push(page)
+                        }
+                    } else if (last_page = page-1) {
+                        page_ranges.push([last_page, page]);
+                    }
+                };
+
+                for (const page of current_source.pages) {
+                    add_page(page);
+                }
+
+                // Now that we have compacted page ranges, we can display them
+                let page_texts = [];
+                for (const range of page_ranges) {
+                    if (typeof range !== "number") {
+                        page_texts.push(range[0] + "–" + range[1]);
+                    } else {
+                        page_texts.push(range.toString());
+                    }
+                }
+
+                pages_elem.innerHTML = page_texts.join(",");
+            }
+
+        } else if (current_source.source_type == "model") {
+            let source_element = base_source_element.querySelector("div.model_source");
+            source_element.style.display = "block";
+            source_element.hidden = false;
+            if (current_source.model) {
+                source_element.querySelector("span.model").innerHTML = current_source.model;
+            }
+            if (current_source.date) {
+                let date_elem = source_element.querySelector("span.date");
+                date_elem.innerHTML = current_source.date;
+                date_elem.style.display = "inline";
+            }
+        } else {
+            console.error("Unknown source type in source: " + current_source);
+        }
+    }
+
+    on_sentence_shown = () => {};
+    $("#hintbutton").trigger("click");
+</script>

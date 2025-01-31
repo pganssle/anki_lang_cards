@@ -1,0 +1,376 @@
+<div class="word">
+    <!-- Main word display with TTS support for both AnkiDroid and native Anki -->
+    <tts service="android" voice="es_ES" id="word-tts">{{#Article}}{{Article}} {{/Article}}{{Word}}</tts>
+    <span class="ankitts native-word-tts">[anki:tts lang=es_US]{{#Article}}{{Article}} {{/Article}}{{Word}}[/anki:tts]</span>
+    <span class="part-of-speech">{{Part-of-Speech}}</span>
+    <button class="ankidroidTtsButton native-word-tts" onclick="speak(DISPLAY_WORD);">▶</button>
+</div>
+
+<!-- Toggle button for showing/hiding example sentence -->
+<button id="hintbutton">Example Sentence</button>
+
+<!-- Example sentence container with TTS support -->
+<div class="spanish start-hidden" id="example-sentence">
+    <!-- We leave these empty as they'll be populated by JavaScript -->
+    <tts service="android" voice="es_ES" id="sentence-tts"></tts>
+    <span class="ankitts native-spanish-tts"></span>
+    <button class="ankidroidTtsButton native-spanish-tts" onclick="_speak_contents(this.previousElementSibling);">▶</button>
+</div>
+
+<!-- Settings UI -->
+<div class="settings-button-container">
+    <button class="settings-button" onclick="toggle_settings()">⚙️</button>
+</div>
+<div class="settings-container start-hidden" id="settings-container">
+    <div class="checkbox-container">
+        <input type="checkbox" id="read-word-cb" name="read-word-setting" onchange="update_settings();">
+        <label for="read-word-cb">Automatically read word</label>
+    </div>
+    <div class="checkbox-container">
+        <input type="checkbox" id="read-sentence-cb" name="read-sentence-setting" onchange="update_settings();">
+        <label for="read-sentence-cb">Automatically read sentence</label>
+    </div>
+    <div class="checkbox-container">
+        <input type="checkbox" id="show-sentence-cb" name="show-sentence-setting" onchange="update_settings();">
+        <label for="show-sentence-cb">Automatically show sentence</label>
+    </div>
+    <div class="checkbox-container">
+        <input type="number" id="sentence-delay" name="sentence-delay" min="0" onchange="update_settings();"> <label for="sentence-delay">Delay before sentence (ms)</label> </div>
+</div>
+
+<script>
+    // Default settings for new users
+    DEFAULT_SETTINGS = {
+        read_word: true,
+        read_sentence: true,
+        show_sentence: true,
+        sentence_delay: 2500
+    };
+
+    // Key used for storing settings in localStorage
+    let SETTINGS_KEY = "anki-spanish-vocab-settings";
+
+    // Global state variables
+    let settings = null;
+    let hidden = true; // Controls visibility of example sentence
+    let sentence_shown = false; // Tracks if sentence has been shown for TTS purposes
+    let on_sentence_shown = null; // Callback for when sentence is shown
+    let currentSentence = {
+        spanish: '',
+        english: '',
+        source: ''
+    }; // Currently displayed sentence
+
+    // AnkiDroid API support detection
+    let api = undefined;
+    let ASYNC_API = false;
+    let SUPPORTS_ANKIDROID_JS = false;
+
+    // Initialize AnkiDroid API support
+    try {
+        api = new AnkiDroidJS({
+            "version": "0.0.2",
+            "developer": "none@example.com",
+        });
+        ASYNC_API = true;
+        SUPPORTS_ANKIDROID_JS = true;
+    } catch (err) {
+        if (err instanceof TypeError) {
+            // Fall back to old API
+            api = AnkiDroidJS;
+            SUPPORTS_ANKIDROID_JS = true;
+        }
+    }
+
+    DISPLAY_WORD = "";
+
+    // Verify TTS support specifically
+    SUPPORTS_ANKIDROID_JS = SUPPORTS_ANKIDROID_JS && typeof api?.ankiTtsSpeak === 'function';
+
+    // Helper function to speak the contents of a DOM element
+    function _speak_contents(elem) {
+        speak(elem.textContent);
+    }
+
+    // Settings Management Functions
+
+    // Get settings from localStorage, falling back to defaults if none exist
+    function _get_settings_nocache() {
+        const value = localStorage.getItem(SETTINGS_KEY);
+        return value === null ? DEFAULT_SETTINGS : JSON.parse(value);
+    }
+
+    // Get settings, using cached version if available
+    function get_settings() {
+        if (settings === null) {
+            settings = _get_settings_nocache();
+        }
+        return settings;
+    }
+
+    // Save current settings to localStorage
+    function save_settings() {
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    }
+
+    // Update settings from UI inputs
+    function update_settings() {
+        settings = {
+            read_word: document.querySelector("#read-word-cb").checked,
+            read_sentence: document.querySelector("#read-sentence-cb").checked,
+            show_sentence: document.querySelector("#show-sentence-cb").checked,
+            sentence_delay: document.querySelector("#sentence-delay").valueAsNumber
+        };
+        save_settings();
+        load_settings_ui();
+    }
+
+    // Update UI to reflect current settings
+    function load_settings_ui() {
+        settings = get_settings();
+        document.querySelector("#read-word-cb").checked = settings.read_word;
+        document.querySelector("#read-sentence-cb").checked = settings.read_sentence;
+        document.querySelector("#show-sentence-cb").checked = settings.show_sentence;
+        const sentence_display = document.querySelector("#sentence-delay");
+        sentence_display.valueAsNumber = settings.sentence_delay;
+        sentence_display.disabled = !settings.show_sentence;
+    }
+
+    // Toggle settings panel visibility
+    function toggle_settings() {
+        const settings_container = document.querySelector("div#settings-container");
+        settings_container.classList.toggle("start-hidden");
+    }
+
+    // TTS functionality
+    function speak(text) {
+        if (!SUPPORTS_ANKIDROID_JS) return;
+
+        if (ASYNC_API) {
+            api.ankiTtsSetLanguage("es_ES").then(() => {
+                api.ankiTtsSpeak(text).then();
+            });
+        } else {
+            api.ankiTtsSetLanguage("es_US");
+            api.ankiTtsSpeak(text);
+        }
+    }
+
+    // Random Sentence Selection Functions
+
+    // Generate a deterministic seed based on the current date and word
+    function get_rand_seed() {
+        // Start with milliseconds since Jan 1, 2000
+        const epoch = new Date(2000, 0, 1, 0, 0, 0, 0);
+        let today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let seed = today - epoch;
+
+        // Incorporate the current word into the seed
+        const word = `{{text:Word}}`;
+        for (let i = 0; i < word.length; i++) {
+            seed = ((seed << 5) - seed) + word.charCodeAt(i);
+            seed |= 0;
+        }
+        return seed;
+    }
+
+    // Generate a random integer between 0 and max-1 using the given seed
+    function _randint(max, seed) {
+        // Not exactly cryptographic randomness, but good enough for our purposes
+        let x = Math.sin(seed) * 10000;
+        return Math.floor((x - Math.floor(x)) * max);
+    }
+
+    // Select a random sentence from available sentences
+    function select_sentence() {
+        const current_spanish = `{{text:Spanish}}`;
+        const current_english = `{{text:English}}`;
+        let json_data = `{{text:Extra Sentences}}`.trim();
+
+        // Parse extra sentences, defaulting to empty array if parsing fails
+        let sentences = [];
+        try {
+            if (json_data) {
+                // Decode HTML entities (specifically &quot;) before parsing JSON
+                sentences = JSON.parse(json_data);
+            }
+        } catch (e) {
+            console.error("Failed to parse extra sentences:", e);
+            console.error("Raw JSON data:", json_data);
+        }
+
+        let source_json = `{{text::Sentence Source}}`;
+        let source = {};
+        try {
+            if (source_json) {
+                source = JSON.parse(source_json);
+            }
+        } catch(e) {
+            console.error("Failed to parse sentence source: ", e);
+            console.error("Raw source data: ", source_json);
+        }
+
+        const current_source = source;
+        for (let sentence of sentences) {
+            if (sentence.source && typeof sentence.source === "string") {
+                try {
+                    sentence.source = JSON.parse(sentence.source);
+                } catch (e) {
+                    console.error("Failed to parse source:", e);
+                    console.error("Raw source data: ", sentence.source);
+                }
+            }
+        }
+
+        // Add current sentence to the pool
+        sentences.push({
+            spanish: current_spanish,
+            english: current_english,
+            source: current_source
+        });
+
+        // Select a random sentence using deterministic randomization
+        const rand_seed = get_rand_seed();
+        const selectedIndex = _randint(sentences.length, rand_seed);
+        console.log(`Selected sentence ${selectedIndex} of ${sentences.length}`);
+        console.log("Selected sentence:", sentences[selectedIndex]);
+        return sentences[selectedIndex];
+    }
+
+    // Update the DOM with the selected sentence
+    function updateSentenceDisplay(sentence) {
+        // Get all relevant elements
+        const ttsElem = document.querySelector("tts#sentence-tts");
+        const spanElem = document.querySelector("span.native-spanish-tts");
+
+        // Update text content
+        ttsElem.textContent = sentence.spanish;
+        spanElem.textContent = sentence.spanish;
+
+        // Store current sentence for TTS
+        currentSentence = sentence;
+    }
+
+    // Show the sentence and trigger TTS if enabled
+    function show_sentence() {
+        $("#example-sentence").fadeIn();
+        if (on_sentence_shown) on_sentence_shown();
+        hidden = false;
+    }
+
+    // Event Handlers
+    $("#hintbutton").click(function() {
+        if (hidden) {
+            show_sentence();
+        } else {
+            $("#example-sentence").fadeOut();
+            hidden = true;
+        }
+    });
+
+    // Initialization
+    function initialize() {
+        // Hide TTS buttons if not supported
+        if (!SUPPORTS_ANKIDROID_JS) {
+            $(".ankidroidTtsButton").hide();
+        }
+
+        // Load and apply settings
+        load_settings_ui();
+
+        // Select and display random sentence
+        const selectedSentence = select_sentence();
+        updateSentenceDisplay(selectedSentence);
+
+        // Check if we're on the back of the card
+        const is_back = typeof IS_BACK !== 'undefined';
+
+        const word = `{{text:Word}}`;
+        DISPLAY_WORD = word;
+        const article = `{{text:Article}}`;
+        if (article.indexOf("/") > -1 && word.indexOf("/") > -1) {
+            let articles = article.split("/").map((x) => x.trim());
+            let words = [];
+
+            console.log(articles);
+
+            // In situatons like `el/la perro/a`, we want to split it
+            // up to `el perro / la perra`
+            if (word.endsWith("o/a") || word.endsWith("a/o")) {
+                let word_base = word.substr(0, word.length-3);
+                words.push(word_base + word[word.length-3]);
+                words.push(word_base + word[word.length-1]);
+            } else if (word.endsWith("os/as") || word.endsWith("as/os")) {
+                let word_base = word.substr(0, word.length-5);
+                words.push(word_base + word.substr(word.length-5, 2));
+                words.push(word_base + word.substr(word.length-2, 2));
+            } else if (word.endsWith("/a")) {
+                let word_base = word.substr(0, word.length-2)
+                words.push(word_base); // Masculine
+
+                // Handle situations like soplón/a, which needs to expand to
+                // soplona instead of soplóna though in practice these are
+                // pronounced the same.
+                const accentMap = {
+                  'á': 'a',
+                  'é': 'e',
+                  'í': 'i',
+                  'ó': 'o',
+                  'ú': 'u'
+                };
+                const vowels = [...Object.keys(accentMap), ...Object.values(accentMap)];
+                // Helper function to check if a character is an accented vowel
+                const is_accented = char => Object.keys(accentMap).includes(char);
+                for (let i = word_base.length -1; i>= 0; i--) {
+                    c = word_base[i];
+                    if (vowels.includes(c)) {
+                        if (is_accented(c)) {
+                            word_base = word_base.slice(0, i) +
+                                accentMap[c] +
+                                word_base.slice(i+1, word_base.length);
+                        } else {
+                            break;
+                        }
+                    }
+                }
+
+                words.push(word_base + "a");
+            } else {
+                words = word.split("/").map((x) => x.trim());
+            }
+
+            DISPLAY_WORD = articles[0] + " " + words[0] + " / " + articles[1] + " " + words[1];
+        } else if (article) {
+            DISPLAY_WORD = article + " " + word;
+        }
+
+        if (SUPPORTS_ANKIDROID_JS) {
+            // Set up automatic word reading if enabled
+            if (!is_back && settings.read_word) {
+                speak(DISPLAY_WORD);
+            }
+
+            // Set up automatic sentence reading if enabled
+            if (!is_back && settings.read_sentence) {
+                on_sentence_shown = function() {
+                    if (!sentence_shown) {
+                        speak(currentSentence.spanish);
+                        sentence_shown = true;
+                    }
+                };
+            }
+        }
+
+        let word_elem = document.getElementById("word-tts");
+        word_elem.textContent = DISPLAY_WORD;
+
+        // Show sentence automatically if enabled
+        if (settings.show_sentence) {
+            setTimeout(show_sentence, settings.sentence_delay);
+        }
+    }
+
+    // Start initialization when script loads
+    initialize();
+</script>

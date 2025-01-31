@@ -2,9 +2,11 @@
 
 This is a set of mostly janky scripts that makes Anki cards for my Anki deck. I have created a modified version of [this deck](https://ankiweb.net/shared/info/1350487717). The way I use it is that I suspended *all* cards, and then I started by unsuspending vocab items as I came across them (except ones that were extremely obvious cognates that I didn't need to memorize).
 
+I now keep an org-mode file of new vocabulary I encounter, and use this script to generate new example sentences and cards for it using an LLM of my choice.
+
 You can find a copy of my modified version of the deck (the fields are slightly different in mine than the upstream version) in the [`deck` folder](deck/). The `.apkg` file is the first 5000 words, mostly unmodified, but with the correct fields. Additionally, I have exported in plain text format a large number of additional words and terms that I have come across. You can import these directly into the deck if so desired.
 
-I now keep an org-mode file of new vocabulary I encounter, and use this script to generate new example sentences and cards for it using an LLM of my choice.
+If you want to separately see the code for the cards, it is in [`decks/spanish_vocab_templates`](decks/spanish_vocab_templates/), though keep in mind that if you modify them there, you must manually import your changes in Anki.
 
 ## How to use
 
