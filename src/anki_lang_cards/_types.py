@@ -97,6 +97,14 @@ class Citation(Protocol):
             raise ValueError(f"{message_preamble}{data}")
         return _cattrs_converter().structure(data, klass)
 
+    def __repr__(self) -> str:
+        out = []
+        for attrib in attrs.fields(self):
+            out.append(f"{attrib.name}={getattr(self, attrib.name)!r}")
+        args = textwrap.indent(",\n".join(out), prefix="  ")
+
+        return f"{self.__class__.__name__}(\n{args}\n)"
+
 
 @attrs.frozen(slots=True)
 class BookCitation(Citation):
@@ -418,6 +426,13 @@ class Word:
 
         return out
 
+    def __repr__(self) -> str:
+        out = []
+        for attrib in attrs.fields(self.__class__):
+            out.append(f"{attrib.name}={getattr(self, attrib.name)!r}")
+        args = textwrap.indent(",\n".join(out), prefix="  ")
+
+        return f"{self.__class__.__name__}(\n{args}\n)"
 
 
 #####
