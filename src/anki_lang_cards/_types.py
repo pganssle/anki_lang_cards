@@ -1,5 +1,8 @@
+import contextlib
+import csv
 import datetime
 import functools
+import io
 import json
 import threading
 import typing
@@ -263,6 +266,65 @@ class Word:
             "model_used",
             "tags",
         )
+
+    @classmethod
+    def words_from_csv(cls, csv_path: Path | str) -> "Sequence[Self]":
+        out = []
+        if isinstance(csv_path, str):
+            string_obj = io.StringIO(csv_path)
+            cm = contextlib.nullcontext(string_obj)
+        else:
+            cm = open(csv_path, "rt")
+
+        with cm as f:
+            reader = csv.DictReader(f)
+            for line in reader:
+                if not (line["word"] and line["meaning"]):
+                    continue
+
+                sentences = []
+                spanish_sentence = line["spanish_sentence"]
+                if spanish_sentence:
+                    english_sentence = line["english_sentence"]
+                    if not english_sentence:
+                        raise ValueError(
+                            f"Spanish sentence exists without english sentence: {line}" +                        )
+
+                    if "sentence_source" in line and line["sentence_source"]:
+                        sentence_source = Citation.from_json(line["sentence_source"])
+                    else:
+                        sentence_source = None
+                    sentences.append(
+                        Sentence(
+                            spanish=spanish_sentence,
+                            english=english_sentence,
+                            source=sentence_source,
+                        )
+                    )
+
+                if line["example_sentences"]:
+                    example_sentences = json.loads(line["example_sentences"])
+                    sentences.extend(map(Sentence.from_dict, example_sentences))
+
+                if "rank" not in line or not line["rank"]:
+                    rank: int | None = None
+                else:
+                    rank = int(line["rank"])
+
+                out.append(
+                    cls(
+                        rank=rank,
+                        word=line["word"],
+                        meaning=line["meaning"],
+                        part_of_speech=line["part_of_speech"],
+                        article=line["article"] or None,
+                        sentences=tuple(sentences),
+                        model_used=line["model_used"] or None,
+                    )
+                )
+
+        return out
+
 
 
 #####

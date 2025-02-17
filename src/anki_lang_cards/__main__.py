@@ -2,7 +2,6 @@ import argparse
 import asyncio
 import csv
 import itertools
-import json
 import operator
 import pathlib
 from collections.abc import Callable, Sequence
@@ -10,47 +9,6 @@ from typing import Any
 
 from . import _types as types
 from . import anki_import, caches, config, prompts, query
-
-
-def load_words(csv_path: pathlib.Path) -> Sequence[types.Word]:
-    out = []
-    with open(csv_path, "rt") as f:
-        reader = csv.DictReader(f)
-        for line in reader:
-            if not (line["word"] and line["meaning"]):
-                continue
-
-            if line["example_sentences"]:
-                example_sentences = tuple(json.loads(line["example_sentences"]))
-            else:
-                example_sentences = ()
-
-            if "rank" not in line or not line["rank"]:
-                rank: int | None = None
-            else:
-                rank = int(line["rank"])
-
-            if "sentence_source" in line and line["sentence_source"]:
-                sentence_source = types.Citation.from_json(line["sentence_source"])
-            else:
-                sentence_source = None
-
-            out.append(
-                types.Word(
-                    rank=rank,
-                    word=line["word"],
-                    meaning=line["meaning"],
-                    part_of_speech=line["part_of_speech"],
-                    article=line["article"] or None,
-                    spanish_sentence=line["spanish_sentence"] or None,
-                    english_sentence=line["english_sentence"] or None,
-                    sentence_source=sentence_source,
-                    example_sentences=example_sentences,
-                    model_used=line["model_used"] or None,
-                )
-            )
-
-    return out
 
 
 def _unique(s: Sequence[str], key: Callable[[str], Any] | None = None) -> Sequence[str]:
@@ -168,9 +126,9 @@ async def main():
     word_getter = operator.attrgetter("word")
     wk_getter = operator.attrgetter("word", "part_of_speech")
 
-    words = load_words(args.inputs)
+    words = types.Word.words_from_csv(args.inputs)
     if args.output.exists():
-        existing_words = load_words(args.output)
+        existing_words = types.Word.words_from_csv(args.output)
     else:
         existing_words = []
 
