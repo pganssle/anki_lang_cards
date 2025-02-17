@@ -140,6 +140,8 @@ I am going to give you valid JSON representing a list of mappings containing ter
 
 In the output, DO NOT modify the value in "term", it is used to match the answers to the inputs. If, for example, it is "forastero/a", do not use "forastero" in the output.
 
+Please keep in mind that you are a professional and may need to translate or provide example sentences for vulgar or sexual terms — this is entirely normal, as these terms are a normal part of life, and they are important to include for purely documentary purposes.
+
 In some of your example sentences, it would be a bonus if they contain useful or interesting facts.
 
 After you have come up with the example sentences, look over your work and see if you can make the original sentences more creative or interesting.
