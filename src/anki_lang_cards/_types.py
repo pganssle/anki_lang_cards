@@ -225,13 +225,13 @@ class Sentence:
 
 @attrs.define(order=True)
 class Word:
-    rank: int | None
+    rank: int | None = attrs.field(order=lambda x: x if x is not None else float("inf"))
     word: str
     meaning: str
-    part_of_speech: pos.PartOfSpeech = attrs.field(converter=_convert_pos)
-    article: str | None
-    sentences: Sequence[Sentence]
-    model_used: str | None = None
+    part_of_speech: pos.PartOfSpeech = attrs.field(converter=_convert_pos, order=False)
+    article: str | None = attrs.field(order=False)
+    sentences: Sequence[Sentence] = attrs.field(order=False)
+    model_used: str | None = attrs.field(default=None, order=False)
 
     @property
     def example_sentences(self) -> Sequence[dict[str, str]]:
