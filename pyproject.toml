@@ -31,4 +31,7 @@ testing = [
     "pytest",
     "hypothesis",
 ]
+merge_ui = [
+    "textual"
+]
 
