@@ -105,6 +105,14 @@ async def main():
         type=int,
         default=None,
     )
+
+    parser.add_argument(
+        "--max-retries",
+        type=int,
+        default=3,
+        help="Maximum number of failed responses from the LLM before giving up.",
+    )
+
     parser.add_argument(
         "--exported-deck",
         type=pathlib.Path,
@@ -244,7 +252,11 @@ async def main():
         )
 
         async with model_api as api:
-            query_results = api.make_queries(words, prompt=prompt_handler)
+            query_results = api.make_queries(
+                words,
+                prompt=prompt_handler,
+                max_invalid_output_retries=args.max_retries,
+            )
 
             with open(args.output, "at") as f:
                 writer = csv.writer(f)
