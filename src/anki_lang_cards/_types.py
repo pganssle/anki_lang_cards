@@ -13,6 +13,8 @@ from typing import Any, Final, NewType, Protocol, Self, TypedDict, TypeVar
 import attrs
 import cattrs
 
+from . import part_of_speech as pos
+
 Url = NewType("Url", str)
 _T = TypeVar("_T")
 
@@ -43,13 +45,6 @@ def _compare_normalized_sequences(seq1: Sequence[str], seq2: Sequence[str]) -> b
         if not _compare_normalized(s1, s2):
             return False
     return True
-
-
-def _base_pos(s: str) -> str:
-    if s[0] in "nv":
-        return s[0]
-
-    return s
 
 
 ID_LOCK = threading.Lock()
@@ -124,12 +119,19 @@ class ModelCitation(Citation):
     )
 
 
-@attrs.define
+def _convert_pos(
+    value: str | pos.PartOfSpeech,
+) -> pos.PartOfSpeech:
+    if isinstance(value, pos.PartOfSpeech):
+        return value
+    return pos.parse_part_of_speech(value)
+
+
 class Word:
     rank: int | None
     word: str
     meaning: str
-    part_of_speech: str
+    part_of_speech: pos.PartOfSpeech = attrs.field(converter=_convert_pos)
     article: str | None
     spanish_sentence: str | None
     english_sentence: str | None
@@ -138,13 +140,15 @@ class Word:
     sentence_source: Citation | None = None
 
     def __eq__(self, other):
-        return _compare_normalized_sequences(
-            (self.word, _base_pos(self.part_of_speech), self.meaning),
-            (other.word, _base_pos(other.part_of_speech), other.meaning),
+        return (
+            self.part_of_speech == other.part_of_speech
+        ) and _compare_normalized_sequences(
+            (self.word, self.meaning),
+            (other.word, other.meaning),
         )
 
     def __hash__(self):
-        return hash((self.word, _base_pos(self.part_of_speech)))
+        return hash((self.word, self.part_of_speech.base_pos))
 
     def update(self, other: Self) -> None:
         """Update the current word with the contents of `other`."""
@@ -154,22 +158,13 @@ class Word:
             raise ValueError(f"{self!r}\n\n is not the same word as\n\n{other!r}")
 
         if self.part_of_speech != other.part_of_speech:
-            if _base_pos(self.part_of_speech) == "v":
-                if self.part_of_speech == "v":
-                    self.part_of_speech = other.part_of_speech
-                    should_raise = False
-                elif other.part_of_speech == "v":
-                    should_raise = False
-                else:
-                    should_raise = True
-            else:
-                should_raise = True
+            raise ValueError(
+                f"Part of speech does not match: {self.part_of_speech} != "
+                f"{other.part_of_speech} for word {self.word}"
+            )
 
-            if should_raise:
-                raise ValueError(
-                    f"Part of speech does not match: {self.part_of_speech} != "
-                    f"{other.part_of_speech} for word {self.word}"
-                )
+        self.part_of_speech = self.part_of_speech.merge(other.part_of_speech)
+        self.article = self.article or other.article
 
         ranks = _non_nulls(self.rank, other.rank)
         if ranks:
@@ -234,7 +229,7 @@ class Word:
         return (
             rank,
             self.word,
-            self.part_of_speech,
+            str(self.part_of_speech),
             self.meaning,
             self.spanish_sentence or "",
             self.english_sentence or "",
