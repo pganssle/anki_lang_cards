@@ -4,6 +4,7 @@ import datetime
 import functools
 import io
 import json
+import textwrap
 import threading
 import typing
 from collections.abc import Mapping, Sequence
@@ -60,6 +61,7 @@ def _get_next_id() -> int:
 
 
 @attrs.frozen
+@typing.runtime_checkable
 class Citation(Protocol):
     id: int = attrs.field(factory=_get_next_id, kw_only=True)
 
@@ -80,7 +82,6 @@ class Citation(Protocol):
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> Self:
-
         source_type = data.get("source_type")
         if source_type == "book":
             klass: type = BookCitation
@@ -127,17 +128,127 @@ def _convert_pos(
     return pos.parse_part_of_speech(value)
 
 
+@attrs.frozen
+class Sentence:
+    spanish: str
+    english: str
+    source: Citation | None
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, Sentence):
+            return NotImplemented
+
+        return _compare_normalized(self.spanish, other.spanish)
+
+    def __hash__(self) -> int:
+        return hash(_normalize_str(self.spanish))
+
+    def to_dict(self) -> dict[str, str]:
+        out = {
+            "spanish": self.spanish,
+            "english": self.english,
+        }
+        if self.source is not None:
+            out["source"] = self.source.to_json()
+
+        return out
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, str | Citation | None]) -> Self:
+        if "source" in data:
+            source_data = data["source"]
+            if isinstance(source_data, Citation):
+                citation = source_data
+            elif isinstance(source_data, str):
+                citation = Citation.from_json(source_data)
+            else:
+                citation = Citation.from_dict(source_data)
+        else:
+            citation = None
+
+        return cls(spanish=data["spanish"], english=data["english"], source=citation)
+
+    def merge(self, other: Self) -> Self:
+        """Merge two sentences into one object.
+
+        This should only be done if the objects are the same Spanish sentence.
+        If one of the two has a missing value in english or source, the value
+        is taken from the one with a value. Otherwise, the object that `merge`
+        is called on takes precedence.
+        """
+        if (self.source is None) != (other.source is None):
+            source = self.source or other.source
+            source_from_other = self.source is None
+            update = self.source is None
+        else:
+            source = self.source
+            source_from_other = False
+
+        if not self.english or not other.english:
+            english = self.english or other.english
+            english_from_other = not self.english
+        else:
+            english = self.english
+            english_from_other = False
+
+        if english_from_other and source_from_other:
+            return other
+        elif not english_from_other and not source_from_other:
+            return self
+        else:
+            return type(self)(spanish=self.spanish, english=english, source=source)
+
+    def __repr__(self) -> str:
+        def truncate(s, n=25) -> str:
+            if len(s) > n:
+                return f"{s[:n-3]}..."
+            else:
+                return s
+
+        out = [
+            f"spanish={truncate(self.spanish)!r}" f"english={truncate(self.english)!r}",
+            f"source={self.source!r}",
+        ]
+
+        args = textwrap.indent(",\n".join(out), prefix="  ")
+
+        return f"{self.__class__.__name__}(\n{args}\n)"
+
+
+@attrs.define(order=True)
 class Word:
     rank: int | None
     word: str
     meaning: str
     part_of_speech: pos.PartOfSpeech = attrs.field(converter=_convert_pos)
     article: str | None
-    spanish_sentence: str | None
-    english_sentence: str | None
-    example_sentences: Sequence[dict[str, str]]
+    sentences: Sequence[Sentence]
     model_used: str | None = None
-    sentence_source: Citation | None = None
+
+    @property
+    def example_sentences(self) -> Sequence[dict[str, str]]:
+        return tuple(sentence.to_dict() for sentence in self.sentences[1:])
+
+    @property
+    def english_sentence(self) -> str | None:
+        if self.sentences:
+            return self.sentences[0].english
+        else:
+            return None
+
+    @property
+    def spanish_sentence(self) -> str | None:
+        if self.sentences:
+            return self.sentences[0].spanish
+        else:
+            return None
+
+    @property
+    def sentence_source(self) -> Citation | None:
+        if self.sentences:
+            return self.sentences[0].source
+        else:
+            return None
 
     def __eq__(self, other):
         return (
@@ -172,37 +283,23 @@ class Word:
         else:
             rank = None
 
-        example_sentences = functools.reduce(
-            lambda a, b: a + b,
-            map(list, _non_nulls(self.example_sentences, other.example_sentences)),
-            [],
-        )
+        # If both have sentences, merge the two pairs of sentences
+        if self.sentences and other.sentences:
+            seen = set(self.sentences)
+            sentences = list(self.sentences)
+            for sentence in other.sentences:
+                if sentence not in seen:
+                    sentences.append(sentence)
+                else:
+                    idx = sentences.index(sentence)
+                    sentences[idx] = sentences[idx].merge(sentence)
+        else:
+            if self.sentences:
+                sentences = list(self.sentences)
+            else:
+                sentences = list(other.sentences)
 
-        # The complicated part: Merge the two sets of example sentences,
-        # without adding any duplicates.
-        if self.spanish_sentence and other.spanish_sentence:
-            sentence_obj = {
-                "english": other.english_sentence,
-                "spanish": other.spanish_sentence,
-            }
-            if other.sentence_source:
-                sentence_obj["source"] = other.sentence_source
-            example_sentences.append(sentence_obj)
-        elif other.spanish_sentence:
-            self.spanish_sentence = other.spanish_sentence
-            self.english_sentence = other.english_sentence
-            self.sentence_source = other.sentence_source
-
-        spanish_examples = set()
-        if self.spanish_sentence:
-            spanish_examples.add(self.spanish_sentence.casefold().strip())
-
-        self.example_sentences = []
-        for example_sentence in example_sentences:
-            normalized_spanish = example_sentence["spanish"].casefold().strip()
-            if normalized_spanish not in spanish_examples:
-                spanish_examples.add(normalized_spanish)
-                self.example_sentences.append(example_sentence)
+        self.sentences = sentences
 
         self.model_used = ", ".join(set(_non_nulls(self.model_used, other.model_used)))
 
@@ -283,7 +380,8 @@ class Word:
                     english_sentence = line["english_sentence"]
                     if not english_sentence:
                         raise ValueError(
-                            f"Spanish sentence exists without english sentence: {line}" +                        )
+                            f"Spanish sentence exists without english sentence: {line}"
+                        )
 
                     if "sentence_source" in line and line["sentence_source"]:
                         sentence_source = Citation.from_json(line["sentence_source"])

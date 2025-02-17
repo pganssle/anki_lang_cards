@@ -360,20 +360,16 @@ def result_to_word(
     word: types.Word, parsed: Mapping[str, str | list[str]]
 ) -> types.Word:
 
-    if not word.spanish_sentence:
-        example_sentence = parsed["examples"].pop(
-            random.randint(0, len(parsed["examples"]) - 1)
-        )
-        word.spanish_sentence = example_sentence["spanish"]
-        word.english_sentence = example_sentence["english"]
-        word.sentence_source = example_sentence["source"]
-    word.example_sentences = parsed["examples"]
+    random.shuffle(parsed["examples"])
+    word.sentences = (
+        *word.sentences,
+        *map(types.Sentence.from_dict, parsed["examples"]),
+    )
     return word
 
 
 def result_to_words(
-    words: Sequence[types.Word],
-    parsed: Sequence[Mapping[str, Any]]
+    words: Sequence[types.Word], parsed: Sequence[Mapping[str, Any]]
 ) -> Iterable[types.Word]:
     word_map = {word.word: word for word in words}
     for parsed_word in parsed:

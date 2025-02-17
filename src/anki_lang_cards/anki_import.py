@@ -280,6 +280,9 @@ class AnkiConnectClient:
             return sentences
 
         rank_str = get_field_value("Rank")
+        spanish_sentence = get_field_value("Spanish")
+        english_sentence = get_field_value("English")
+        example_sentences = parse_sentences()
 
         return types.Word(
             rank=int(rank_str) if rank_str else None,
@@ -287,11 +290,10 @@ class AnkiConnectClient:
             meaning=get_field_value("Definition") or "",
             part_of_speech=get_field_value("Part_of_Speech") or "",
             article=get_field_value("Article"),
-            spanish_sentence=get_field_value("Spanish"),
-            english_sentence=get_field_value("English"),
-            example_sentences=parse_sentences(),
+            sentences=load_sentences(
+                spanish_sentence, english_sentence, sentence_citation, example_sentences
+            ),
             model_used=get_field_value("model_used"),
-            sentence_source=sentence_citation,
         )
 
     async def find_highest_rank(
@@ -355,6 +357,29 @@ async def create_client(endpoint: str = URL, **kwargs) -> Iterator[AnkiConnectCl
         yield AnkiConnectClient(session, endpoint=endpoint)
 
 
+def load_sentences(
+    spanish_sentence: str,
+    english_sentence: str,
+    sentence_source: types.Citation | str | None,
+    example_sentences: Mapping[str, str | Mapping],
+) -> Sequence[types.Sentence]:
+    if isinstance(sentence_source, str):
+        if sentence_source:
+            sentence_source = types.Citation.from_json(sentence_source)
+        else:
+            sentence_source = None
+
+    sentences = (
+        types.Sentence(
+            spanish=spanish_sentence,
+            english=english_sentence,
+            source=sentence_source,
+        ),
+        *map(types.Sentence.from_dict, example_sentences)
+    )
+    return sentences
+
+
 def _load_anki_word(row: Sequence[str]) -> types.Word:
     (
         rank,
@@ -366,7 +391,7 @@ def _load_anki_word(row: Sequence[str]) -> types.Word:
         frequency,
         _image,
         article,
-        _spanish_audio,
+        sentence_citation,
         _note,
         extra_sentences,
         model_used,
@@ -382,15 +407,19 @@ def _load_anki_word(row: Sequence[str]) -> types.Word:
         except:
             print(f"Failed to load {row}")
             raise
+
     return types.Word(
         rank=int(rank),
         word=word,
         part_of_speech=part_of_speech,
         meaning=meaning,
         article=None,
-        spanish_sentence=spanish_sentence or None,
-        english_sentence=english_sentence or None,
-        example_sentences=extra_sentences or (),
+        sentences=load_sentences(
+            spanish_sentence or None,
+            english_sentence or None,
+            sentence_citation or None,
+            extra_sentences or (),
+        ),
         model_used=model_used,
     )
 
