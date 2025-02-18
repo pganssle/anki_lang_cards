@@ -5,10 +5,20 @@ import itertools
 import operator
 import pathlib
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, Final
 
 from . import _types as types
-from . import anki_import, caches, config, prompts, query
+from . import anki_import, caches, config, conflict_resolver, prompts, query
+
+try:
+    from . import word_merger
+except ImportError:
+    _word_merger_import_successful = False
+else:
+    _word_merger_import_successful = True
+
+WORD_MERGER_AVAILABLE: Final[bool] = _word_merger_import_successful
+del _word_merger_import_successful
 
 
 def _unique(s: Sequence[str], key: Callable[[str], Any] | None = None) -> Sequence[str]:
@@ -114,6 +124,14 @@ async def main():
     )
 
     parser.add_argument(
+        "--max-sentences",
+        type=int,
+        default=7,
+        help="If adding a word that is already in the deck and it has greater "
+        "than this many sentences, do not generate new sentences.",
+    )
+
+    parser.add_argument(
         "--exported-deck",
         type=pathlib.Path,
         default=None,
@@ -126,8 +144,38 @@ async def main():
         help="Path to output a CSV only including new and updated words.",
     )
 
+    parser.add_argument(
+        "--conflict-cache-behavior",
+        type=str,
+        default="SKIP",
+        help="When resolving conflicts, how to handle cache hits. Options:\n"
+        "  SKIP: Use cached value without review.\n"
+        "  REVIEW: Load cached values into the UI for review.\n"
+        "  IGNORE: Ignore cached values.",
+    )
+
+    parser.add_argument(
+        "--conflict-cache-path",
+        type=pathlib.Path,
+        default=pathlib.Path(".cache/merges/merged.json"),
+        help="Location of caches for resolving word conflicts.",
+    )
+
     parser.add_argument("--deck-name", type=str, default="Spanish::Vocab by Frequency")
     args = parser.parse_args()
+
+    if WORD_MERGER_AVAILABLE:
+        match args.conflict_cache_behavior:
+            case "SKIP":
+                conflict_cache_behavior = word_merger.CacheHitBehavior.SKIP
+            case "REVIEW":
+                conflict_cache_behavior = word_merger.CacheHitBehavior.REVIEW
+            case "IGNORE":
+                conflict_cache_behavior = word_merger.CacheHitBehavior.IGNORE
+            case _:
+                raise ValueError(
+                    f"Unknown conflict cache behavior: {args.conflict_cache_behavior}"
+                )
 
     deck_name = args.deck_name
 
@@ -136,9 +184,9 @@ async def main():
 
     words = types.Word.words_from_csv(args.inputs)
     if args.output.exists():
-        existing_words = types.Word.words_from_csv(args.output)
+        output_words = types.Word.words_from_csv(args.output)
     else:
-        existing_words = []
+        output_words = []
 
     if args.exported_deck is not None:
         current_deck = anki_import.load_anki_words(args.exported_deck)
@@ -164,8 +212,7 @@ async def main():
 
     done: set[tuple[str, str]] = set()
     to_update: set[str] = set()
-    all_words = {}
-    diff_words = []
+    has_sentences: set[types.Word] = {word for word in words if len(word.sentences)}
 
     config_file = pathlib.Path(args.config)
     if not config_file.exists():
@@ -174,58 +221,150 @@ async def main():
     else:
         conf_obj = config.Config.from_file(config_file)
 
-    for word in itertools.chain(current_deck, existing_words):
-        if word.rank and word.rank >= start_rank_at:
-            start_rank_at = word.rank + 1
+    # This seems like it can be dramatically simplified, but we need to make it
+    # so that after we have placed a resolved conflict into the output, we can
+    # detect that the output is the cache we've already resolved. HOWEVER, we
+    # also want to be able to handle the situation where there is a conflict
+    # between an updated word in the current output and a NEW word that was not
+    # included in the merge resolution.
+    new_words_wl = conflict_resolver.WordLookup(words)
+    current_deck_wl = conflict_resolver.WordLookup(current_deck)
+    output_wl = conflict_resolver.WordLookup(output_words)
 
-        if word.example_sentences:
-            done.add((word.word, word.part_of_speech))
+    new_and_existing = conflict_resolver.WordLookup(
+        itertools.chain(*new_words_wl, current_deck)
+    )
 
-        if (word.word, word.part_of_speech) in all_words:
-            existing = all_words[(word.word, word.part_of_speech)]
-            if (word.rank and word.rank < 5000) and (
-                existing.rank and existing.rank < 5000
-            ):
+    unique_new_words = [next(iter(s)) for s in new_words_wl]
+
+    merge_cache = conflict_resolver.MergeCache(args.conflict_cache_path)
+
+    conflict_sets = conflict_resolver.find_conflicting_word_sets(
+        unique_new_words, new_and_existing
+    )
+    to_merge = list(
+        conflict_resolver.filter_merged_outputs(conflict_sets, output_wl, merge_cache)
+    )
+
+    if to_merge:
+        if WORD_MERGER_AVAILABLE:
+            merge_results = await word_merger.merge_words(
+                to_merge,
+                cache=merge_cache,
+                cache_behavior=conflict_cache_behavior,
+            )
+
+            conflicting_sets = dict(zip(to_merge, merge_results, strict=True))
+        else:
+            conflict_resolver.print_conflicts(to_merge)
+
+            import sys
+
+            print(
+                f"Found {len(to_merge)} unresolved conflicts, cannot proceed.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    else:
+        conflicting_sets = {}
+
+    diff_words = []
+    updated: set[types.Word] = set()
+    # This is the logic for which things get sent to the LLM and which don't.
+    # At this point we have a list of unique words, we have them deduplicated,
+    # and we also have resolved all conflicts or have chosen not to resolve
+    # some conflicts. This leaves us with a list of unique words from the input
+    # set, and we need to sort them into several buckets:
+    #
+    # 1. Things that are already in the output set because they were generated
+    #   from an earlier run of this program that didn't (e.g. one with fewer
+    #   conflicts resolved).
+    # 2. Words that are in the output set but have unique new sentences that
+    #    need to be merged into the Anki deck.
+    # 3. Words are in the existing deck and have a full complement of example
+    #    sentences, but need updating because the input set has new example
+    #    sentences (e.g. as a result of annotation extraction).
+    # 4. Words that are in the existing deck and don't have unique new
+    #    sentences.
+    # 5. Words that needed manual conflict resolution.
+    # 6. Words that need conflict resolution but it hasn't been done.
+    # 7. Words that only exist in the inputs.
+    #
+    # Group 1 shouldn't be sent to the LLM or added to the output. Group 2 should
+    # also not be sent to the LLM (unless the earlier run generated fewer sentences
+    # than the current maximum), but should be added to the output (and possibly
+    # removed from the existing output file?). Group 3 should not be sent to the
+    # LLM but should definitely be in the output set. Group 4 should be sent to
+    # the LLM if they don't have enough sentences, but otherwise not.
+    #
+    # Group 5 (which may overlap with other groups) will always need to be
+    # added to the output (and possibly earlier versions of it should be
+    # removed as well). Group 6 should be excluded entirely, since it needs to
+    # be handled after conflicts have been resolved.
+    for word in unique_new_words:
+        # Groups 1 and 2: Already in the output
+        word_set = frozenset(new_and_existing.lookup(word))
+        ew = output_wl.lookup(word)
+
+        if ew:
+            if word_set in conflicting_sets:
+                resolved = conflicting_sets[word_set]
+
+                existing_resolved = conflict_resolver.merge_word_set(ew)
+                if set(resolved.sentences) - set(existing_resolved.sentences):
+                    # Group 2 - New sentences
+                    merged_word = resolved
+                    updated.add(merged_word)
+                else:
+                    # Group 1 - No new sentences
+                    continue
+            else:
+                # Group 1 - Only in output
                 continue
 
-            sentences = tuple(existing.example_sentences)
-            existing.update(word)
-            if not sentences:
-                diff_words.append(existing)
-        else:
-            all_words[(word.word, word.part_of_speech)] = word
-
-    unique_words = []
-    for word in words:
-        if (word.word, word.part_of_speech) in done:
-            if word.example_sentences or word.spanish_sentence:
-                existing = all_words[(word.word, word.part_of_speech)]
-                existing.update(word)
-                to_update.add((word.word, word.part_of_speech))
-        else:
-            unique_words.append(word)
-
-    words = unique_words
-    errors = 0
-    for i in range(len(words)):
-        if (words[i].word, words[i].part_of_speech) in all_words:
-            print(f"Word exists in deck: {words[i].word}")
-            existing = all_words[(words[i].word, words[i].part_of_speech)]
-            try:
-                existing.update(words[i])
-            except ValueError as e:
-                errors += 1
-                print(
-                    f"{existing.rank} {existing.word} != {words[i].word}:\n"
-                    + f"    {existing.meaning}\n"
-                    + f"    {words[i].meaning}"
-                )
+        if (resolved := conflicting_sets.get(word_set)) is not None:
+            if ew:
+                existing_resolved = conflict_resolver.merge_word_set(ew)
+                if set(resolved.sentences) - set(existing_resolved.sentences):
+                    # Group 2 - New sentences, so we need to update it
+                    merged_word = conflict_resolver.merge_word_set({resolved, ew})
+                    updated.add(merged_word)
+                else:
+                    # Group 1: No new sentences and already in output
+                    continue
             else:
-                words[i] = existing
-            if errors > 20:
-                break
-    if errors:
-        raise ValueError(f"Found {errors} non-matching duplicates, stopping")
+                # Group 5: We have a resolution, so we know it has been updated.
+                merged_word = conflicting_sets[word_set]
+                updated.add(merged_word)
+        elif word_set in conflicting_sets:
+            # Group 6
+            w = next(iter(word_set))
+            print(f"Skipping {w.word}: {w.meaning} as unresolved conflict.")
+            continue
+        elif ew:
+            # Group 1 - Only exists in output
+            continue
+        else:
+            # No conflicts with the existing deck or among new words, but
+            # we can be in groups 3, 4 or 7 here.
+            merged_word = conflict_resolver.merge_word_set(word_set)
+            if word not in current_deck_wl or (
+                set(word.sentences)
+                - set(
+                    conflict_resolver.merge_word_set(
+                        current_deck_wl.lookup(word)
+                    ).sentences
+                )
+            ):
+                # If it is not in the current deck, that is group 7
+                # If the merged word has sentences not in the existing deck, that is group 3.
+                updated.add(merged_word)
+
+        if len(merged_word.sentences) < args.max_sentences:
+            diff_words.append(merged_word)
+
+        if word in has_sentences:
+            updated.add(merged_word)
 
     rank = start_rank_at or 5001
 
@@ -236,15 +375,12 @@ async def main():
         system_prompt=prompts.MULTI_SENTENCE_SYSTEM_PROMPT,
     )
 
-    diff_words.extend(
-        map(
-            all_words.get,
-            set(map(wk_getter, existing_words)) - set(map(wk_getter, current_deck)),
-        )
-    )
-    diff_words = _unique(diff_words, key=id)
-
-    if words:
+    diff_word_set = set(diff_words)
+    include_without_new_sentences = updated - diff_word_set
+    diff_words_lookup = conflict_resolver.WordLookup(diff_words)
+    diff_out: list[types.Word] = []
+    if diff_words:
+        print(f"Generating sentences for {len(diff_words)} words")
         model_api = _make_api_obj(
             conf_obj=conf_obj,
             service=args.model_service,
@@ -253,7 +389,7 @@ async def main():
 
         async with model_api as api:
             query_results = api.make_queries(
-                words,
+                diff_words,
                 prompt=prompt_handler,
                 max_invalid_output_retries=args.max_retries,
             )
@@ -264,35 +400,35 @@ async def main():
                 if needs_header:
                     writer.writerow(types.Word.make_csv_header())
 
-                async for word in query_results:
-                    print(f"Adding {word.word}")
-                    if not word.rank:
-                        word.rank = rank
-                    if word.word in all_words:
-                        existing = all_words[word.word]
-                        if existing is not word:
-                            existing.update(word)
-                        word = existing
-
-                    diff_words.append(word)
+                for word in include_without_new_sentences:
+                    diff_out.append(word)
                     writer.writerow(word.to_csv_line(require_rank=True))
                     f.flush()
-                    rank += 1
 
-                for term, pos in to_update:
-                    word = all_words[(term, pos)]
+                async for word in query_results:
+                    print(f"Adding {word.word}")
+                    diff_words_lookup.add(word)
+                    word = conflict_resolver.merge_word_set(
+                        diff_words_lookup.lookup(word)
+                    )
+                    if not word.rank:
+                        word.rank = rank
+                        rank += 1
+                        diff_words_lookup.add(word)
+
+                    diff_out.append(word)
                     writer.writerow(word.to_csv_line(require_rank=True))
                     f.flush()
 
     else:
         print("No new words found.")
 
-    print(f"Found {len(diff_words)} new or updated words.")
-    print("\n".join(map(word_getter, diff_words)))
-    if diff_words:
+    print(f"Found {len(diff_out)} new or updated words.")
+    print("\n".join(map(word_getter, diff_out)))
+    if diff_words and diff_out:
         with open(args.diff_output, "wt") as f:
             writer = csv.writer(f)
-            for word in diff_words:
+            for word in diff_out:
                 writer.writerow(word.to_csv_line(word))
 
 
