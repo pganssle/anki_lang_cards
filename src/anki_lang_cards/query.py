@@ -4,13 +4,15 @@ import json
 import random
 import urllib.parse
 from collections.abc import AsyncIterable, Iterable, Mapping, Sequence
-from typing import Any, ClassVar, Final, Protocol, Self
+from typing import Any, ClassVar, Final, Protocol, Self, TypedDict
 
 import aiohttp
 import attrs
 import backoff
+import llm
 
 from . import _types as types
+from . import caches
 
 
 def _backoff_word_logger(details: Mapping[str, Any]) -> None:
@@ -62,7 +64,7 @@ class ModelAPIBase(Protocol):
         """
 
         # TODO: Change this to mutate the API maybe
-        raise OperationNotSupported("Model changes not supported by this server.")
+        raise OperationUnsupported("Model changes not supported by this server.")
 
     def batch_words(
         self, words: Iterable[types.Word]
@@ -119,13 +121,16 @@ class ModelAPIBase(Protocol):
                 word_subset = query_futures.pop(future)
                 try:
                     parsed, model = self.parse_results(await future)
-                except (ValueError, json.decoder.JSONDecodeError):
+                except (ValueError, json.decoder.JSONDecodeError) as e:
                     key = tuple(word.word for word in word_subset)
                     retries[key] = retries.get(key, 0) + 1
                     if retries[key] <= max_invalid_output_retries:
                         print(f"Retrying {key} after invalid output")
                         task = asyncio.create_task(
-                            self.query_model(prompt=prompt.make_prompt(word_subset)),
+                            self.query_model(
+                                prompt=prompt.make_prompt(word_subset),
+                                system_prompt=prompt.system_prompt,
+                            ),
                         )
                         pending.add(task)
                         query_futures[task] = word_subset
@@ -134,6 +139,7 @@ class ModelAPIBase(Protocol):
                     continue
 
                 citation = types.ModelCitation(model=model)
+
                 def _add_citation(response_data: dict) -> dict:
                     new_examples = []
                     for example in response_data["examples"]:
@@ -229,52 +235,77 @@ class AnthropicAPI(ModelAPIBase):
     def __init__(
         self,
         api_key: str,
+        query_cacher: caches.QueryCacher,
         max_connections: int = 1,
         model_name: str | None = None,
         query_params: Mapping[str, str | int | float] | None = None,
         batch_size: int = 15,
         max_tokens: int = 8192,
     ):
-        import anthropic
-
-        self._client = anthropic.AsyncAnthropic(api_key=api_key)
         if model_name is None:
             model_name = self.DEFAULT_MODEL
-        self.model = model_name
+        self.model_name = model_name
+        self.model = llm.get_async_model(self.model_name)
+        self.model.key = api_key
         self.semaphore = asyncio.Semaphore(max_connections)
-        self.query_params = query_params or {}
-        self.query_params["max_tokens"] = max_tokens
+        if query_params is None:
+            query_params = {}
+        query_params = dict(**query_params)
+        query_params["max_tokens"] = max_tokens
+        self.query_params = query_params
         self.batch_size = batch_size
+        self.query_cacher = query_cacher
 
     def batch_words(
         self, words: Iterable[types.Word]
     ) -> Iterable[Iterable[types.Word]]:
         return _batched(words, self.batch_size)
 
-    async def query_model(self, prompt: str, system_prompt: str) -> Mapping:
-        # TODO: Cache and log results to avoid duplicate successful queries
-        async with self.semaphore:
-            message = await self._client.messages.create(
-                model=self.model,
-                messages=[
-                    {"role": "user", "content": [{"type": "text", "text": prompt}]}
-                ],
-                system=system_prompt,
-                **self.query_params,
+    async def query_model(
+        self,
+        prompt: str,
+        system_prompt: str,
+        invalidate_cache: bool = False,
+        skip_cache: bool = False,
+    ) -> caches.ResponseData:
+        """Makes a cached query to the model."""
+        # First try and hit the cache
+        cache_hit: bool = False
+        if not (invalidate_cache or skip_cache):
+            cached_response = self.query_cacher.load_from_cache(
+                prompt, system_prompt=system_prompt
+            )
+            if cached_response is not None:
+                cache_hit = True
+                response_data: caches.ResponseData = cached_response["response"]
+
+        if not cache_hit:
+            async with self.semaphore:
+                response = await self.model.prompt(
+                    prompt, system=system_prompt, **self.query_params
+                )
+                response_data = await _extract_response_data(response)
+                if not skip_cache:
+                    self.query_cacher.cache_result(
+                        prompt,
+                        response_data,
+                        system_prompt=system_prompt,
+                        query_params=self.query_params,
+                    )
+
+        return response_data
+
+    async def change_model(self, model_name: str) -> None:
+        if self.model_name != model_name:
+            raise OperationUnsupported(
+                f"Cannot change model from {self.model_name} to {model_name}"
             )
 
-        usage = message.usage  # input_tokens, output_tokens
-        model = message.model
-        response_text = message.content[0].text
-        if message.stop_reason != "end_turn":
-            print(f"Warning: stop_reason is {message.stop_reason}")
-        return message
+    def parse_results(self, resp: caches.ResponseData) -> tuple[Mapping[str, str], str]:
 
-    def parse_results(self, resp: Mapping[str, Any]) -> tuple[Mapping[str, str], str]:
-
-        response_content = resp.content[0].text
+        response_content = resp["text"]
         try:
-            return json.loads(response_content), resp.model
+            return json.loads(response_content), self.model_name
         except json.decoder.JSONDecodeError:
             print(f"Failed to decode text:\n{response_content}")
             raise
@@ -350,6 +381,19 @@ def result_to_words(
             yield result_to_word(word_map[parsed_word["term"]], parsed_word)
         except KeyError:
             print(f"Term mismatch for {parsed_word}, skipping.")
+
+
+async def _extract_response_data(
+    response: llm.AsyncResponse,
+) -> caches.ResponseData:
+    text = await response.text()
+    usage = await response.usage()
+    usage_obj: caches.UsageData = {
+        "input": usage.input,
+        "output": usage.output,
+        "details": usage.details,
+    }
+    return {"text": text, "usage": usage_obj}
 
 
 class OperationUnsupported(NotImplementedError):

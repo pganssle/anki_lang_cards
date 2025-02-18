@@ -9,7 +9,7 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from . import _types as types
-from . import anki_import, config, prompts, query
+from . import anki_import, caches, config, prompts, query
 
 
 def load_words(csv_path: pathlib.Path) -> Sequence[types.Word]:
@@ -77,8 +77,14 @@ def _make_api_obj(
     if service == "anthropic":
         if conf_obj.anthropic is None:
             raise ValueError("Anthropic model selected but no config found.")
+        query_cacher = caches.QueryCacher(
+            cache_type=caches.CacheTypes.SENTENCES,
+            model_name=model_name or query.AnthropicAPI.DEFAULT_MODEL,
+            model_service=service,
+        )
         model_api = query.AnthropicAPI(
             api_key=conf_obj.anthropic.api_key,
+            query_cacher=query_cacher,
             model_name=model_name,
             max_connections=1,
         )

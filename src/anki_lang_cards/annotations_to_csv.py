@@ -17,7 +17,7 @@ from typing import Any, Final, Literal, TypeAlias, TypedDict, cast
 import attrs
 import llm
 
-from . import config, dictionary_entries, prompts
+from . import caches, config, dictionary_entries, prompts
 from ._types import (BookCitation, CombinedAnnotation, CombinedBookAnnotations,
                      Word)
 
@@ -35,13 +35,6 @@ class PromptInput:
     rag_entries: Mapping[str, str]
     annotation_entry: AnnotationEntry
     source: BookCitation
-
-
-CACHE_LOC: Final[Path] = Path(".cache")
-
-
-def _get_response_dir() -> Path:
-    return CACHE_LOC / "responses"
 
 
 def _format_definition_list(
@@ -393,23 +386,6 @@ def _prepare_source_mapping(
     }
 
 
-def _get_llm_cache_file_loc(
-    prompt: str,
-    model_service: str,
-    model_name: str,
-) -> Path:
-    prompt_hash: str = hashlib.md5(
-        prompt.encode("utf-8"), usedforsecurity=False
-    ).hexdigest()
-    return (
-        CACHE_LOC
-        / "annotations"
-        / f"{model_service}"
-        / f"{model_name}"
-        / f"{prompt_hash}.json"
-    )
-
-
 async def _extract_response_data(response: llm.AsyncResponse) -> dict:
     text = await response.text()
     usage = await response.usage()
@@ -424,11 +400,30 @@ async def _extract_response_data(response: llm.AsyncResponse) -> dict:
     }
 
 
+async def _process_input_with_llm_nocache(
+    prompt: str, model_service: str, model_name: str, conf_obj: config.Config
+) -> Mapping:
+    if model_service == "anthropic":
+        if not conf_obj.anthropic:
+            raise ValueError("Anthropic configuration is missing.")
+        model = llm.get_async_model(model_name)
+        model.key = conf_obj.anthropic.api_key
+    elif model_service == "tgw":
+        raise NotImplementedError("Getting around to it.")
+    else:
+        raise ValueError(f"Unsupported model service: {model_service}")
+
+    # Prepare and send the request
+    response = await model.prompt(prompt)
+    return await _extract_response_data(response)
+
+
 async def process_input_with_llm(
     prompt: str,
     model_service: str,
     model_name: str,
     conf_obj: config.Config,
+    query_cacher: caches.QueryCacher,
     invalidate_cache: bool = False,
     skip_cache: bool = False,
 ) -> str:
@@ -436,39 +431,23 @@ async def process_input_with_llm(
     if invalidate_cache and skip_cache:
         raise ValueError("Only one of invalidate_cache and skip_cache can be true")
 
-    cache_file_loc = _get_llm_cache_file_loc(prompt, model_service, model_name)
-    if not (skip_cache or invalidate_cache) and cache_file_loc.exists():
-        response_data = json.loads(cache_file_loc.read_text())["response"]
-    else:
-        if model_service == "anthropic":
-            if not conf_obj.anthropic:
-                raise ValueError("Anthropic configuration is missing.")
-            model = llm.get_async_model(model_name)
-            model.key = conf_obj.anthropic.api_key
-        elif model_service == "tgw":
-            raise NotImplementedError("Getting around to it.")
-        else:
-            raise ValueError(f"Unsupported model service: {model_service}")
+    response_data: Mapping | None = None
+    cache_hit: bool = False
+    if not (skip_cache or invalidate_cache):
+        cached_response = query_cacher.load_from_cache(prompt)
+        if cached_response is not None:
+            response_data = cached_response["response"]
+            cache_hit = True
 
-        # Prepare and send the request
-        response = await model.prompt(prompt)
-        response_data = await _extract_response_data(response)
+    if not cache_hit:
+        response_data = await _process_input_with_llm_nocache(
+            prompt, model_service, model_name, conf_obj
+        )
 
-        if invalidate_cache or not cache_file_loc.exists():
-            cache_data = {
-                "input": {
-                    "model_name": model_name,
-                    "model_service": model_service,
-                    "prompt": prompt,
-                    "timestamp": datetime.datetime.now().isoformat(),
-                },
-                "response": response_data,
-            }
+        if not skip_cache:
+            query_cacher.cache_result(prompt, response_data)
 
-            cache_file_loc.parent.mkdir(exist_ok=True, parents=True)
-            cache_file_loc.write_text(
-                json.dumps(cache_data, ensure_ascii=False, indent=2)
-            )
+    assert response_data is not None
 
     return response_data["text"]
 
@@ -622,9 +601,16 @@ async def main() -> None:
     source_mapping = _prepare_source_mapping(prompt_inputs)
 
     existing: dict[Word, Word] = {}
+    query_cacher = caches.QueryCacher(
+        cache_type=caches.CacheTypes.ANNOTATIONS,
+        model_name=model_name,
+        model_service=args.model_service,
+    )
     print(f"Generating prompts for {len(prompt_inputs)} combined annotations.")
     for prompt in generate_prompts(prompt_inputs):
         for i in range(1, 4):
+            # If the first try failed, we must invalidate the cache before
+            # trying again.
             if i > 1:
                 invalidate_cache = True
             else:
@@ -636,13 +622,15 @@ async def main() -> None:
                 model_service=args.model_service,
                 model_name=model_name,
                 conf_obj=conf,
+                query_cacher=query_cacher,
                 invalidate_cache=invalidate_cache,
                 skip_cache=args.skip_response_cache,
             )
 
             try:
                 words = parse_llm_response(
-                    response, model_used=model_name, source_mapping=source_mapping)
+                    response, model_used=model_name, source_mapping=source_mapping
+                )
             except ValueError as e:
                 print(f"Failed to parse LLM response {i} times, retrying. Error:\n{e}")
                 continue
