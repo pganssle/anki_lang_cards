@@ -192,7 +192,15 @@ async def main():
         current_deck = anki_import.load_anki_words(args.exported_deck)
         start_rank_at = args.start_rank_at
         if start_rank_at is None:
-            start_rank_at = max(word.rank for word in current_deck) + 1
+            start_rank_at = (
+                max(
+                    itertools.chain(
+                        (word.rank for word in current_deck),
+                        (word.rank for word in output_words),
+                    )
+                )
+                + 1
+            )
     else:
         print("Loading words from Anki Connect")
         async with anki_import.create_client() as client:
