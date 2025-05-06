@@ -128,7 +128,7 @@ class AnkiConnectClient:
         """
         full_query = f'deck:"{deck_name}"'
         if query:
-            full_query += " " + query
+            full_query += f" and ({query})"
 
         data = {
             "action": "findNotes",
@@ -288,7 +288,7 @@ class AnkiConnectClient:
             rank=int(rank_str) if rank_str else None,
             word=get_field_value("Word") or "",
             meaning=get_field_value("Definition") or "",
-            part_of_speech=get_field_value("Part_of_Speech") or "",
+            part_of_speech=get_field_value("Part-of-Speech") or "",
             article=get_field_value("Article"),
             sentences=load_sentences(
                 spanish_sentence, english_sentence, sentence_citation, example_sentences
