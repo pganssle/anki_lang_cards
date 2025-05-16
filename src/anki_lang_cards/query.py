@@ -230,7 +230,7 @@ class TGWModelAPI(ModelAPIBase):
 
 
 class AnthropicAPI(ModelAPIBase):
-    DEFAULT_MODEL: str = "claude-3-5-sonnet-20241022"
+    DEFAULT_MODEL: str = "anthropic/claude-3-7-sonnet-20250219"
 
     def __init__(
         self,
@@ -244,8 +244,11 @@ class AnthropicAPI(ModelAPIBase):
     ):
         if model_name is None:
             model_name = self.DEFAULT_MODEL
-        self.model_name = model_name
-        self.model = llm.get_async_model(self.model_name)
+        self.model = llm.get_async_model(model_name)
+        # TODO: Instead of doing this, have a separate "display_name" and use it
+        # whenever we want a specific display
+        if model_name.startswith("anthropic/"):
+            self.model_name = model_name.split("/", 1)[1]
         self.model.key = api_key
         self.semaphore = asyncio.Semaphore(max_connections)
         if query_params is None:
