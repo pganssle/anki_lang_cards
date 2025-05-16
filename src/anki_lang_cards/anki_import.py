@@ -201,7 +201,7 @@ class AnkiConnectClient:
             "params": {"note": new_note_info},
         }
 
-        result = self._post(data)
+        result = await self._post(data)
         if result["error"] != None:
             raise ValueError(result["error"])
         return result
