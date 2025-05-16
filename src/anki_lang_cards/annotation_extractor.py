@@ -220,11 +220,13 @@ class EPUBContext:
             else:
                 raise KeyError("Document ID not found: {doc_id}")
 
+            item_content = item.content.replace(b"&nbsp;", b" ")
             try:
-                parsed_doc = etree.fromstring(item.content)
+                parsed_doc = etree.fromstring(item_content)
             except etree.XMLSyntaxError:
                 # Fallback for potentially malformed HTML
-                parsed_doc = etree.fromstring(f"<html>{item.content}</html>")
+                parsed_doc = etree.fromstring(f"<html>{item_content}</html>")
+
             _strip_ns_prefixes(parsed_doc)
             self._doc_cache[doc_id] = self._doc_cache.setdefault(item_id, parsed_doc)
 
