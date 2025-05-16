@@ -44,7 +44,7 @@ class WordDiff:
             meaning_diff=word1.meaning != word2.meaning,
             pos_diff=word1.part_of_speech != word2.part_of_speech,
             article_diff=word1.article != word2.article,
-            example_count=len(word1.example_sentences) + len(word2.example_sentences),
+            example_count=len(word1.sentences) + len(word2.sentences),
         )
 
 
@@ -76,7 +76,7 @@ class WordView(Static):
             f"Article: {self.word.article or 'None'}",
             bool(self.diff and self.diff.article_diff),
         )
-        examples_text = f"Examples: {len(self.word.example_sentences)}"
+        examples_text = f"Examples: {len(self.word.sentences)}"
 
         return f"{rank_text}\n{word_text}\n{meaning_text}\n{pos_text}\n{article_text}\n{examples_text}"
 
