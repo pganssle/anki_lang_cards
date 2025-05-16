@@ -69,7 +69,7 @@ class Citation(Protocol):
     def source_type(self) -> str:
         raise NotImplementedError
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str]:
         return _cattrs_converter().unstructure(self)
 
     def to_json(self) -> str:
@@ -151,13 +151,13 @@ class Sentence:
     def __hash__(self) -> int:
         return hash(_normalize_str(self.spanish))
 
-    def to_dict(self) -> dict[str, str]:
-        out = {
+    def to_dict(self) -> dict[str, str | dict[str, str]]:
+        out: dict[str, str | dict[str, str]] = {
             "spanish": self.spanish,
             "english": self.english,
         }
         if self.source is not None:
-            out["source"] = self.source.to_json()
+            out["source"] = self.source.to_dict()
 
         return out
 
@@ -169,8 +169,10 @@ class Sentence:
                 citation = source_data
             elif isinstance(source_data, str):
                 citation = Citation.from_json(source_data)
-            else:
+            elif isinstance(source_data, dict):
                 citation = Citation.from_dict(source_data)
+            else:
+                citation = None
         else:
             citation = None
 
@@ -310,6 +312,7 @@ class Word:
         self.sentences = sentences
 
         self.model_used = ", ".join(set(_non_nulls(self.model_used, other.model_used)))
+
 
     def to_csv_line(self, require_rank: bool = False) -> Sequence[str]:
         if self.example_sentences:
