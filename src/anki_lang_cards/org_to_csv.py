@@ -206,6 +206,8 @@ async def main() -> None:
         conf = config.Config.from_file(args.config)
         if args.model_name is not None:
             model_name = args.model_name
+        elif conf.anthropic.default_model is not None:
+            model_name = conf.anthropic.default_model
         elif args.model_service == "anthropic":
             model_name = "claude-3-5-sonnet-20241022"
         else:
