@@ -7,6 +7,8 @@ import pathlib
 from collections.abc import Callable, Sequence
 from typing import Any, Final
 
+import attrs
+
 from . import _types as types
 from . import anki_import, caches, config, conflict_resolver, prompts, query
 
@@ -45,6 +47,8 @@ def _make_api_obj(
     if service == "anthropic":
         if conf_obj.anthropic is None:
             raise ValueError("Anthropic model selected but no config found.")
+        if model_name is None and conf_obj.anthropic.default_model is not None:
+            model_name = conf_obj.anthropic.default_model
         query_cacher = caches.QueryCacher(
             cache_type=caches.CacheTypes.SENTENCES,
             model_name=model_name or query.AnthropicAPI.DEFAULT_MODEL,
@@ -235,26 +239,47 @@ async def main():
     # also want to be able to handle the situation where there is a conflict
     # between an updated word in the current output and a NEW word that was not
     # included in the merge resolution.
+
+    # Words from the input CSV
     new_words_wl = conflict_resolver.WordLookup(words)
+
+    # Words from Anki Connect or the exported deck
     current_deck_wl = conflict_resolver.WordLookup(current_deck)
+
+    # If the output CSV already exists, this contains those words, which
+    # may or may not have been imported to the deck already.
     output_wl = conflict_resolver.WordLookup(output_words)
 
     new_and_existing = conflict_resolver.WordLookup(
         itertools.chain(*new_words_wl, current_deck)
     )
 
+    # This gets a single exemplar `Word` object for each word in the new words
+    # imported from the CSV (a given word may appear more than once, and
+    # it would show up in the `new_words_wl` as a set of words).
     unique_new_words = [next(iter(s)) for s in new_words_wl]
 
+    # Reads a cache from disk mapping sets of words to a single merged word
     merge_cache = conflict_resolver.MergeCache(args.conflict_cache_path)
 
+    # This finds all words which should map to the same card, but cannot
+    # because they are not exactly equal (usually the definition is slightly
+    # different). These may need manual merging; it is a lazy iterable.
     conflict_sets = conflict_resolver.find_conflicting_word_sets(
         unique_new_words, new_and_existing
     )
+
+    # There are two ways that a word in the conflict set may already have been
+    # resolved: 1. it could be in the merge_cache or 2. it could already be
+    # in the output CSV. In both of these cases, we don't need to show it to
+    # the user for manual merge resolution, so we filter these out.
     to_merge = list(
         conflict_resolver.filter_merged_outputs(conflict_sets, output_wl, merge_cache)
     )
 
     if to_merge:
+        # `textual` is an optional depdendency; if it isn't installed, you cannot
+        # use the TUI to do merge resolution.
         if WORD_MERGER_AVAILABLE:
             merge_results = await word_merger.merge_words(
                 to_merge,
@@ -275,6 +300,11 @@ async def main():
             sys.exit(1)
     else:
         conflicting_sets = {}
+
+    # TODO: Handle the case where the word itself is changed during the merging
+    # process and this results in a new conflict between the (updated) merged
+    # word and the word that you've added.
+    # TODO: Add a test of some sort for this.
 
     diff_words = []
     updated: set[types.Word] = set()
@@ -335,7 +365,19 @@ async def main():
                 existing_resolved = conflict_resolver.merge_word_set(ew)
                 if set(resolved.sentences) - set(existing_resolved.sentences):
                     # Group 2 - New sentences, so we need to update it
-                    merged_word = conflict_resolver.merge_word_set({resolved, ew})
+                    # Since the values in `ew` haven't already been harmonized
+                    # with those in `resolved`, we are going to just update
+                    # the sentences part.
+                    new_sentences = list(resolved.sentences)
+                    sentence_set = set(new_sentences)
+                    for sentence in itertools.chain.from_iterable(
+                        w.sentences for w in ew
+                    ):
+                        if sentence not in sentence_set:
+                            new_sentences.append(sentence)
+                            sentence_set.add(sentence)
+
+                    merged_word = attrs.evolve(resolved, sentences=new_sentences)
                     updated.add(merged_word)
                 else:
                     # Group 1: No new sentences and already in output
