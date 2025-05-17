@@ -3,6 +3,8 @@ input/
 output/
 .cache/
 debug/
+.hypothesis
+local/
 
 venv/
 
