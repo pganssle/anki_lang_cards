@@ -30,6 +30,7 @@ books = [
 testing = [
     "pytest",
     "hypothesis",
+    "time-machine"
 ]
 merge_ui = [
     "textual"
