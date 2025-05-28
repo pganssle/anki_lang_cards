@@ -9,7 +9,7 @@ import threading
 import typing
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Final, NewType, Protocol, Self, TypedDict, TypeVar
+from typing import Any, Final, NewType, Protocol, Self, TypeVar
 
 import attrs
 import cattrs
@@ -22,11 +22,15 @@ _T = TypeVar("_T")
 
 def _non_nulls(v1: _T | None, v2: _T | None) -> Sequence[_T]:
     if v1 and not v2:
+        assert v1 is not None
         return (v1,)
     if v2 and not v1:
+        assert v2 is not None
         return (v2,)
     if not v1 and not v2:
         return ()
+    assert v1 is not None
+    assert v2 is not None
     return (v1, v2)
 
 
@@ -42,10 +46,7 @@ def _compare_normalized_sequences(seq1: Sequence[str], seq2: Sequence[str]) -> b
     if isinstance(seq1, str) or isinstance(seq2, str):
         raise TypeError("Cannot compare strings")
 
-    for s1, s2 in zip(seq1, seq2, strict=True):
-        if not _compare_normalized(s1, s2):
-            return False
-    return True
+    return all(_compare_normalized(s1, s2) for s1, s2 in zip(seq1, seq2, strict=True))
 
 
 ID_LOCK = threading.Lock()
@@ -189,7 +190,6 @@ class Sentence:
         if (self.source is None) != (other.source is None):
             source = self.source or other.source
             source_from_other = self.source is None
-            update = self.source is None
         else:
             source = self.source
             source_from_other = False
@@ -289,9 +289,9 @@ class Word:
 
         ranks = _non_nulls(self.rank, other.rank)
         if ranks:
-            rank = min(ranks)
+            self.rank = min(ranks)
         else:
-            rank = None
+            self.rank = None
 
         # If both have sentences, merge the two pairs of sentences
         if self.sentences and other.sentences:
@@ -312,7 +312,6 @@ class Word:
         self.sentences = sentences
 
         self.model_used = ", ".join(set(_non_nulls(self.model_used, other.model_used)))
-
 
     def to_csv_line(self, require_rank: bool = False) -> Sequence[str]:
         if self.example_sentences:
@@ -377,7 +376,7 @@ class Word:
             string_obj = io.StringIO(csv_path)
             cm = contextlib.nullcontext(string_obj)
         else:
-            cm = open(csv_path, "rt")
+            cm = open(csv_path, "rt")  # noqa: SIM115, UP015
 
         with cm as f:
             reader = csv.DictReader(f)

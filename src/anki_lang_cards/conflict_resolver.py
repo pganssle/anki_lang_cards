@@ -2,13 +2,19 @@
 
 import copy
 import csv
-import enum
 import io
 import itertools
 import json
 import pathlib
-from collections.abc import (Collection, Iterable, Iterator, MutableMapping,
-                             MutableSequence, Sequence, Set)
+from collections.abc import (
+    Collection,
+    Iterable,
+    Iterator,
+    MutableMapping,
+    MutableSequence,
+    Sequence,
+    Set,
+)
 from typing import Any, Final, Self, TypeAlias
 
 import attrs
@@ -243,12 +249,13 @@ def find_merged_outputs(
         Yields the merged words from the word cache.
     """
     for word_set in conflict_sets:
-        if (merge_operation := merge_cache.get_merge(word_set)) is not None:
-            if merge_operation.result in output_words:
-                ow_set = output_words.lookup(merge_operation.result)
-                if len(ow_set) == 1 and next(iter(ow_set)) == merge_operation.result:
-                    yield merge_operation
-                    continue
+        if (
+            merge_operation := merge_cache.get_merge(word_set)
+        ) is not None and merge_operation.result in output_words:
+            ow_set = output_words.lookup(merge_operation.result)
+            if len(ow_set) == 1 and next(iter(ow_set)) == merge_operation.result:
+                yield merge_operation
+                continue
         yield word_set
 
 

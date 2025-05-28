@@ -4,10 +4,9 @@ import json
 import random
 import urllib.parse
 from collections.abc import AsyncIterable, Iterable, Mapping, Sequence
-from typing import Any, ClassVar, Final, Protocol, Self, TypedDict
+from typing import Any, ClassVar, Protocol, Self
 
 import aiohttp
-import attrs
 import backoff
 import llm
 
@@ -121,7 +120,7 @@ class ModelAPIBase(Protocol):
                 word_subset = query_futures.pop(future)
                 try:
                     parsed, model = self.parse_results(await future)
-                except (ValueError, json.decoder.JSONDecodeError) as e:
+                except (ValueError, json.decoder.JSONDecodeError):
                     key = tuple(word.word for word in word_subset)
                     retries[key] = retries.get(key, 0) + 1
                     if retries[key] <= max_invalid_output_retries:
@@ -140,10 +139,10 @@ class ModelAPIBase(Protocol):
 
                 citation = types.ModelCitation(model=model)
 
-                def _add_citation(response_data: dict) -> dict:
+                def _add_citation(response_data: dict, _citation=citation) -> dict:
                     new_examples = []
                     for example in response_data["examples"]:
-                        new_example = {**example, "source": citation}
+                        new_example = {**example, "source": _citation}
                         new_examples.append(new_example)
                     return {**response_data, "examples": new_examples}
 
@@ -395,5 +394,5 @@ async def _extract_response_data(
     return {"text": text, "usage": usage_obj}
 
 
-class OperationUnsupported(NotImplementedError):
+class OperationUnsupported(NotImplementedError):  # noqa: N818
     """If an operation is not supported by an API endpoint."""

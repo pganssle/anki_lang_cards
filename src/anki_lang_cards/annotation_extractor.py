@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import copy
 import functools
 import json
 import os
 import sqlite3
 from collections.abc import Mapping, MutableMapping, Sequence
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Final, NotRequired, Self, TypedDict
 
@@ -91,21 +89,20 @@ class DocPosition:
         index = pos.index
         if pos.text_idx is not None and pos.text_idx > 0:
             node = node.getchildren()[pos.text_idx - 1]
-            if index is not None and pos.text_idx > 0:
+            if index is not None and node.text is not None:
                 # When specified on a text fragment, the index is relative to
                 # the "tail" of the child element we've chosen, so we need to
                 # add in the length of the text contents of the child element
                 # to make the indexing work out properly.
-                if node.text is not None:
-                    index += len(node.text)
+                index += len(node.text)
         return cls(node=node, index=index)
 
 
 def _next_position(cpos: DocPosition) -> DocPosition:
     node_children = cpos.node.getchildren()
     if node_children:
-        # Search any children of the current node. Anything between children is going to be
-        # in the tail of the previous child node.
+        # Search any children of the current node. Anything between children is
+        # going to be in the tail of the previous child node.
         cpos = DocPosition(node=next(iter(node_children)))
     elif (next_sibling := cpos.node.getnext()) is not None:
         cpos = DocPosition(node=next_sibling)
@@ -213,10 +210,11 @@ class EPUBContext:
                     item = self.book.get_item_with_id(item_id)
             elif isinstance(doc_id, str):
                 for item in self.book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
-                    if isinstance(item, epub.EpubHtml):
-                        if doc_id in item.id or doc_id in item.file_name:
-                            item.id = item.id
-                            break
+                    if isinstance(item, epub.EpubHtml) and (
+                        doc_id in item.id or doc_id in item.file_name
+                    ):
+                        item.id = item.id
+                        break
             else:
                 raise KeyError("Document ID not found: {doc_id}")
 
@@ -285,7 +283,6 @@ class EPUBContext:
 
     def _next_sentence_end(self, position: DocPosition) -> DocPosition:
         cpos = position
-        parent = cpos.node.getparent()
 
         while True:
             # Search the current node and any "tails". This covers situations like:
@@ -334,7 +331,6 @@ class EPUBContext:
 
             # We want the last child of the previous element (recursively)
             while node_children := next_sibling.getchildren():
-                parent = next_sibling
                 next_sibling = node_children[-1]
 
             last_pos = cpos
@@ -352,8 +348,6 @@ class EPUBContext:
         self,
         drange: DocPositionRange,
     ) -> int:
-        count = 0
-        text = drange.text
         count = len(SENTENCE_END_REGEX.findall(drange.text))
         return count
 
@@ -412,7 +406,7 @@ class EPUBContext:
 
 def get_language_clause(language: str | None) -> tuple[str, tuple[str, ...]]:
     if not language:
-        return "", tuple()
+        return "", ()
     normalized = LANGUAGE_MAPPINGS.get(language.lower())
     if not normalized:
         raise ValueError(f"Unsupported language: {language}")
@@ -453,7 +447,7 @@ def process_annotations(
     for annotation in raw_annotations.values():
         annotation_data = AnnotationData(**annotation)
         if "pos0" not in annotation_data:
-            print(f"Warning: Skipping annotation")
+            print("Warning: Skipping annotation")
             print(annotation_data)
             print(book_info)
             continue

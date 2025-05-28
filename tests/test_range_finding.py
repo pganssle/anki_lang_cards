@@ -11,14 +11,15 @@ import re
 
 import hypothesis
 import pytest
-from anki_lang_cards import anki_import
 from hypothesis import strategies as st
+
+from anki_lang_cards import anki_import
 
 NUM_STRATEGY = st.integers(min_value=1, max_value=1_000_000)
 
 
 @pytest.mark.parametrize(
-    "left,right,expected",
+    ("left", "right", "expected"),
     [
         (1, 1000, {"[1-9]", "[1-9][0-9]", "[1-9][0-9][0-9]"}),
         (2512, 2519, {"251[2-8]"}),

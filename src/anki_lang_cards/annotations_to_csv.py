@@ -3,23 +3,24 @@
 import argparse
 import asyncio
 import csv
-import datetime
-import functools
-import hashlib
 import itertools
 import json
 import re
-import textwrap
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Final, Literal, TypeAlias, TypedDict, cast
+from typing import Any, Literal, Self, TypeAlias, TypedDict, cast
 
 import attrs
 import llm
 
 from . import caches, config, dictionary_entries, prompts
-from ._types import (BookCitation, CombinedAnnotation, CombinedBookAnnotations,
-                     Word)
+from ._types import (
+    BookCitation,
+    CombinedAnnotation,
+    CombinedBookAnnotations,
+    Sentence,
+    Word,
+)
 
 WordMap: TypeAlias = Mapping[str, Sequence[dictionary_entries.DictionaryEntry]]
 
@@ -49,8 +50,8 @@ def dictionary_entry_to_rag_input(entry: dictionary_entries.DictionaryEntry) -> 
     if all(
         entry.definitions[0].pos == definition.pos for definition in entry.definitions
     ):
-        # All the same part of speech, we can put that in with the headword and not indent as much
-        # Format looks like:
+        # All the same part of speech, we can put that in with the headword and
+        # not indent as much. Format looks like:
         #
         # llama (n)
         #   1. flame
@@ -64,8 +65,8 @@ def dictionary_entry_to_rag_input(entry: dictionary_entries.DictionaryEntry) -> 
         lines: list[str] = [headword]
         lines.extend(_format_definition_list(entry.definitions))
     else:
-        # Mixed part of speech, so we use a format that separtes out definitions by part of speech
-        # Format looks like:
+        # Mixed part of speech, so we use a format that separtes out
+        # definitions by part of speech. Format looks like:
         #
         # largo
         #   (adj)
@@ -75,8 +76,8 @@ def dictionary_entry_to_rag_input(entry: dictionary_entries.DictionaryEntry) -> 
         #     1. length
         #     2. largo (musical movement)
 
-        # We will assume that the definitions for parts of speech are already grouped together,
-        # and if they aren't it's for some good reason.
+        # We will assume that the definitions for parts of speech are already
+        # grouped together, and if they aren't it's for some good reason.
         lines = [entry.headword]
         for pos, group in itertools.groupby(entry.definitions, key=lambda x: x.pos):
             lines.append(f"  ({pos})")
@@ -290,7 +291,7 @@ def _prepare_prompt_inputs(
         highlights = sorted(set(annotation.highlights), key=annotation.highlights.index)
 
         annotation_entry = {
-            "highlights": annotation.highlights,
+            "highlights": highlights,
             "context": annotation.context,
             "source_id": citation.id,
         }
@@ -355,7 +356,8 @@ def _estimate_tokens(prompt: str) -> int:
 def generate_prompts(
     prompt_inputs: Sequence[PromptInput], max_tokens: int = 2048
 ) -> Iterable[str]:
-    # TODO: Can use heuristic to estimate how many fit in the context window to make this faster
+    # TODO: Can use heuristic to estimate how many fit in the context window to
+    # make this faster
 
     current_prompt_stack: list[PromptInput] = []
     last_prompt: str = ""
@@ -559,7 +561,10 @@ async def main() -> None:
     parser.add_argument(
         "--invalidate-response-cache",
         action="store_true",
-        help="If specified, delete any existing caches for this given response and replace them with the new query response.",
+        help=(
+            "If specified, delete any existing caches for this given response "
+            "and replace them with the new query response."
+        ),
     )
     parser.add_argument(
         "--skip-response-cache",
@@ -570,7 +575,8 @@ async def main() -> None:
 
     if args.skip_response_cache and args.invalidate_response_cache:
         raise ValueError(
-            "At most one of --skip-response-cache and --invalidate-response-cache may be specified."
+            "At most one of --skip-response-cache and "
+            "--invalidate-response-cache may be specified."
         )
 
     conf = config.Config.from_file(args.config)

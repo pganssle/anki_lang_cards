@@ -229,7 +229,7 @@ async def main():
     config_file = pathlib.Path(args.config)
     if not config_file.exists():
         print(f"Config file {config.abs()} does not exist.")
-        raise IOError("At least one model config is required.")
+        raise OSError("At least one model config is required.")
     else:
         conf_obj = config.Config.from_file(config_file)
 

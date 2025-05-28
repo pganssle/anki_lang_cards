@@ -4,10 +4,13 @@ import argparse
 import json
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import cast
 
-from ._types import (Annotation, BookAnnotations, BookData, CombinedAnnotation,
-                     CombinedBookAnnotations)
+from ._types import (
+    BookAnnotations,
+    CombinedAnnotation,
+    CombinedBookAnnotations,
+)
 
 
 def combine_highlights(

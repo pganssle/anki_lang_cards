@@ -3,8 +3,8 @@
 import enum
 import functools
 import warnings
-from collections.abc import Mapping, Sequence, Set
-from typing import Any, Final, Literal, Self, TypeAlias
+from collections.abc import Mapping
+from typing import Any, Literal, Self, TypeAlias
 
 import attrs
 
@@ -86,11 +86,11 @@ _WordCharacteristic: TypeAlias = Gender | Number | Transitivity | Phrasality
 
 
 def _compare_characteristic(c1: _WordCharacteristic, c2: _WordCharacteristic) -> bool:
-    if type(c1) != type(c2):
+    if type(c1) is type(c2):
         raise TypeError(f"Cannot compare {c1} and {c2}")
 
     unspecified = type(c1).UNSPECIFIED
-    return c1 == unspecified or c2 == unspecified or c1 == c2
+    return c1 == unspecified or c2 == unspecified or c1 == c2  # noqa: SIM102
 
 
 def _merge_phrasality(
@@ -151,7 +151,7 @@ class PartOfSpeech:
         type=Phrasality, default=Phrasality.UNSPECIFIED, eq=False, hash=False, repr=True
     )
 
-    def __str__(self):
+    def __str__(self) -> str:
         if self.phrasal == Phrasality.PHRASAL:
             return f"{self.base_pos.value} phr"
         else:
@@ -357,10 +357,13 @@ def parse_part_of_speech(s: str, /) -> PartOfSpeech:
             number = Number.PLURAL
             phrasality = Phrasality.PHRASAL
 
-        if gender != Gender.UNSPECIFIED:
-            if phrasality == Phrasality.UNSPECIFIED and number == Number.UNSPECIFIED:
-                phrasality = Phrasality.NON_PHRASAL
-                number = Number.SINGULAR
+        if (
+            gender != Gender.UNSPECIFIED
+            and phrasality == Phrasality.UNSPECIFIED
+            and number == Number.UNSPECIFIED
+        ):
+            phrasality = Phrasality.NON_PHRASAL
+            number = Number.SINGULAR
         return Noun(number=number, gender=gender, phrasal=phrasality)
     elif base[0] == "v":
         if s == "v":

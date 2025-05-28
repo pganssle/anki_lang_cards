@@ -7,8 +7,8 @@ import datetime
 import io
 import pathlib
 import sys
-from collections.abc import Mapping, Sequence
-from typing import Any, Final
+from collections.abc import Sequence
+from typing import Final
 
 import attrs
 import llm
@@ -122,6 +122,7 @@ def parse_response(csv_response: str) -> Sequence[WordResponse]:
     idxes = {value: i for i, value in enumerate(header)}
 
     output = []
+
     def get_kwarg(row, kwarg) -> str:
         idx = idxes[kwarg]
         if idx >= len(row) and kwarg == "article":
@@ -140,7 +141,7 @@ def parse_response(csv_response: str) -> Sequence[WordResponse]:
     return output
 
 
-def words_to_csv(response: Sequence[WordResponse], write_header: bool=True) -> str:
+def words_to_csv(response: Sequence[WordResponse], write_header: bool = True) -> str:
     output = io.StringIO()
     writer = csv.writer(output)
     if write_header:
@@ -240,12 +241,13 @@ async def main() -> None:
         with open(args.output, "at+") as f:
             f.seek(0, 2)
             t = f.tell()
-            f.seek(t-1)
+            f.seek(t - 1)
             char = f.read(1)
             if char != "\n":
                 f.write("\n")
 
             f.write(csv_text)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

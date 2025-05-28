@@ -1,10 +1,9 @@
 """Library for dictionary headword stemming and dictionary lookup."""
 
 import re
-from collections.abc import Mapping, Sequence
-from enum import Enum, auto
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Final, TypeAlias
+from typing import TypeAlias
 
 import attrs
 import hunspell
@@ -45,7 +44,7 @@ def _parse_wiktionary_entry(content: str) -> Sequence[Definition]:
 
 def _parse_simple_entry(content: str) -> Sequence[Definition]:
     if not content:
-        return tuple()
+        return ()
 
     content = re.sub(r"<k>.*?</k>\n?", "", content)
     meanings = [s.strip() for s in content.split(",")]

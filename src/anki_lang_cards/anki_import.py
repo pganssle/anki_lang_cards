@@ -5,9 +5,8 @@ import json
 import math
 import pathlib
 import warnings
-from collections.abc import AsyncIterator, Iterable, Iterator, Sequence
-from typing import (Any, Final, Generic, Mapping, NewType, TypeAlias,
-                    TypedDict, TypeVar)
+from collections.abc import AsyncIterator, Iterable, Iterator, Mapping, Sequence
+from typing import Any, Final, Generic, NewType, TypeAlias, TypedDict, TypeVar
 
 import aiohttp
 
@@ -81,14 +80,13 @@ class AnkiConnectClient:
 
     async def _post(self, data: Mapping) -> Mapping:
         assert self._retries >= 0
-        for i in range(self._retries + 1):
+        for _ in range(self._retries + 1):
             try:
                 async with self._session.post(
                     self.endpoint, json=data, timeout=self._timeout
                 ) as response:
                     response.raise_for_status()
-                    result = await response.json()
-                    return result
+                    return await response.json()
             except aiohttp.ClientResponseError:
                 raise
             except aiohttp.ClientConnectionError as e:
@@ -149,7 +147,8 @@ class AnkiConnectClient:
             deck_name (str): The name of the Anki deck to retrieve notes from.
 
         Yields:
-            list: A list of dicts, where each dict represents an Anki note with its fields.
+            list: A list of dicts, where each dict represents an Anki note with
+            its fields.
         """
 
         pending = {
@@ -170,7 +169,7 @@ class AnkiConnectClient:
                 try:
                     result = await task
                     yield result
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     if retries.setdefault(note_id, 0) < 3:
                         pending.add(
                             asyncio.create_task(
@@ -193,7 +192,7 @@ class AnkiConnectClient:
                 for note_info in new_note_info
             ]
             await asyncio.gather(*tasks)
-            return
+            return None
 
         data = {
             "action": "updateNoteFields",
@@ -202,7 +201,7 @@ class AnkiConnectClient:
         }
 
         result = await self._post(data)
-        if result["error"] != None:
+        if result["error"] is not None:
             raise ValueError(result["error"])
         return result
 
@@ -375,7 +374,7 @@ def load_sentences(
             english=english_sentence,
             source=sentence_source,
         ),
-        *map(types.Sentence.from_dict, example_sentences)
+        *map(types.Sentence.from_dict, example_sentences),
     )
     return sentences
 
@@ -489,8 +488,7 @@ def _generate_regex_ranges(start: int, end: int) -> list[tuple[int, int]]:
         """Retrieves the position of the least significant digit."""
         assert n != 0
         str_n = str(n)
-        lsd = len(str_n)
-        for i, c in enumerate(reversed(str_n)):
+        for i, c in enumerate(reversed(str_n)):  # noqa: RET503
             if c != "0":
                 return i
 

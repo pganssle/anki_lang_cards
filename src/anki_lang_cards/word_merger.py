@@ -1,4 +1,3 @@
-import csv
 import enum
 from collections.abc import Collection, Iterable, Sequence, Set
 from typing import Self
@@ -11,8 +10,7 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.driver import Driver
 from textual.screen import ModalScreen, Screen
 from textual.widget import Widget
-from textual.widgets import (Button, Footer, Header, Input, Label, RadioButton,
-                             RadioSet, Static)
+from textual.widgets import Button, Footer, Header, Input, Label, Static
 
 from . import _types as types
 from . import conflict_resolver
@@ -78,7 +76,14 @@ class WordView(Static):
         )
         examples_text = f"Examples: {len(self.word.sentences)}"
 
-        return f"{rank_text}\n{word_text}\n{meaning_text}\n{pos_text}\n{article_text}\n{examples_text}"
+        return (
+            f"{rank_text}\n"
+            f"{word_text}\n"
+            f"{meaning_text}\n"
+            f"{pos_text}\n"
+            f"{article_text}\n"
+            f"{examples_text}"
+        )
 
 
 class WordEditor(Screen):
@@ -279,7 +284,7 @@ class MergeScreen(Screen):
 
     def previous_word(self) -> None:
         if self.current_idx < 1:
-            raise IndexError(f"Already at beginning of list.")
+            raise IndexError("Already at beginning of list.")
         self._load_word(self.current_idx - 1)
 
     @property
@@ -455,7 +460,7 @@ def auto_merge_words(words: Collection[types.Word]) -> types.Word:
     ranked_words = [(w, m) for w, m in zip(words, meanings) if w.rank is not None]
     ranked_words.sort(key=lambda x: x[0].rank or float("inf"))
 
-    for word, word_meanings in ranked_words:
+    for _, word_meanings in ranked_words:
         for meaning in word_meanings:
             if meaning not in seen:
                 seen.add(meaning)
@@ -568,5 +573,4 @@ async def merge_words(
     app = WordMergerApp(
         word_sets, cache, cache_behavior=cache_behavior, driver_class=driver_class
     )
-    result = await app.run_async()
-    return result
+    return await app.run_async()
