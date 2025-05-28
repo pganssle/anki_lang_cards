@@ -13,6 +13,7 @@ from . import _types as types
 @attrs.frozen
 class AnthropicConfig:
     api_key: str
+    default_model: str | None = None
 
     @classmethod
     def from_values(cls, vals: Mapping[str, Any]) -> Self:
