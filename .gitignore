@@ -5,6 +5,7 @@ output/
 debug/
 .hypothesis
 local/
+.tox/
 
 venv/
 
