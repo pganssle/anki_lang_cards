@@ -35,3 +35,122 @@ merge_ui = [
     "textual"
 ]
 
+[tool.pytest]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+addopts = "--strict-markers"
+
+[tool.coverage.run]
+parallel = true
+dynamic_context = "test_function"
+
+[tool.coverage.paths]
+source = ["*/src/anki_lang_cards", "*/.tox/*/site-packages/anki_lang_cards"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "pass",
+    "raise ImportError"
+]
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+atomic=true
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+line_length = 88
+known_first_party=["anki_lang_cards"]
+known_third_party=["pystardict", "pytest", "lxml", "regex", "hunspell", "ebooklib", "time-machine"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I", "C4", "N", "UP", "S", "BLE", "A", "C90", "T20", "PT", "RET", "SIM"]
+ignore = [
+    "B028",
+    "B905",
+    "C901",
+    "RET504",
+    "RET505",
+    "RET506",
+    "RET508",
+    "S101",
+    "S320",
+    "SIM103",
+    "SIM108",
+    "SIM117",
+    "UP015",
+    "UP040",
+    # TODO: Remove print statements
+    # Allow "print" for now
+    "T201",
+    # Allow too-long lines for now
+    "E501",
+]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+strict_optional = true
+warn_redundant_casts = true
+warn_no_return = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
