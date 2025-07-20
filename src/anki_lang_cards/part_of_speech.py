@@ -86,7 +86,7 @@ _WordCharacteristic: TypeAlias = Gender | Number | Transitivity | Phrasality
 
 
 def _compare_characteristic(c1: _WordCharacteristic, c2: _WordCharacteristic) -> bool:
-    if type(c1) is type(c2):
+    if type(c1) is not type(c2):
         raise TypeError(f"Cannot compare {c1} and {c2}")
 
     unspecified = type(c1).UNSPECIFIED
