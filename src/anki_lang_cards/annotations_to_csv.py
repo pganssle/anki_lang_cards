@@ -279,6 +279,46 @@ def handle_book_skipping(
     return book_annotations
 
 
+def generate_processed_pages_json(
+    combined_book_annotations: Sequence[CombinedBookAnnotations],
+) -> Sequence[Mapping[str, Any]]:
+    """Generate a JSON object representing pages that have been processed.
+
+    The format matches the existing book skipping syntax.
+    """
+    processed_books: list[dict[str, Any]] = []
+
+    for book_annotation in combined_book_annotations:
+        # Skip books with no annotations
+        if not book_annotation.annotations:
+            continue
+
+        # For each book, collect all page numbers
+        all_pages: Sequence[int] = sorted(
+            {
+                page
+                for annotation in book_annotation.annotations
+                for page in annotation.page_numbers
+            }
+        )
+
+        if not all_pages:
+            continue
+
+        # Create a book entry with page range from first to last page
+        book_entry: dict[str, StringPattern | RangePattern] = {
+            "title": book_annotation.book.title,
+            "author": book_annotation.book.author,
+        }
+
+        # Add page range from first to last annotated page
+        book_entry["page_numbers"] = [{"range": (all_pages[0], all_pages[-1])}]
+
+        processed_books.append(book_entry)
+
+    return processed_books
+
+
 def _prepare_prompt_inputs(
     combined_annotations: Sequence[CombinedAnnotation],
     word_map: WordMap,
@@ -568,6 +608,12 @@ async def main() -> None:
         help="List of books to skip, or page ranges within books",
     )
     parser.add_argument(
+        "--processed-pages-output",
+        type=Path,
+        default="output/processed_pages.json",
+        help="Path to output a JSON file containing processed pages",
+    )
+    parser.add_argument(
         "--invalidate-response-cache",
         action="store_true",
         help=(
@@ -667,6 +713,13 @@ async def main() -> None:
             writer.writerow(word.to_csv_line())
 
     print(f"Written to {args.output}")
+    print(f"Writing rules for processed pages to {args.processed_pages_output}")
+    # Generate and save processed pages JSON if requested
+    if args.processed_pages_output:
+        processed_pages = generate_processed_pages_json(combined_annotations)
+        with open(args.processed_pages_output, "w") as f:
+            json.dump(processed_pages, f, indent=2)
+        print(f"Processed pages written to {args.processed_pages_output}")
 
 
 if __name__ == "__main__":
