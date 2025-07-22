@@ -518,6 +518,15 @@ def _sentence_to_citation(
 def parse_llm_response(
     response_text: str, model_used: str, source_mapping: Mapping[int, BookCitation]
 ) -> Sequence[Word]:
+    if response_text.startswith("```json"):
+        print("Removing ```json wrapper")
+    response_text = (
+        response_text.strip()
+        .removeprefix("```json")
+        .removeprefix("```")
+        .removesuffix("```")
+        .strip()
+    )
     response_data = json.loads(response_text)
     output: list[Word] = []
     for highlight in response_data:

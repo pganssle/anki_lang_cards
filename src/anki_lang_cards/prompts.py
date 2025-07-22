@@ -406,6 +406,8 @@ The output format should also be JSON, and be structured like so, as a list of J
 ```
 
 Use EXACTLY the format above, do not try wrapping it in a top-level dictionary.
+Do not include the markdown (```json"/"```") wrapper, I want to directly parse
+the output as JSON.
 
 Only populate "article" for nouns. Valid parts of speech are:
 
