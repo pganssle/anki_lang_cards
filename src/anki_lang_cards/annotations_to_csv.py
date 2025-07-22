@@ -106,12 +106,14 @@ def lookup_words(
     return output
 
 
+StringPattern: TypeAlias = str | dict[Literal["pattern"], str]
+RangePattern: TypeAlias = Sequence[int | dict[Literal["range"], tuple[int, int]]]
+
+
 def handle_book_skipping(
     book_skip_list: Path, combined_book_annotations: Sequence[CombinedBookAnnotations]
 ) -> Sequence[CombinedBookAnnotations]:
     # This is absurdly complicated for what it does 😅
-    StringPattern: TypeAlias = str | dict[Literal["pattern"], str]
-    RangePattern: TypeAlias = Sequence[int | dict[Literal["range"], tuple[int, int]]]
 
     def compile_string_match(pattern: StringPattern) -> Callable[[str], bool]:
         if isinstance(pattern, dict):
