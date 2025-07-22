@@ -574,7 +574,7 @@ async def main() -> None:
         "--dictionary",
         action="append",
         type=Path,
-        default=(),
+        default=[],
         help="Path to a dictionary in STARDICT format. This can also be "
         "specified in the config file under annotations.dictionaries.",
     )
