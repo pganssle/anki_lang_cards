@@ -536,16 +536,14 @@ def parse_llm_response(
         article = highlight.get("article", None) or None
 
         example_sentences = list(highlight["examples"])
-        first_example = example_sentences[0]
-        del example_sentences[0]
-        english_sentence = first_example["english"]
-        spanish_sentence = first_example["spanish"]
-        sentence_source = _sentence_to_citation(first_example, source_mapping)
-
-        for example in example_sentences:
-            if (source := _sentence_to_citation(example, source_mapping)) is not None:
-                example["source"] = source.to_dict()
-            del example["source_id"]
+        sentences = [
+            Sentence(
+                spanish=sentence["spanish"],
+                english=sentence["english"],
+                source=_sentence_to_citation(sentence, source_mapping),
+            )
+            for sentence in example_sentences
+        ]
 
         output.append(
             Word(
@@ -554,10 +552,7 @@ def parse_llm_response(
                 meaning=meaning,
                 part_of_speech=part_of_speech,
                 article=article,
-                spanish_sentence=spanish_sentence,
-                english_sentence=english_sentence,
-                sentence_source=sentence_source,
-                example_sentences=example_sentences,
+                sentences=sentences,
                 model_used=model_used,
             )
         )
