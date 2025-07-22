@@ -642,7 +642,10 @@ async def main() -> None:
     if args.model_name is not None:
         model_name = args.model_name
     elif args.model_service == "anthropic":
-        model_name = "claude-3-5-sonnet-20241022"
+        if conf.anthropic is not None and conf.anthropic.default_model is not None:
+            model_name = conf.anthropic.default_model
+        else:
+            model_name = "anthropic/claude-sonnet-4-0"
     else:
         raise NotImplementedError("No model name")
 
