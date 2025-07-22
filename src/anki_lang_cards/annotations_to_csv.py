@@ -626,10 +626,18 @@ async def main() -> None:
             "and replace them with the new query response."
         ),
     )
+
     parser.add_argument(
         "--skip-response-cache",
         action="store_true",
         help="If specified, don't use existing caches, but also don't replace them.",
+    )
+
+    parser.add_argument(
+        "--max-simultaneous-queries",
+        type=int,
+        default=5,
+        help="Maximum number of simultaneous queries to the LLM service.",
     )
     args = parser.parse_args()
 
@@ -675,44 +683,53 @@ async def main() -> None:
         model_name=model_name,
         model_service=args.model_service,
     )
-    print(f"Generating prompts for {len(prompt_inputs)} combined annotations.")
-    prompts = list(generate_prompts(prompt_inputs))
-    for prompt in tqdm.tqdm(prompts):
-        for i in range(1, 4):
-            # If the first try failed, we must invalidate the cache before
-            # trying again.
-            if i > 1:
-                invalidate_cache = True
+
+    semaphore = asyncio.Semaphore(args.max_simultaneous_queries)
+    prompts_to_process = list(generate_prompts(prompt_inputs))
+
+    async def process_single_prompt(prompt: str) -> Sequence[Word]:
+        """Helper to process one prompt with retries and semaphore."""
+        async with semaphore:
+            for i in range(1, 4):
+                # Invalidate cache on retries (i > 1)
+                invalidate_cache = i > 1 or args.invalidate_response_cache
+
+                try:
+                    response = await process_input_with_llm(
+                        prompt,
+                        model_service=args.model_service,
+                        model_name=model_name,
+                        conf_obj=conf,
+                        query_cacher=query_cacher,
+                        invalidate_cache=invalidate_cache,
+                        skip_cache=args.skip_response_cache,
+                    )
+                    return parse_llm_response(
+                        response, model_used=model_name, source_mapping=source_mapping
+                    )
+                except (ValueError, json.JSONDecodeError) as e:
+                    msg = f"Attempt {i} failed for prompt. Error: {e}"
+                    print(msg)
+                    if i == 3:
+                        print(f"Final attempt failed. Prompt was:\n---\n{prompt}\n---")
+
+            return []
+
+    print(
+        f"Processing {len(prompts_to_process)} prompts with up to "
+        f"{args.max_simultaneous_queries} parallel queries."
+    )
+    tasks = [process_single_prompt(prompt) for prompt in prompts_to_process]
+
+    for future in tqdm.tqdm(
+        asyncio.as_completed(tasks), total=len(tasks), desc="Processing prompts"
+    ):
+        words = await future
+        for word in words:
+            if word in existing:
+                existing[word].update(word)
             else:
-                invalidate_cache = args.invalidate_response_cache
-
-            # TODO: Run these queries in parallel
-            response = await process_input_with_llm(
-                prompt,
-                model_service=args.model_service,
-                model_name=model_name,
-                conf_obj=conf,
-                query_cacher=query_cacher,
-                invalidate_cache=invalidate_cache,
-                skip_cache=args.skip_response_cache,
-            )
-
-            try:
-                words = parse_llm_response(
-                    response, model_used=model_name, source_mapping=source_mapping
-                )
-            except ValueError as e:
-                print(f"Failed to parse LLM response {i} times, retrying. Error:\n{e}")
-                continue
-
-            for word in words:
-                if word in existing:
-                    existing[word].update(word)
-                else:
-                    existing[word] = word
-            break
-        else:
-            print(f"Failed to parse response for prompt: {prompt}")
+                existing[word] = word
 
     print(f"Generated {len(existing)} entries.")
     with open(args.output, "wt") as f:
