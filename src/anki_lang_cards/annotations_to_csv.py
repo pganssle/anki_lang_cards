@@ -8,7 +8,7 @@ import json
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Literal, Self, TypeAlias, TypedDict, cast
+from typing import Any, Literal, TypeAlias, TypedDict, cast
 
 import attrs
 import llm
