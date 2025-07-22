@@ -12,6 +12,7 @@ from typing import Any, Literal, TypeAlias, TypedDict, cast
 
 import attrs
 import llm
+import tqdm
 
 from . import caches, config, dictionary_entries, prompts, _types
 from ._types import (
@@ -675,7 +676,8 @@ async def main() -> None:
         model_service=args.model_service,
     )
     print(f"Generating prompts for {len(prompt_inputs)} combined annotations.")
-    for prompt in generate_prompts(prompt_inputs):
+    prompts = list(generate_prompts(prompt_inputs))
+    for prompt in tqdm.tqdm(prompts):
         for i in range(1, 4):
             # If the first try failed, we must invalidate the cache before
             # trying again.

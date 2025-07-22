@@ -17,6 +17,7 @@ dependencies = [
     "llm",
     "llm-claude-3",
     "anthropic",
+    "tqdm",
 ]
 
 [project.optional-dependencies]
