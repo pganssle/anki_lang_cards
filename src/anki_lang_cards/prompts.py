@@ -418,6 +418,10 @@ v phr = verbal phrase
 adv = adverb
 adj = adjective
 adj mf = adjective using one form for both masculine and feminine
+interj = interjection
+conj = conjunction
+pron = prounoun
+prep = preposition
 
 BACKGROUND:
 -----------
