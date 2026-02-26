@@ -91,7 +91,10 @@ class WordLookup:
         return iter(self._words.values())
 
     def _key(self, word: types.Word) -> _WordKeyType:
-        return (word.word, word.part_of_speech.base_pos)
+        if isinstance(word.part_of_speech, pos.Noun):
+            return (word.word, word.part_of_speech.base_pos, word.part_of_speech.gender)
+        else:
+            return (word.word, word.part_of_speech.base_pos)
 
 
 @attrs.frozen
@@ -221,7 +224,26 @@ def find_conflicting_word_sets(
     """
     for word, matching_words in find_existing_words(new_words, existing_words):
         if any(mw != word for mw in matching_words):
-            yield frozenset({word, *matching_words})
+            # For `Word` objects, neither `__eq__` nor `__hash__` include things like
+            # rank and sentence, but we want to retain that information, so when
+            # we find non-conflicting words within the matching words, we need
+            # to merge them together before adding them to the final word set.
+            #
+            # TODO: This may already be sort of handled by later merging logic,
+            # but it is currently causing a display issue where merge conflicts
+            # get resolved without the full information available.
+            #
+            # TODO: Look into whether this can be fixed by adjusting how hashing
+            # and equality work instead
+            words_out = {word: word}
+            for mw in matching_words:
+                if mw in words_out:
+                    existing = copy.copy(words_out.pop(mw))
+                    existing.update(mw)
+                    words_out[existing] = existing
+                else:
+                    words_out[mw] = mw
+            yield frozenset(words_out)
 
 
 def find_merged_outputs(
