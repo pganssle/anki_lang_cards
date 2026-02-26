@@ -59,10 +59,14 @@ class DictionaryEngine:
     def __init__(
         self, hunspell_dict_path: Path, stardict_paths: Sequence[Path]
     ) -> None:
-        self._speller = hunspell.HunSpell(
-            str(hunspell_dict_path.with_suffix(".dic")),
-            str(hunspell_dict_path.with_suffix(".aff")),
-        )
+        try:
+            self._speller = hunspell.HunSpell(
+                str(hunspell_dict_path.with_suffix(".dic")),
+                str(hunspell_dict_path.with_suffix(".aff")),
+            )
+        except hunspell.HunSpellError:
+            print(f"Error with dictionary {str(hunspell_dict_path)}")
+            raise
         self._dictionaries = [
             pystardict.Dictionary(str(path)) for path in stardict_paths
         ]
