@@ -28,7 +28,7 @@ books = [
     "pystardict",
 ]
 testing = [
-    "pytest",
+    "pytest>=7.0.0",
     "hypothesis",
     "time-machine"
 ]
