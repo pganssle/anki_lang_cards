@@ -65,6 +65,40 @@ class DeckStats(TypedDict):
     total_in_deck: int
 
 
+def _word_to_note_data(
+    note_id: NoteId, word: types.Word | tuple[types.Word, Mapping[str, str]]
+) -> NoteData:
+    if not isinstance(word, types.Word):
+        word, extra_fields = word
+    else:
+        extra_fields = {}
+    fields = {
+        "Word": word.word,
+        "Definition": word.meaning,
+        "Part of Speech": str(word.part_of_speech),
+    }
+    if word.rank is not None:
+        fields["Rank"] = str(word.rank)
+
+    if word.article is not None:
+        fields["Article"] = word.article
+
+    if word.sentences:
+        fields["Spanish"] = word.spanish_sentence
+        fields["English"] = word.english_sentence
+        if word.sentence_source:
+            fields["Sentence Source"] = word.sentence_source.to_json()
+        else:
+            fields["Sentence Source"] = ""
+
+    fields = {**fields, **extra_fields}
+    if word.example_sentences:
+        # TODO: Refactor `WORD` or something to expose just this thing we need
+        fields["Extra Sentences"] = word.to_csv_line()[11]
+
+    return {"id": note_id, "fields": fields}
+
+
 class AnkiConnectClient:
     def __init__(
         self,
@@ -182,6 +216,17 @@ class AnkiConnectClient:
 
         if errors:
             raise ValueError(f"Failed to fetch notes: {errors}")
+
+    async def update_note_info_from_words(
+        self, replacements: Mapping[NoteId, tuple[types.Word, Mapping[str, str]]]
+    ) -> None:
+        new_note_info = []
+        for note_id, word in replacements.items():
+            new_note_info.append(_word_to_note_data(note_id, word))
+
+        if len(new_note_info) == 1:
+            new_note_info = new_note_info[0]
+        await self.update_note_info(new_note_info)
 
     async def update_note_info(
         self, new_note_info: NoteData | Sequence[NoteData]
