@@ -125,9 +125,12 @@ ignore = [
     "RET508",
     "S101",
     "S320",
+    "S603",
+    "S607",
     "SIM103",
     "SIM108",
     "SIM117",
+    "SIM118",
     "UP015",
     "UP040",
     # TODO: Remove print statements
