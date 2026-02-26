@@ -4,9 +4,9 @@ import argparse
 import functools
 import json
 import os
+import pathlib
 import sqlite3
 from collections.abc import Mapping, MutableMapping, Sequence
-from pathlib import Path
 from typing import Any, Final, NotRequired, Self, TypedDict
 
 import attrs
@@ -414,13 +414,13 @@ def get_language_clause(language: str | None) -> tuple[str, tuple[str, ...]]:
 
 
 @functools.lru_cache(maxsize=16)
-def parse_epub_context(book_path: Path) -> EPUBContext:
+def parse_epub_context(book_path: pathlib.Path) -> EPUBContext:
     """Cached EPUB parsing with LRU caching."""
     return EPUBContext(epub.read_epub(str(book_path)))
 
 
 def process_annotations(
-    calibre_dir: Path, book_data: Mapping[str, Any], context_sentences: int
+    calibre_dir: pathlib.Path, book_data: Mapping[str, Any], context_sentences: int
 ) -> BookAnnotations:
     # Find the EPUB file
     book_path = calibre_dir / book_data["path"]
@@ -472,13 +472,13 @@ def process_annotations(
     return BookAnnotations(book=book_info, annotations=processed_annotations)
 
 
-def export_to_json(data: Sequence[BookAnnotations], output_path: Path) -> None:
+def export_to_json(data: Sequence[BookAnnotations], output_path: pathlib.Path) -> None:
     serializable_data = BookAnnotations.sequence_to_serializable(data)
     with output_path.open("w", encoding="utf-8") as f:
         json.dump(serializable_data, f, ensure_ascii=False, indent=2)
 
 
-def export_to_csv(data: Sequence[BookAnnotations], output_path: Path) -> None:
+def export_to_csv(data: Sequence[BookAnnotations], output_path: pathlib.Path) -> None:
     import csv
 
     headers = [
@@ -516,9 +516,10 @@ def export_to_csv(data: Sequence[BookAnnotations], output_path: Path) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Extract Calibre annotations")
     parser.add_argument("-i", "--calibre-directory", type=Path, required=True)
+    parser.add_argument("-i", "--calibre-directory", type=pathlib.Path, required=True)
     parser.add_argument("-l", "--language", type=str)
     parser.add_argument("--context-sentences", type=int, default=1)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=pathlib.Path, required=True)
     parser.add_argument("--sidecar-column", type=str, default="raw_sidecar")
     parser.add_argument("--csv", action="store_true")
     parser.add_argument("--json", action="store_true")
