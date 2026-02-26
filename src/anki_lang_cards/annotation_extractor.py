@@ -4,7 +4,7 @@ import json
 import os
 import pathlib
 import sqlite3
-from collections.abc import Mapping, MutableMapping, Sequence
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from typing import Any, Final, NotRequired, Self, TypeAlias, TypedDict
 
 import attrs
@@ -513,9 +513,50 @@ def export_to_csv(data: Sequence[BookAnnotations], output_path: pathlib.Path) ->
                 )
 
 
+def load_annotations_from_db(
+    db_path: pathlib.Path, sidecar_column: str, language: str
+) -> Sequence[BookData]:
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Get column ID
+        cursor.execute(DatabaseQueries.GET_COLUMN_ID, (sidecar_column,))
+        column_id = cursor.fetchone()
+        if not column_id:
+            raise ValueError(f"Column {sidecar_column} not found")
+
+        # Build query with language filter if specified
+        lang_clause, lang_params = get_language_clause(language)
+        query = DatabaseQueries.GET_BOOKS.format(
+            column_id[0], column_id[0], column_id[0], column_id[0], lang_clause
+        )
+
+        # Get books and annotations
+        cursor.execute(query, lang_params)
+        books_data = cursor.fetchall()
+
+        return books_data
+
+
+def process_all_annotations(
+    books_data: Iterable[BookData], calibre_dir: pathlib.Path, context_sentences: int
+) -> Iterable[BookAnnotations]:
+    for book in books_data:
+        book_data = dict(book)
+        try:
+            result = process_annotations(calibre_dir, book_data, context_sentences)
+        except Exception:
+            print(f"[ERROR]: Failed to process annotations for {book_data['author']} - {book_data['title']}")
+            continue
+
+        # TODO: Log when no annotations are found for a given book
+        if result.annotations:
+            yield result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Extract Calibre annotations")
-    parser.add_argument("-i", "--calibre-directory", type=Path, required=True)
     parser.add_argument("-i", "--calibre-directory", type=pathlib.Path, required=True)
     parser.add_argument("-l", "--language", type=str)
     parser.add_argument("--context-sentences", type=int, default=1)
@@ -531,44 +572,22 @@ def main() -> None:
     if not db_path.exists():
         raise FileNotFoundError(f"Calibre database not found at {db_path}")
 
-    args.output.mkdir(parents=True, exist_ok=True)
+    books_data = load_annotations_from_db(
+        db_path, sidecar_column=args.sidecar_column, language=args.language
+    )
+    results = list(
+        process_all_annotations(books_data, args.calibre_directory, args.context_sentences)
+    )
 
-    with sqlite3.connect(db_path) as conn:
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+    if args.json or args.csv:
+        args.output.mkdir(parents=True, exist_ok=True)
 
-        # Get column ID
-        cursor.execute(DatabaseQueries.GET_COLUMN_ID, (args.sidecar_column,))
-        column_id = cursor.fetchone()
-        if not column_id:
-            raise ValueError(f"Column {args.sidecar_column} not found")
+    # Export results
+    if args.json:
+        export_to_json(results, args.output / f"{args.base_output_filename}.json")
 
-        # Build query with language filter if specified
-        lang_clause, lang_params = get_language_clause(args.language)
-        query = DatabaseQueries.GET_BOOKS.format(
-            column_id[0], column_id[0], column_id[0], column_id[0], lang_clause
-        )
-
-        # Get books and annotations
-        cursor.execute(query, lang_params)
-        books_data = cursor.fetchall()
-
-        # Process annotations
-        results = [
-            process_annotations(
-                args.calibre_directory, dict(book), args.context_sentences
-            )
-            for book in books_data
-        ]
-
-        results = [result for result in results if result.annotations]
-
-        # Export results
-        if args.json:
-            export_to_json(results, args.output / f"{args.base_output_filename}.json")
-
-        if args.csv:
-            export_to_csv(results, args.output / f"{args.base_output_filename}.csv")
+    if args.csv:
+        export_to_csv(results, args.output / f"{args.base_output_filename}.csv")
 
 
 if __name__ == "__main__":
