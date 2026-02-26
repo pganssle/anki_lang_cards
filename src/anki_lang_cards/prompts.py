@@ -360,6 +360,8 @@ I have a number of snippets of text in Spanish that include specific vocabulary 
 
 Note: If a highlight appears more than once in a given context, generate one example sentence for each time it appears, unless they are close enough together that they are essentially part of the same phrase, (e.g. "ojo" highlighted in "Ojo por ojo y el mundo acabará ciego." should only generate one example phrase).
 
+When generating sentences, please use the appropriate punctuation for the language when the punctuation differs (e.g. quotation marks, use of commas and em-dashes, etc).
+
 The input format will be JSON formatted like so:
 
 ```json
