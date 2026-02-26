@@ -306,6 +306,11 @@ class AnthropicAPI(ModelAPIBase):
     def parse_results(self, resp: caches.ResponseData) -> tuple[Mapping[str, str], str]:
 
         response_content = resp["text"]
+        response_content = (
+            response_content.removeprefix("```json")
+            .removeprefix("```")
+            .removesuffix("```")
+        )
         try:
             return json.loads(response_content), self.model_name
         except json.decoder.JSONDecodeError:
