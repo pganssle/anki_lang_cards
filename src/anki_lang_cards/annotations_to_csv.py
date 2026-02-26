@@ -13,20 +13,21 @@ from typing import Any, Literal, Self, TypeAlias, TypedDict, cast
 import attrs
 import llm
 
-from . import caches, config, dictionary_entries, prompts
+from . import caches, config, dictionary_entries, prompts, _types
 from ._types import (
     BookCitation,
     CombinedAnnotation,
     CombinedBookAnnotations,
     Sentence,
     Word,
+    HighlightWithNote
 )
 
 WordMap: TypeAlias = Mapping[str, Sequence[dictionary_entries.DictionaryEntry]]
 
 
 class AnnotationEntry(TypedDict):
-    highlights: Sequence[str]
+    highlights: Sequence[str | HighlightWithNote]
     context: str
     source_id: int
 
@@ -95,6 +96,9 @@ def lookup_words(
         book_annotation.annotations for book_annotation in combined_annotations
     ):
         for word in annotation.highlights:
+            if hasattr(word, "highlight"):
+                word = word.highlight
+
             entry = engine.lookup(word)
             if entry:
                 output[word] = entry
@@ -333,6 +337,7 @@ def _generate_prompt(prompt_inputs: Sequence[PromptInput]) -> str:
         [prompt_input.annotation_entry for prompt_input in prompt_inputs],
         indent=2,
         ensure_ascii=False,
+        default=_types._cattrs_converter().unstructure,
     )
     all_rag_entries: list[str] = []
     seen_headwords: set[str] = set()
@@ -361,6 +366,8 @@ def generate_prompts(
 
     current_prompt_stack: list[PromptInput] = []
     last_prompt: str = ""
+    if not prompt_inputs:
+        raise ValueError("No prompt inputs provided")
 
     for prompt_input in prompt_inputs:
         current_prompt_stack.append(prompt_input)

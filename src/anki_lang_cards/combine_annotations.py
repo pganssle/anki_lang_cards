@@ -10,6 +10,7 @@ from ._types import (
     BookAnnotations,
     CombinedAnnotation,
     CombinedBookAnnotations,
+    HighlightWithNote
 )
 
 
@@ -72,22 +73,28 @@ def combine_highlights(
         current_chapters: set[str] = set()
         current_page_numbers: set[int | None] = set()
 
+        annotation_text : str |  HighlightWithNote
         for annotation in annotations:
             if annotation.note:
-                # Skip anything with a note, since that signals that it was highlighted
-                # for a reason other than it being a vocabulary word.
-                continue
+                if annotation.note.startswith("K:"):
+                    annotation_text = HighlightWithNote(annotation.text, annotation.note.removeprefix("K:").strip())
+                else:
+                    # Skip anything with a note, since that signals that it was highlighted
+                    # for a reason other than it being a vocabulary word.
+                    continue
+            else:
+                annotation_text = annotation.text
 
             if not current_context:
                 # Start a new group
-                current_highlight_group = [annotation.text]
+                current_highlight_group = [annotation_text]
                 current_context = annotation.context
                 current_chapters.add(annotation.chapter or "")
                 current_page_numbers.add(annotation.page_number)
             elif has_overlap(current_context, annotation.context):
                 # Merge overlapping contexts
                 current_context = combine_contexts(current_context, annotation.context)
-                current_highlight_group.append(annotation.text)
+                current_highlight_group.append(annotation_text)
                 current_chapters.add(annotation.chapter or "")
                 current_page_numbers.add(annotation.page_number)
             else:
@@ -102,7 +109,7 @@ def combine_highlights(
                         ),
                     )
                 )
-                current_highlight_group = [annotation.text]
+                current_highlight_group = [annotation_text]
                 current_context = annotation.context
                 current_chapters = {annotation.chapter or ""}
                 current_page_numbers = {annotation.page_number}

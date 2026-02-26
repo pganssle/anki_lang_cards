@@ -458,6 +458,12 @@ class CattrsSerializable(Protocol):
 
 
 @attrs.frozen
+class HighlightWithNote:
+    highlight: str
+    note: str
+
+
+@attrs.frozen
 class BookData:
     title: str
     author: str
@@ -476,7 +482,7 @@ class Annotation:
 
 @attrs.frozen
 class CombinedAnnotation:
-    highlights: Sequence[str]
+    highlights: Sequence[str | HighlightWithNote]
     context: str
     chapters: Sequence[str]
     page_numbers: Sequence[int]
@@ -510,6 +516,13 @@ def _cattrs_converter() -> cattrs.Converter:
     converter.register_unstructure_hook(datetime.date, lambda d: d.isoformat())
     converter.register_structure_hook(
         datetime.date, lambda s, _: datetime.date.fromisoformat(s)
+    )
+
+    converter.register_structure_hook(
+        str | HighlightWithNote,
+        lambda v, _: (
+            v if isinstance(v, str) else converter.structure(v, HighlightWithNote)
+        ),
     )
 
     return converter
