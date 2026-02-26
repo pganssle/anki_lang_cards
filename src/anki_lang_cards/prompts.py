@@ -375,6 +375,12 @@ The input format will be JSON formatted like so:
 ]
 ```
 
+If a "highlight" contains a note, e.g. {"highlight": "fiambres", "note": "comida"}, this note
+is supposed to be appended to the headword, and it should be used to narrow the sense of the
+word when selecting sentences. In this example, only use meanings of "fiambre" that refer
+to food, and the "headword" output should be "fiambre (comida)". The note should always be
+in a single set of parentheses after the headword.
+
 The output format should also be JSON, and be structured like so, as a list of JSON objects:
 
 ```json
