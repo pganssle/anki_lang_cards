@@ -326,7 +326,7 @@ Would turn into:
 gemelo/a,"twin (identical)",nm/f,el/la
 mellizo/a,"twin, fraternal twin",nm/f,el/la
 
-If a word is only commonly used in Latin America, append (LatAm) after the English definition. If it is only commonly used in Spain, append (Spain) after the English definition.
+If a word is only commonly used in a specific region or country, please note that after the English definition. If it is generally used in Latin America, append (LatAm); if it is used specifically in Argentina, use (Argentina), in Spain use (Spain), if it's only used in Andalusia use (Andalusia), etc.
 
 ONLY OUTPUT THE WELL-FORMATTED CSV. Do not give any explanations or other extraneous text.
 
