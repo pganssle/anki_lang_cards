@@ -112,6 +112,12 @@ class AnkiConnectClient:
         self.endpoint = endpoint
         self._timeout = timeout
 
+    def _unwrap_result(self, result: Mapping) -> ...:
+        if result["error"]:
+            # TODO: Custom error class
+            raise ValueError(f"Anki Connect Error: {result['error']}")
+        return result["result"]
+
     async def _post(self, data: Mapping) -> Mapping:
         assert self._retries >= 0
         for _ in range(self._retries + 1):
@@ -169,7 +175,7 @@ class AnkiConnectClient:
         }
 
         result = await self._post(data=data)
-        return tuple(map(NoteId, result["result"]))
+        return tuple(map(NoteId, self._unwrap_result(result)))
 
     async def get_anki_notes(
         self, note_list: Iterable[NoteId]
