@@ -464,7 +464,7 @@ class HighlightWithNote:
 
 
 @attrs.frozen
-class BookData:
+class BookInfo:
     title: str
     author: str
     path: Path
@@ -490,13 +490,13 @@ class CombinedAnnotation:
 
 @attrs.frozen
 class BookAnnotations(CattrsSerializable):
-    book: BookData
+    book: BookInfo
     annotations: Sequence[Annotation]
 
 
 @attrs.frozen
 class CombinedBookAnnotations(CattrsSerializable):
-    book: BookData
+    book: BookInfo
     annotations: Sequence[CombinedAnnotation]
 
 

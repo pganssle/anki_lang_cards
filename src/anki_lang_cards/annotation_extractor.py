@@ -7,7 +7,7 @@ import os
 import pathlib
 import sqlite3
 from collections.abc import Mapping, MutableMapping, Sequence
-from typing import Any, Final, NotRequired, Self, TypedDict
+from typing import Any, Final, NotRequired, Self, TypeAlias, TypedDict
 
 import attrs
 import ebooklib
@@ -15,7 +15,9 @@ import regex
 from ebooklib import epub
 from lxml import etree
 
-from ._types import Annotation, BookAnnotations, BookData
+from ._types import Annotation, BookAnnotations, BookInfo
+
+BookData: TypeAlias = Mapping[str, Any]  # TODO: Use dataclass or be more specific
 
 LANGUAGE_MAPPINGS: Final[Mapping[str, str]] = {
     "spa": "spa",
@@ -420,7 +422,7 @@ def parse_epub_context(book_path: pathlib.Path) -> EPUBContext:
 
 
 def process_annotations(
-    calibre_dir: pathlib.Path, book_data: Mapping[str, Any], context_sentences: int
+    calibre_dir: pathlib.Path, book_data: BookData, context_sentences: int
 ) -> BookAnnotations:
     # Find the EPUB file
     book_path = calibre_dir / book_data["path"]
@@ -432,7 +434,7 @@ def process_annotations(
     raw_annotations = json.loads(book_data["annotations"])["annotations"]
 
     # Prepare book info
-    book_info = BookData(
+    book_info = BookInfo(
         title=book_data["title"],
         author=book_data["author"],
         path=os.fspath(book_path.relative_to(calibre_dir)),
