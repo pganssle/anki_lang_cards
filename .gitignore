@@ -9,6 +9,10 @@ local/
 
 venv/
 
+# Calibre-related nonsense
+.caltrash/
+.calnotes/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
