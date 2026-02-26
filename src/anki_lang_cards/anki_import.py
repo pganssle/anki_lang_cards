@@ -14,6 +14,7 @@ from . import _types as types
 
 NoteId = NewType("NoteId", int)
 DeckId = NewType("DeckId", int)
+CardId = NewType("CardId", int)
 JsonStr = NewType("JsonStr", str)
 URL: Final[str] = "http://localhost:8765"
 AC_VERSION: Final[int] = 6
@@ -53,7 +54,18 @@ class NoteData(TypedDict, total=False):
     fields: NoteFields
     modelName: str
     mod: int
-    cards: Sequence[int]
+    cards: Sequence[CardId]
+
+
+class CardData(TypedDict, total=False):
+    cardId: CardId
+
+    profile: str
+    tags: Sequence[str]
+    fields: NoteFields
+    modelName: str
+    mod: int
+    cards: Sequence[CardId]
 
 
 class DeckStats(TypedDict):
@@ -152,6 +164,35 @@ class AnkiConnectClient:
         }
         result = await self._post(data=data)
         return result["result"][0]
+
+    async def are_suspended(self, card_ids: Sequence[CardId]) -> Mapping[CardId, bool]:
+        data = {
+            "action": "areSuspended",
+            "version": AC_VERSION,
+            "params": {"cards": card_ids},
+        }
+        raw_result = await self._post(data=data)
+        result = self._unwrap_result(raw_result)
+
+        return dict(zip(card_ids, result, strict=True))
+
+    async def unsuspend_cards(self, card_ids: Sequence[CardId]) -> bool:
+        data = {
+            "action": "unsuspend",
+            "version": AC_VERSION,
+            "params": {"cards": [card_ids]},
+        }
+        result = await self._post(data=data)
+        return self._unwrap_result(result)
+
+    async def delete_notes(self, note_ids: Sequence[NoteId]) -> None:
+        data = {
+            "action": "deleteNotes",
+            "version": AC_VERSION,
+            "params": {"notes": list(note_ids)},
+        }
+        result = await self._post(data=data)
+        return self._unwrap_result(result)
 
     async def get_note_ids(
         self, deck_name: str, query: str | None = None
