@@ -14,14 +14,14 @@ import attrs
 import llm
 import tqdm
 
-from . import caches, config, dictionary_entries, prompts, _types
+from . import _types, caches, config, dictionary_entries, prompts
 from ._types import (
     BookCitation,
     CombinedAnnotation,
     CombinedBookAnnotations,
+    HighlightWithNote,
     Sentence,
     Word,
-    HighlightWithNote
 )
 
 WordMap: TypeAlias = Mapping[str, Sequence[dictionary_entries.DictionaryEntry]]
@@ -171,7 +171,7 @@ def handle_book_skipping(
             return match_ranges
 
     def compile_book_rule(
-        rule: dict[str, StringPattern | RangePattern]
+        rule: dict[str, StringPattern | RangePattern],
     ) -> Callable[[CombinedBookAnnotations], CombinedBookAnnotations | None]:
         rule_matchers = []
         for field in ("title", "author", "path", "language"):
@@ -213,7 +213,7 @@ def handle_book_skipping(
         # If we have page number or chapters, we have to compile those rules
         # and create a subset
         def subset_rule(
-            rule: dict[str, StringPattern | RangePattern]
+            rule: dict[str, StringPattern | RangePattern],
         ) -> Callable[[CombinedBookAnnotations], CombinedBookAnnotations | None]:
             annotation_matchers = []
             if "chapters" in rule:

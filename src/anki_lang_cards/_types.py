@@ -9,7 +9,7 @@ import threading
 import typing
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any, Final, NewType, Protocol, Self, TypeVar
+from typing import Any, Final, NewType, Protocol, Self
 
 import attrs
 import cattrs
@@ -17,10 +17,9 @@ import cattrs
 from . import part_of_speech as pos
 
 Url = NewType("Url", str)
-_T = TypeVar("_T")
 
 
-def _non_nulls(v1: _T | None, v2: _T | None) -> Sequence[_T]:
+def _non_nulls[T](v1: T | None, v2: T | None) -> Sequence[T]:
     if v1 and not v2:
         assert v1 is not None
         return (v1,)

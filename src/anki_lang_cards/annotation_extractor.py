@@ -159,16 +159,12 @@ class AnnotationData(TypedDict):
 
 
 class DatabaseQueries:
-    GET_COLUMN_ID: Final[
-        str
-    ] = """
+    GET_COLUMN_ID: Final[str] = """
         SELECT id FROM custom_columns 
         WHERE label = ?
     """
 
-    GET_BOOKS: Final[
-        str
-    ] = """
+    GET_BOOKS: Final[str] = """
         SELECT 
             books.title,
             authors.name as author,
@@ -546,8 +542,10 @@ def process_all_annotations(
         book_data = dict(book)
         try:
             result = process_annotations(calibre_dir, book_data, context_sentences)
-        except Exception:
-            print(f"[ERROR]: Failed to process annotations for {book_data['author']} - {book_data['title']}")
+        except Exception:  # noqa: BLE001
+            print(
+                f"[ERROR]: Failed to process annotations for {book_data['author']} - {book_data['title']}"
+            )
             continue
 
         # TODO: Log when no annotations are found for a given book
@@ -576,7 +574,9 @@ def main() -> None:
         db_path, sidecar_column=args.sidecar_column, language=args.language
     )
     results = list(
-        process_all_annotations(books_data, args.calibre_directory, args.context_sentences)
+        process_all_annotations(
+            books_data, args.calibre_directory, args.context_sentences
+        )
     )
 
     if args.json or args.csv:

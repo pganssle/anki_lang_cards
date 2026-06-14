@@ -1,4 +1,4 @@
-""" Module for handling word conflicts."""
+"""Module for handling word conflicts."""
 
 import copy
 import csv

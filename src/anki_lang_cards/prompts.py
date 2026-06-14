@@ -1,9 +1,7 @@
 # ruff: noqa E501
 from typing import Final
 
-SENTENCE_PROMPT: Final[
-    str
-] = """\
+SENTENCE_PROMPT: Final[str] = """\
 You are an expert Spanish teacher and lexicographer, whose specialty is designing excellent example sentences that show off the range of uses of a given word.
 
 I am going to give you valid JSON representing a term ("term") in Spanish and its meaning in English ("meaning"). I would like you to generate valid JSON containing 4 example sentences in idiomatic Spanish that use the term accompanied by a translation from the original Spanish into English; the example sentences should use the sense of the term that has the meaning specified by the English meaning. When the word is a verb, select different moods and tenses in the different sentences. The translations do not need to be word-for-word translations, it is more important that they capture the general spirit of the original Spanish.
@@ -132,9 +130,7 @@ OUTPUT:
 --------------
 """
 
-MULTI_SENTENCE_SYSTEM_PROMPT: Final[
-    str
-] = """\
+MULTI_SENTENCE_SYSTEM_PROMPT: Final[str] = """\
 You are an expert Spanish teacher and lexicographer, whose specialty is designing excellent example sentences that show off the range of uses of a given word.
 
 I am going to give you valid JSON representing a list of mappings containing terms ("term") in Spanish and their meaning in English ("meaning"). For each term, I would like you to generate valid JSON containing 4 example sentences in idiomatic Spanish that use the term accompanied by a translation from the original Spanish into English; the example sentences should use the sense of the term that has the meaning specified by the English meaning. If multiple English meanings are provided, provide sentences that sample all the meanings. When the word is a verb, select different moods and tenses in the different sentences. The translations do not need to be word-for-word translations, it is more important that they capture the general spirit of the original Spanish.
@@ -270,9 +266,7 @@ OUTPUT:
 ]
 """
 
-MULTI_SENTENCE_PROMPT_TEMPLATE: Final[
-    str
-] = """\
+MULTI_SENTENCE_PROMPT_TEMPLATE: Final[str] = """\
 Prompt:
 =======
 INPUT:
@@ -283,9 +277,7 @@ OUTPUT:
 --------------
 """
 
-ORG_TO_CSV_PROMPT_TEMPLATE: Final[
-    str
-] = """\
+ORG_TO_CSV_PROMPT_TEMPLATE: Final[str] = """\
 Task:
 
 Translate notes on Spanish words into well-formatted CSVs with the definition, part of speech and (if applicable), article.
@@ -341,9 +333,7 @@ INPUT:
 OUTPUT:
 """
 
-BOOK_ANNOTATION_PROMPT: Final[
-    str
-] = """
+BOOK_ANNOTATION_PROMPT: Final[str] = """
 You are an expert Spanish teacher and lexicographer, whose speciality is designing excellent sample sentences that show off the range of uses of a given word in context.
 
 TASK:

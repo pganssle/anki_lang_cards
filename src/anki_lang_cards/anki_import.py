@@ -6,7 +6,7 @@ import math
 import pathlib
 import warnings
 from collections.abc import AsyncIterator, Iterable, Iterator, Mapping, Sequence
-from typing import Any, Final, Generic, NewType, TypeAlias, TypedDict, TypeVar
+from typing import Any, Final, NewType, TypeAlias, TypedDict
 
 import aiohttp
 
@@ -19,10 +19,8 @@ JsonStr = NewType("JsonStr", str)
 URL: Final[str] = "http://localhost:8765"
 AC_VERSION: Final[int] = 6
 
-T = TypeVar("T", bound=str)
 
-
-class Field(TypedDict, Generic[T]):
+class Field[T: str](TypedDict):
     value: T
     order: int
 
@@ -583,6 +581,7 @@ def _generate_regex_ranges(start: int, end: int) -> list[tuple[int, int]]:
         for i, c in enumerate(reversed(str_n)):  # noqa: RET503
             if c != "0":
                 return i
+        raise AssertionError("A non-zero integer must contain a non-zero digit")
 
     def _floor_to(number: int, digit: int) -> int:
         m = 10 ** (digit - 1)

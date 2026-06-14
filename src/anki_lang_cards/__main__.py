@@ -184,7 +184,6 @@ async def main():
     deck_name = args.deck_name
 
     word_getter = operator.attrgetter("word")
-    wk_getter = operator.attrgetter("word", "part_of_speech")
 
     words = types.Word.words_from_csv(args.inputs)
     if args.output.exists():
@@ -222,8 +221,6 @@ async def main():
             else:
                 start_rank_at = args.start_rank_at
 
-    done: set[tuple[str, str]] = set()
-    to_update: set[str] = set()
     has_sentences: set[types.Word] = {word for word in words if len(word.sentences)}
 
     config_file = pathlib.Path(args.config)

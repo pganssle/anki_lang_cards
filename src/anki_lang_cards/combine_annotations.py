@@ -10,7 +10,7 @@ from ._types import (
     BookAnnotations,
     CombinedAnnotation,
     CombinedBookAnnotations,
-    HighlightWithNote
+    HighlightWithNote,
 )
 
 
@@ -73,11 +73,13 @@ def combine_highlights(
         current_chapters: set[str] = set()
         current_page_numbers: set[int | None] = set()
 
-        annotation_text : str |  HighlightWithNote
+        annotation_text: str | HighlightWithNote
         for annotation in annotations:
             if annotation.note:
                 if annotation.note.startswith("K:"):
-                    annotation_text = HighlightWithNote(annotation.text, annotation.note.removeprefix("K:").strip())
+                    annotation_text = HighlightWithNote(
+                        annotation.text, annotation.note.removeprefix("K:").strip()
+                    )
                 else:
                     # Skip anything with a note, since that signals that it was highlighted
                     # for a reason other than it being a vocabulary word.

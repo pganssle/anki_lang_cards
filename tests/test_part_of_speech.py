@@ -50,7 +50,7 @@ def test_part_of_speech_equal(pos1: pos.PartOfSpeech, pos2: pos.PartOfSpeech) ->
     )
 )
 def test_part_of_speech_unequal(
-    comparands: tuple[pos.PartOfSpeech, pos.PartOfSpeech]
+    comparands: tuple[pos.PartOfSpeech, pos.PartOfSpeech],
 ) -> None:
     pos1, pos2 = comparands
     assert pos1 != pos2
@@ -60,7 +60,7 @@ def test_part_of_speech_unequal(
     st.tuples(st.sampled_from(PART_OF_SPEECH_BASES), st.sampled_from(pos.Phrasality))
 )
 def test_part_of_speech_merge_same_phrasality(
-    data: tuple[pos.BasePoS, pos.Phrasality]
+    data: tuple[pos.BasePoS, pos.Phrasality],
 ) -> None:
     base_pos, phrasality = data
     pos1 = pos.PartOfSpeech(base_pos, phrasal=phrasality)
@@ -86,7 +86,7 @@ def test_part_of_speech_merge_same_phrasality(
     ).filter(lambda x: x[1] != x[2])
 )
 def test_part_of_speech_merge_different_phrasality(
-    data: tuple[pos.BasePoS, pos.Phrasality, pos.Phrasality]
+    data: tuple[pos.BasePoS, pos.Phrasality, pos.Phrasality],
 ) -> None:
     base_pos, phr1, phr2 = data
     pos1 = pos.PartOfSpeech(base_pos, phrasal=phr1)
