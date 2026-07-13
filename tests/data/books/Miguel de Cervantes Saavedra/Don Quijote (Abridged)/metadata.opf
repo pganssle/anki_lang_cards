@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="uuid_id" version="2.0">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:identifier opf:scheme="uuid" id="uuid_id">14acf480-bd2f-48e8-93e5-75d11d298240</dc:identifier>
+    <dc:title>Don Quijote (Abridged)</dc:title>
+    <dc:creator opf:file-as="Cervantes Saavedra, Miguel de" opf:role="aut">Miguel de Cervantes Saavedra</dc:creator>
+    <dc:language>spa</dc:language>
+  </metadata>
+</package>

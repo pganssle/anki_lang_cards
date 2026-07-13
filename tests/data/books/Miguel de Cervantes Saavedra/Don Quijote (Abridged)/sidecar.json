@@ -1,0 +1,43 @@
+{
+  "annotations": {
+    "1": {
+      "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+      "datetime": "2025-06-03 11:36:09",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[61]/text().34",
+      "pageno": 54,
+      "pos0": "/body/DocFragment[3]/body/div/p[61]/text().34",
+      "pos1": "/body/DocFragment[3]/body/div/p[61]/text().40",
+      "text": "nombre"
+    },
+    "2": {
+      "chapter": "Capítulo XXV. Que trata de las estrañas cosas que en Sierra Morena sucedieron al valiente caballero de la Mancha, y de la imitación que hizo a la penitencia de Beltenebros",
+      "datetime": "2025-06-03 11:38:36",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[4]/body/div/p[504]/text().610",
+      "pageno": 481,
+      "pos0": "/body/DocFragment[4]/body/div/p[504]/text().610",
+      "pos1": "/body/DocFragment[4]/body/div/p[504]/text().618",
+      "text": "diamante"
+    },
+    "3": {
+      "chapter": "Capítulo LXXIV. De cómo don Quijote cayó malo, y del testamento que hizo, y su muerte",
+      "datetime": "2025-06-03 11:40:36",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[8]/body/div/p[142]/text().1329",
+      "pageno": 675,
+      "pos0": "/body/DocFragment[8]/body/div/p[142]/text().1329",
+      "pos1": "/body/DocFragment[8]/body/div/p[142]/text().1339",
+      "text": "tropezando"
+    },
+    "4": {
+      "chapter": "Malformed fixture annotation",
+      "datetime": "2025-06-03 11:40:36",
+      "drawer": "lighten",
+      "page": "invalid",
+      "pageno": 676,
+      "pos1": "invalid",
+      "text": "missing position"
+    }
+  }
+}

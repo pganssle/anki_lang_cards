@@ -6,6 +6,7 @@ build-backend = "flit_core.buildapi"
 name = "anki_lang_cards"
 version = "0.0.1"
 description = "Automatically generate Anki cards given a word list"
+requires-python = ">=3.12"
 authors = [{name = "Paul Ganssle", email = "paul@ganssle.io"}]
 license = {file = "LICENSE"}
 classifiers = ["License :: OSI Approved :: Apache Software License"]
@@ -37,11 +38,24 @@ merge_ui = [
     "textual"
 ]
 
+[dependency-groups]
+calibre-e2e = [
+    "attrs",
+    "cattrs",
+    "ebooklib",
+    "lxml",
+    "pytest>=9.0.0",
+    "regex",
+]
+
 [tool.pytest]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = ["--strict-markers"]
+markers = [
+    "e2e: tests requiring external applications and a clean-room environment",
+]
 
 [tool.coverage.run]
 parallel = true
@@ -51,6 +65,7 @@ dynamic_context = "test_function"
 source = ["*/src/anki_lang_cards", "*/.tox/*/site-packages/anki_lang_cards"]
 
 [tool.coverage.report]
+fail_under = 18
 exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",

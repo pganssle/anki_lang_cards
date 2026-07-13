@@ -1,0 +1,33 @@
+[
+  {
+    "book": {
+      "title": "Don Quijote (Abridged)",
+      "author": "Miguel de Cervantes Saavedra",
+      "path": "Miguel de Cervantes Saavedra/Don Quijote (Abridged) (1)",
+      "language": "spa"
+    },
+    "annotations": [
+      {
+        "text": "nombre",
+        "context": "Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha En un lugar de la Mancha, de cuyo nombre no quiero acordarme, no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero, adarga antigua, rocín flaco y galgo corredor.",
+        "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+        "page_number": 54,
+        "note": ""
+      },
+      {
+        "text": "diamante",
+        "context": "y déjeme a mí el cargo, que yo diré a mi señora que vuestra merced se las daba en una punta de peña más dura que la de un diamante.",
+        "chapter": "Capítulo XXV. Que trata de las estrañas cosas que en Sierra Morena sucedieron al valiente caballero de la Mancha, y de la imitación que hizo a la penitencia de Beltenebros",
+        "page_number": 481,
+        "note": ""
+      },
+      {
+        "text": "tropezando",
+        "context": "Y con esto cumplirás con tu cristiana profesión, aconsejando bien a quien mal te quiere, y yo quedaré satisfecho y ufano de haber sido el primero que gozó el fruto de sus escritos enteramente, como deseaba, pues no ha sido otro mi deseo que poner en aborrecimiento de los hombres las fingidas y disparatadas historias de los libros de caballerías, que, por las de mi verdadero don Quijote, van ya tropezando, y han de caer del todo, sin duda alguna.",
+        "chapter": "Capítulo LXXIV. De cómo don Quijote cayó malo, y del testamento que hizo, y su muerte",
+        "page_number": 675,
+        "note": ""
+      }
+    ]
+  }
+]

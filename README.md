@@ -4,6 +4,44 @@ This is a set of mostly janky scripts that makes Anki cards for my Anki deck. I 
 
 I now keep an org-mode file of new vocabulary I encounter, and use this script to generate new example sentences and cards for it using an LLM of my choice.
 
+## Development and tests
+
+The fast test suite runs in an isolated Python environment and does not require
+Calibre or Docker:
+
+```console
+tox -e unit
+```
+
+The annotation-extractor end-to-end test builds a fresh Calibre library from
+the source EPUB and KOReader sidecar fixtures. It runs in a locked, non-root
+Docker image so it cannot accidentally use a local Calibre database or
+configuration:
+
+```console
+tox -e e2e
+```
+
+The equivalent Docker commands are:
+
+```console
+docker build --network host --target calibre-e2e --tag anki-lang-cards-calibre-e2e .
+docker run --network none --rm anki-lang-cards-calibre-e2e
+```
+
+Use `docker build --no-cache ...` when validating the build from scratch, and
+`docker image inspect anki-lang-cards-calibre-e2e --format '{{.Size}}'` to watch
+for unexpected image growth. The verified image is approximately 343 MB; most
+of that is Calibre and its system libraries.
+
+The expected annotation output is stored in
+`tests/data/annotations.json`. Update it only after reviewing an intentional
+extractor behavior change. Run all non-containerized quality checks with:
+
+```console
+tox -e py312,py313,lint,format,type
+```
+
 You can find a copy of my modified version of the deck (the fields are slightly different in mine than the upstream version) in the [`deck` folder](deck/). The `.apkg` file is the first 5000 words, mostly unmodified, but with the correct fields. Additionally, I have exported in plain text format a large number of additional words and terms that I have come across. You can import these directly into the deck if so desired.
 
 If you want to separately see the code for the cards, it is in [`decks/spanish_vocab_templates`](decks/spanish_vocab_templates/), though keep in mind that if you modify them there, you must manually import your changes in Anki.

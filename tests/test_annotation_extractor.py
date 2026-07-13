@@ -1,44 +1,61 @@
-import functools
+import json
 import pathlib
+import subprocess
+import sys
+from typing import Any, Final
 
 import pytest
 
-from anki_lang_cards import annotation_extractor
+EXPECTED_OUTPUT: Final = pathlib.Path(__file__).parent / "data" / "annotations.json"
 
 
-@functools.cache
-def get_book_data(
-    calibre_dir: pathlib.Path,
-    sidecar_column: str = "raw_sidecar",
-    language: str = "Spanish",
-) -> annotation_extractor.BookData:
-    return annotation_extractor.load_annotations_from_db(
-        calibre_dir / "metadata.db",
-        sidecar_column=sidecar_column,
-        language=language,
+def _run_extractor(
+    calibre_library: pathlib.Path,
+    output_directory: pathlib.Path,
+    language: str,
+) -> None:
+    subprocess.run(
+        (
+            sys.executable,
+            "-m",
+            "anki_lang_cards.annotation_extractor",
+            "--calibre-directory",
+            str(calibre_library),
+            "--language",
+            language,
+            "--context-sentences",
+            "1",
+            "--output",
+            str(output_directory),
+            "--json",
+        ),
+        check=True,
     )
 
 
-@functools.lru_cache
-def get_annotations(
-    calibre_dir: pathlib.Path,
-    context_sentences: int,
-    sidecar_column: str = "raw_sidecar",
-    language: str = "Spanish",
-) -> annotation_extractor.BookData:
-    book_data = get_book_data(calibre_dir, sidecar_column, language)
-    return list(
-        annotation_extractor.process_all_annotations(
-            book_data, calibre_dir, context_sentences=context_sentences
-        )
-    )
+@pytest.mark.e2e
+def test_annotation_extractor_cli(
+    calibre_library: pathlib.Path,
+    tmp_path: pathlib.Path,
+) -> None:
+    _run_extractor(calibre_library, tmp_path, "Spanish")
+
+    with (tmp_path / "annotations.json").open(encoding="utf-8") as output_file:
+        actual: Any = json.load(output_file)
+    with EXPECTED_OUTPUT.open(encoding="utf-8") as expected_file:
+        expected: Any = json.load(expected_file)
+
+    assert actual == expected
+    assert len(actual) == 1
+    assert len(actual[0]["annotations"]) == 3
 
 
-def test_annotation_loading(calibre_library: pathlib.Path) -> None:
-    book_data = get_book_data(calibre_library)
+@pytest.mark.e2e
+def test_annotation_extractor_filters_other_languages(
+    calibre_library: pathlib.Path,
+    tmp_path: pathlib.Path,
+) -> None:
+    _run_extractor(calibre_library, tmp_path, "English")
 
-    assert len(book_data) == 1
-
-
-def test_annotation_processing_1_sentence(calibre_library: pathlib.Path) -> None:
-    all_annotations = get_annotations(calibre_library, 1)
+    with (tmp_path / "annotations.json").open(encoding="utf-8") as output_file:
+        assert json.load(output_file) == []
