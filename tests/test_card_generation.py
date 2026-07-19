@@ -138,6 +138,7 @@ def _run_annotations_to_csv(
     combined_annotations: pathlib.Path,
     dictionaries: DictionaryPaths,
     output_name: str = "words_from_annotations.csv",
+    extra_args: Sequence[str] = (),
 ) -> CliRun:
     output_csv = workdir / output_name
     config_path = _write_config(workdir, dictionaries)
@@ -162,6 +163,7 @@ def _run_annotations_to_csv(
             str(workdir / "processed_pages.json"),
             "--max-simultaneous-queries",
             "1",
+            *extra_args,
         ),
         check=True,
         capture_output=True,
@@ -470,17 +472,20 @@ def test_main_generates_sentences(main_run: CliRun) -> None:
         assert sentence.source.model == "fake-cards"
 
 
-def test_main_regenerates_existing_deck_word(main_run: CliRun) -> None:
-    """Documents current behavior, which looks like a bug: a deck word with
-    too few sentences is sent to the LLM for more, but the ``frozenset`` in
-    ``__main__`` collapses the (equal) input and deck Word objects and keeps
-    the rank-less input copy, so the word comes back with a *new* rank — a
-    duplicate of the existing card — and without the deck's sentences."""
+@pytest.mark.xfail(
+    strict=True,
+    reason="The frozenset in __main__ collapses the (equal) input and deck "
+    "Word objects and keeps the rank-less input copy, so the word comes "
+    "back under a new rank — a duplicate of the existing card.",
+)
+def test_main_merges_existing_deck_word(main_run: CliRun) -> None:
+    """A deck word sent to the LLM for more sentences keeps its rank and
+    its existing sentences."""
     words = _words_by_headword(main_run.output_csv)
     existente = words["existente"]
-    assert existente.rank == 1402  # A fresh rank, not the deck's 1400
+    assert existente.rank == 1400  # The deck's rank, not a fresh one
     spanish = {sentence.spanish for sentence in existente.sentences}
-    assert "La palabra existente ya estaba en el mazo." not in spanish
+    assert "La palabra existente ya estaba en el mazo." in spanish
     assert "Los expertos dicen: «existente» es fundamental." in spanish
 
 
@@ -500,22 +505,26 @@ def test_main_output_roundtrips(main_run: CliRun) -> None:
         assert line[1] == word.word
 
 
-def test_main_invalid_json_poisons_cache(
+@pytest.mark.xfail(
+    strict=True,
+    reason="When a response fails to parse, the retry in make_queries reads "
+    "the just-written (poisoned) response cache back instead of re-querying, "
+    "so the whole batch is skipped after the retries run out.",
+)
+def test_main_invalid_json_response_retried(
     dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
-    """Documents current behavior: when a response fails to parse, the retry
-    hits the just-written response cache and receives the same broken
-    response, so the whole batch is skipped after the retries run out."""
+    """A response that fails to parse is retried against the model (not the
+    response cache), so the second, valid response is used."""
     run = _run_main(
         tmp_path_factory.mktemp("badjson-run"),
         CARDS_DIR / "words_badjson.csv",
         dictionary_paths,
     )
     assert "Retrying" in run.stdout
-    assert "Skipping" in run.stdout
-    with run.output_csv.open(encoding="utf-8", newline="") as f:
-        rows = list(csv.DictReader(f))
-    assert rows == []
+    words = _words_by_headword(run.output_csv)
+    assert "badjsonito" in words
+    assert "inocente" in words
 
 
 def test_load_anki_export_repairs_mangled_json() -> None:
@@ -530,3 +539,60 @@ def test_load_anki_export_repairs_mangled_json() -> None:
     assert extra.english == 'An "example" quoted sentence.'
     assert isinstance(extra.source, types.ModelCitation)
     assert extra.source.model == "old-model"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="The JSON repair replaces &quot;, &nbsp; and <br> but not &amp;, "
+    "so escaped ampersands stay permanently corrupted.",
+)
+def test_load_anki_export_repairs_ampersands() -> None:
+    """Escaped ampersands in mangled deck exports are repaired on load."""
+    words = {
+        word.word: word
+        for word in anki_import.load_anki_words(CARDS_DIR / "exported_deck.txt")
+    }
+    ampersand = words["existente"].sentences[2]
+    assert ampersand.spanish == "Pan & vino."
+    assert ampersand.english == "Bread & wine."
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="The output CSVs unconditionally start with a header row, which "
+    "imports into Anki as a junk note. The header should be opt-in.",
+)
+def test_annotations_csv_has_no_header_by_default(annotations_run: CliRun) -> None:
+    with annotations_run.output_csv.open(encoding="utf-8", newline="") as f:
+        first_row = next(csv.reader(f))
+    assert first_row[:2] != ["rank", "word"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="The --csv-header option does not exist yet.",
+)
+def test_annotations_csv_header_flag_adds_header(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    workdir = tmp_path_factory.mktemp("header-run")
+    run = _run_annotations_to_csv(
+        workdir,
+        CARDS_DIR / "combined_annotations.json",
+        dictionary_paths,
+        extra_args=("--csv-header",),
+    )
+    with run.output_csv.open(encoding="utf-8", newline="") as f:
+        first_row = next(csv.reader(f))
+    assert first_row[:2] == ["rank", "word"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="The output CSVs unconditionally start with a header row, which "
+    "imports into Anki as a junk note. The header should be opt-in.",
+)
+def test_main_output_has_no_header_by_default(main_run: CliRun) -> None:
+    with main_run.output_csv.open(encoding="utf-8", newline="") as f:
+        first_row = next(csv.reader(f))
+    assert first_row[:2] != ["rank", "word"]

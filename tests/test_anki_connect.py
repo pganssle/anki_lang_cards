@@ -286,12 +286,14 @@ def test_update_note_fields_is_idempotent(anki_setup: None) -> None:
     assert after_second == new_extra
 
 
-def test_update_from_word_never_updates_part_of_speech(anki_setup: None) -> None:
-    """Documents a write/read field-name mismatch: `_word_to_note_data`
-    writes "Part of Speech", but the notetype (and the read path in
-    `word_from_anki_connect_response`) uses "Part-of-Speech". AnkiConnect
-    silently ignores unknown fields, so updating a note from a Word updates
-    everything except the part of speech."""
+@pytest.mark.xfail(
+    strict=True,
+    reason="_word_to_note_data writes a 'Part of Speech' field but the "
+    "notetype (and the read path) use 'Part-of-Speech'; AnkiConnect "
+    "silently ignores unknown fields, so the part of speech never updates.",
+)
+def test_update_from_word_updates_part_of_speech(anki_setup: None) -> None:
+    """Updating a note from a Word updates its part of speech."""
     word = _nasty_word(2004, word="renombre")
     note_id = _add_note(word)
 
@@ -311,14 +313,19 @@ def test_update_from_word_never_updates_part_of_speech(anki_setup: None) -> None
 
     _run(update())
     fields = _fields_of(note_id)
-    assert fields["Definition"] == "a corrected meaning"  # Other fields update
-    assert fields["Part-of-Speech"] == "nm"  # The part of speech never does
+    assert fields["Definition"] == "a corrected meaning"
+    assert fields["Part-of-Speech"] == "adj"
 
 
-def test_empty_json_string_corrupted_by_reader(anki_setup: None) -> None:
-    """Documents a repair-hack side effect: fix_json_field rewrites every
-    `""` to `"`, so a legitimately empty JSON string in Extra Sentences
-    breaks the parse and the reader silently drops all extra sentences."""
+@pytest.mark.xfail(
+    strict=True,
+    reason="The reader's blanket rewrite of doubled quotes corrupts any "
+    "legitimately empty JSON string, so the extra sentences are silently "
+    "dropped. Valid JSON should be parsed as-is, with repair only as a "
+    "fallback.",
+)
+def test_empty_json_string_sentences_preserved(anki_setup: None) -> None:
+    """A stored sentence with an empty translation survives the read path."""
     word = _nasty_word(2005, word="vacio")
     note_id = _add_note(word)
     empty_english = json.dumps(
@@ -335,9 +342,9 @@ def test_empty_json_string_corrupted_by_reader(anki_setup: None) -> None:
             return await client.retrieve_matching_words(DECK, [word])
 
     (retrieved,) = [w for w in _run(retrieve()).values() if w.word == "vacio"]
-    # The stored field holds one valid sentence, but the reader's quote
-    # repair corrupts it and it is silently discarded.
-    assert len(retrieved.sentences) == 1
+    assert len(retrieved.sentences) == 2
+    assert retrieved.sentences[1].spanish == "Sin traducción."
+    assert retrieved.sentences[1].english == ""
 
 
 def test_find_highest_rank_against_real_search(anki_setup: None) -> None:
