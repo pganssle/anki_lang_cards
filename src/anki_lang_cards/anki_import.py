@@ -112,6 +112,47 @@ def _word_to_note_data(
     return {"id": note_id, "fields": fields}
 
 
+def _json_repair_candidates(json_str: str) -> Iterator[str]:
+    """Yield progressively more aggressively repaired forms of a JSON field.
+
+    The first candidate is the field verbatim; the second undoes the HTML
+    escaping historically applied by Anki imports; the last also collapses
+    doubled quotes. The doubled-quote rewrite is destructive on valid JSON
+    (it corrupts legitimately empty strings), which is why it is only ever
+    applied as a last resort.
+    """
+    yield json_str
+    unescaped = (
+        json_str.replace("&quot;", '"')
+        .replace("&nbsp;", " ")
+        .replace("<br>", "\n")
+        # &amp; must come last so it unwraps double escaping one layer at
+        # a time.
+        .replace("&amp;", "&")
+    )
+    yield unescaped
+    yield unescaped.replace('""', '"')
+
+
+def parse_json_field_with_repair(json_str: str) -> Any:
+    """Parse a JSON-bearing Anki field, repairing HTML-escape mangling.
+
+    Valid JSON is parsed as-is; mangled fields go through repairs of
+    increasing aggressiveness.
+
+    :raises json.JSONDecodeError: If no candidate parses (the error comes
+        from the most-repaired candidate).
+    """
+    last_error: json.JSONDecodeError | None = None
+    for candidate in _json_repair_candidates(json_str):
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError as e:
+            last_error = e
+    assert last_error is not None
+    raise last_error
+
+
 class AnkiConnectClient:
     def __init__(
         self,
@@ -333,30 +374,20 @@ class AnkiConnectClient:
             field: Field = fields.get(field_name, None)
             return field["value"] if field else None
 
-        def fix_json_field(json_str: JsonStr) -> JsonStr:
-            json_str = json_str.replace('""', '"')
-            json_str = json_str.replace("&quot;", '"')
-            json_str = json_str.replace("&nbsp;", " ")
-            json_str = json_str.replace("<br>", "\n")
-            # &amp; must come last so it does not create new entities out of
-            # doubly-escaped text before the other replacements see them.
-            json_str = json_str.replace("&amp;", "&")
-            return json_str
-
         def parse_json_field(field_name: str) -> Sequence[Any] | None:
             """Helper function to parse JSON fields into a Python object."""
             field_value = get_field_value(field_name)
             if field_value:
                 try:
-                    return json.loads(fix_json_field(field_value))
+                    return parse_json_field_with_repair(field_value)
                 except json.JSONDecodeError:
                     return None
             return None
 
         sentence_source = get_field_value("Sentence Source")
         if sentence_source:
-            sentence_citation: types.Citation | None = types.Citation.from_json(
-                fix_json_field(sentence_source)
+            sentence_citation: types.Citation | None = types.Citation.from_dict(
+                parse_json_field_with_repair(sentence_source)
             )
         else:
             sentence_citation = None
@@ -495,11 +526,7 @@ def _load_anki_word(row: Sequence[str]) -> types.Word:
 
     if extra_sentences:
         try:
-            extra_sentences = extra_sentences.replace('""', '"')
-            extra_sentences = extra_sentences.replace("&quot;", '"')
-            extra_sentences = extra_sentences.replace("&nbsp;", " ")
-            extra_sentences = extra_sentences.replace("&amp;", "&")
-            extra_sentences = tuple(json.loads(extra_sentences))
+            extra_sentences = tuple(parse_json_field_with_repair(extra_sentences))
         except:
             print(f"Failed to load {row}")
             raise

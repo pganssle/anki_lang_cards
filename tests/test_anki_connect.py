@@ -311,13 +311,6 @@ def test_update_from_word_updates_part_of_speech(anki_setup: None) -> None:
     assert fields["Part-of-Speech"] == "adj"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="The reader's blanket rewrite of doubled quotes corrupts any "
-    "legitimately empty JSON string, so the extra sentences are silently "
-    "dropped. Valid JSON should be parsed as-is, with repair only as a "
-    "fallback.",
-)
 def test_empty_json_string_sentences_preserved(anki_setup: None) -> None:
     """A stored sentence with an empty translation survives the read path."""
     word = _nasty_word(2005, word="vacio")
