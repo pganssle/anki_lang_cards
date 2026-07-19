@@ -472,12 +472,6 @@ def test_main_generates_sentences(main_run: CliRun) -> None:
         assert sentence.source.model == "fake-cards"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="The frozenset in __main__ collapses the (equal) input and deck "
-    "Word objects and keeps the rank-less input copy, so the word comes "
-    "back under a new rank — a duplicate of the existing card.",
-)
 def test_main_merges_existing_deck_word(main_run: CliRun) -> None:
     """A deck word sent to the LLM for more sentences keeps its rank and
     its existing sentences."""

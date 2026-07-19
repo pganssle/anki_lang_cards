@@ -393,8 +393,13 @@ async def main():
             continue
         else:
             # No conflicts with the existing deck or among new words, but
-            # we can be in groups 3, 4 or 7 here.
-            merged_word = conflict_resolver.merge_word_set(word_set)
+            # we can be in groups 3, 4 or 7 here. Merge over the full lookup
+            # group rather than `word_set`: the frozenset collapses Word
+            # objects that compare equal, which would throw away the deck
+            # copy's rank and sentences and produce a duplicate card.
+            merged_word = conflict_resolver.merge_word_set(
+                tuple(new_and_existing.lookup(word))
+            )
             if word not in current_deck_wl or (
                 set(word.sentences)
                 - set(
