@@ -370,15 +370,26 @@ class Word:
 
     @classmethod
     def words_from_csv(cls, csv_path: Path | str) -> "Sequence[Self]":
-        out = []
+        out: list[Self] = []
         if isinstance(csv_path, str):
             string_obj = io.StringIO(csv_path)
             cm = contextlib.nullcontext(string_obj)
         else:
             cm = open(csv_path, "rt")  # noqa: SIM115, UP015
 
+        header = cls.make_csv_header()
         with cm as f:
-            reader = csv.DictReader(f)
+            # The header row is optional: sniff the first record and fall
+            # back to the canonical column order when it is not a header.
+            first_row = next(csv.reader(f), None)
+            if first_row is None:
+                return out
+            f.seek(0)
+            stripped = tuple(cell.strip().lower() for cell in first_row)
+            if stripped == tuple(header):
+                reader = csv.DictReader(f)
+            else:
+                reader = csv.DictReader(f, fieldnames=list(header))
             for line in reader:
                 if not (line["word"] and line["meaning"]):
                     continue

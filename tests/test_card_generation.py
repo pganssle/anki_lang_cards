@@ -184,6 +184,12 @@ def annotations_run(
     )
 
 
+def _raw_rows(csv_path: pathlib.Path) -> Sequence[Mapping[str, str]]:
+    """Read a headerless pipeline CSV with the canonical column names."""
+    with csv_path.open(encoding="utf-8", newline="") as f:
+        return list(csv.DictReader(f, fieldnames=list(types.Word.make_csv_header())))
+
+
 def _words_by_headword(csv_path: pathlib.Path) -> Mapping[str, types.Word]:
     words = types.Word.words_from_csv(csv_path)
     by_headword = {word.word: word for word in words}
@@ -214,8 +220,7 @@ def test_sentence_source_roundtrip(annotations_run: CliRun) -> None:
     assert source.title == "Libro de Pruebas"
     assert tuple(source.pages) == (12, 13)
 
-    with annotations_run.output_csv.open(encoding="utf-8", newline="") as f:
-        rows = {row["word"]: row for row in csv.DictReader(f)}
+    rows = {row["word"]: row for row in _raw_rows(annotations_run.output_csv)}
     raw_source = json.loads(rows["gatos"]["sentence_source"])
     assert raw_source["title"] == "Libro de Pruebas"
     assert raw_source["pages"] == [12, 13]
@@ -225,13 +230,12 @@ def test_example_sentence_sources_are_objects(annotations_run: CliRun) -> None:
     """Sources inside example_sentences must be JSON objects, not
     double-encoded JSON strings (the damage scripts/fix_example_sentences.py
     had to repair retrospectively)."""
-    with annotations_run.output_csv.open(encoding="utf-8", newline="") as f:
-        for row in csv.DictReader(f):
-            if not row["example_sentences"]:
-                continue
-            for sentence in json.loads(row["example_sentences"]):
-                if "source" in sentence:
-                    assert isinstance(sentence["source"], dict)
+    for row in _raw_rows(annotations_run.output_csv):
+        if not row["example_sentences"]:
+            continue
+        for sentence in json.loads(row["example_sentences"]):
+            if "source" in sentence:
+                assert isinstance(sentence["source"], dict)
 
 
 def test_unknown_source_id_dropped(annotations_run: CliRun) -> None:
@@ -318,12 +322,21 @@ def test_second_run_is_cached_and_identical(
     not (SCRIPTS_DIR / "find_book_ranges.py").exists(),
     reason="scripts/ is not present (e.g. inside the Docker test image)",
 )
-def test_find_book_ranges_script(annotations_run: CliRun) -> None:
+def test_find_book_ranges_script(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """The script reads the CSV with DictReader, so it needs --csv-header."""
+    run = _run_annotations_to_csv(
+        tmp_path_factory.mktemp("book-ranges-run"),
+        CARDS_DIR / "combined_annotations.json",
+        dictionary_paths,
+        extra_args=("--csv-header",),
+    )
     result = subprocess.run(
         (
             sys.executable,
             str(SCRIPTS_DIR / "find_book_ranges.py"),
-            str(annotations_run.output_csv),
+            str(run.output_csv),
         ),
         check=True,
         capture_output=True,
@@ -540,21 +553,12 @@ def test_load_anki_export_repairs_ampersands() -> None:
     assert ampersand.english == "Bread & wine."
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="The output CSVs unconditionally start with a header row, which "
-    "imports into Anki as a junk note. The header should be opt-in.",
-)
 def test_annotations_csv_has_no_header_by_default(annotations_run: CliRun) -> None:
     with annotations_run.output_csv.open(encoding="utf-8", newline="") as f:
         first_row = next(csv.reader(f))
     assert first_row[:2] != ["rank", "word"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="The --csv-header option does not exist yet.",
-)
 def test_annotations_csv_header_flag_adds_header(
     dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
@@ -570,11 +574,6 @@ def test_annotations_csv_header_flag_adds_header(
     assert first_row[:2] == ["rank", "word"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="The output CSVs unconditionally start with a header row, which "
-    "imports into Anki as a junk note. The header should be opt-in.",
-)
 def test_main_output_has_no_header_by_default(main_run: CliRun) -> None:
     with main_run.output_csv.open(encoding="utf-8", newline="") as f:
         first_row = next(csv.reader(f))

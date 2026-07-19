@@ -639,6 +639,14 @@ async def main() -> None:
         default=5,
         help="Maximum number of simultaneous queries to the LLM service.",
     )
+    parser.add_argument(
+        "--csv-header",
+        action="store_true",
+        help="Include a header row in the output CSV. Note that Anki's CSV "
+        "importer has no header-skipping option, so a header row imports "
+        "as a junk note; it is useful mainly for matching up columns in "
+        "the import dialog.",
+    )
     args = parser.parse_args()
 
     if args.skip_response_cache and args.invalidate_response_cache:
@@ -734,7 +742,8 @@ async def main() -> None:
     print(f"Generated {len(existing)} entries.")
     with open(args.output, "wt") as f:
         writer = csv.writer(f)
-        writer.writerow(Word.make_csv_header())
+        if args.csv_header:
+            writer.writerow(Word.make_csv_header())
         for word in existing.values():
             writer.writerow(word.to_csv_line())
 

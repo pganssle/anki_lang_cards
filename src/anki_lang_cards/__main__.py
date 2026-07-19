@@ -166,6 +166,14 @@ async def main():
     )
 
     parser.add_argument("--deck-name", type=str, default="Spanish::Vocab by Frequency")
+    parser.add_argument(
+        "--csv-header",
+        action="store_true",
+        help="Include a header row when creating the output CSV. Note that "
+        "Anki's CSV importer has no header-skipping option, so a header row "
+        "imports as a junk note; it is useful mainly for matching up "
+        "columns in the import dialog.",
+    )
     args = parser.parse_args()
 
     if WORD_MERGER_AVAILABLE:
@@ -421,7 +429,7 @@ async def main():
     rank = start_rank_at or 5001
 
     # TODO: Check size here as well
-    needs_header = not args.output.exists()
+    needs_header = args.csv_header and not args.output.exists()
     prompt_handler = query.MultiSentencePromptHandler(
         prompts.MULTI_SENTENCE_PROMPT_TEMPLATE,
         system_prompt=prompts.MULTI_SENTENCE_SYSTEM_PROMPT,
