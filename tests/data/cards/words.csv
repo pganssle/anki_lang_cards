@@ -1,0 +1,5 @@
+rank,word,part_of_speech,meaning,spanish_sentence,english_sentence,frequency,image,article,sentence_source,note,example_sentences,model_used,tags
+,gato,nm,cat,,,,,el,,,,,
+,renamedo/a,nm/f,word the fake model renames,,,,,el/la,,,,,
+,wordkeyado,nm,word reported under a word key,,,,,el,,,,,
+,existente,nm,existing word,,,,,el,,,,,

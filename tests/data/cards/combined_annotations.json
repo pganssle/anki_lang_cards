@@ -1,0 +1,77 @@
+[
+  {
+    "book": {
+      "title": "Libro de Pruebas",
+      "author": "Autora de Ejemplo",
+      "path": "Autora de Ejemplo/Libro de Pruebas (1)",
+      "language": "spa"
+    },
+    "annotations": [
+      {
+        "highlights": [
+          "gatos",
+          {
+            "highlight": "fiambres",
+            "note": "comida"
+          }
+        ],
+        "context": "Los gatos comían fiambres en la cocina. «¡Qué banquete!», pensó la cocinera.",
+        "chapters": [
+          "Capítulo 1"
+        ],
+        "page_numbers": [
+          12,
+          13
+        ]
+      },
+      {
+        "highlights": [
+          "fencear"
+        ],
+        "context": "El caballero decidió fencear toda la tarde, espada en mano.",
+        "chapters": [
+          "Capítulo 2"
+        ],
+        "page_numbers": [
+          20
+        ]
+      },
+      {
+        "highlights": [
+          "badjsonero"
+        ],
+        "context": "El badjsonero rompió el formato una vez más.",
+        "chapters": [
+          "Capítulo 3"
+        ],
+        "page_numbers": [
+          30
+        ]
+      },
+      {
+        "highlights": [
+          "badsourcero"
+        ],
+        "context": "El badsourcero citaba fuentes que no existían.",
+        "chapters": [
+          "Capítulo 3"
+        ],
+        "page_numbers": [
+          31
+        ]
+      },
+      {
+        "highlights": [
+          "comillas"
+        ],
+        "context": "Dijo: \"Las comillas dobles son peligrosas\", y escribió «más comillas» en el margen.",
+        "chapters": [
+          "Capítulo 4"
+        ],
+        "page_numbers": [
+          40
+        ]
+      }
+    ]
+  }
+]
