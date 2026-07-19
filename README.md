@@ -4,6 +4,8 @@ This is a set of mostly janky scripts that makes Anki cards for my Anki deck. I 
 
 I now keep an org-mode file of new vocabulary I encounter, and use this script to generate new example sentences and cards for it using an LLM of my choice.
 
+The full pipeline is a sequence of several tools run one after the other; [`docs/workflow.md`](docs/workflow.md) documents the whole thing end-to-end, in order. The sections below are the per-tool reference documentation.
+
 ## Development and tests
 
 The fast test suite runs in an isolated Python environment and does not require
@@ -127,6 +129,20 @@ xclip -selection c -o | python -m anki_lang_cards.org_to_csv
 ### Cards from annotations
 
 If you use `calibre` and `KOReader`, you can sync annotations to your `calibre` database and automatically extract the sentences they are part of. This will only extract annotations from books matching the target language.
+
+#### Finding libraries with annotations
+
+If you don't remember which of your Calibre libraries contains the annotated books, `anki_lang_cards.find_libraries` will scan one or more directory trees for Calibre libraries and report how many annotated books and annotations each one has:
+
+```
+$ python -m anki_lang_cards.find_libraries ~ -l es
+/home/me/Calibre/SpanishLibrary: 12 annotated books, 345 annotations
+/home/me/Calibre/Manuals: no 'raw_sidecar' column
+
+Found 2 Calibre libraries (1 with annotations).
+```
+
+The databases are opened read-only, so this is safe to run while Calibre is open. `--annotated-only` hides libraries without annotations, and `--sidecar-column` changes which custom column it looks for (same default as the annotation extractor).
 
 #### Annotation extractor
 
