@@ -4,8 +4,6 @@ import json
 import re
 from typing import Final
 
-import pytest
-
 from anki_lang_cards import _types as types
 from anki_lang_cards import prompts, query
 
@@ -23,12 +21,6 @@ def _make_word(word: str, meaning: str) -> types.Word:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="MultiSentencePromptHandler interpolates words into a JSON "
-    "template without escaping, and never wraps the objects in a list, so "
-    "the INPUT section is not valid JSON.",
-)
 def test_multi_sentence_prompt_is_valid_json() -> None:
     """The INPUT section of the prompt parses as a JSON list matching the
     words, even when a meaning contains quotes."""

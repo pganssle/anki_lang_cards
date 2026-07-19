@@ -358,13 +358,19 @@ class MultiSentencePromptHandler(PromptHandler):
         self.system_prompt = system_prompt
 
     def make_prompt(self, words: Iterable[types.Word]) -> str:
-        prompt_data = [f"""\
-    {{
-        "term": "{word.word}",
-        "part_of_speech": "{word.part_of_speech}",
-        "meaning": "{word.meaning}"
-    }}""" for word in words]
-        return self.prompt_template % {"data": ",\n".join(prompt_data)}
+        prompt_data = json.dumps(
+            [
+                {
+                    "term": word.word,
+                    "part_of_speech": str(word.part_of_speech),
+                    "meaning": word.meaning,
+                }
+                for word in words
+            ],
+            ensure_ascii=False,
+            indent=4,
+        )
+        return self.prompt_template % {"data": prompt_data}
 
 
 def result_to_word(
