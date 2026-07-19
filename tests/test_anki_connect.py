@@ -286,12 +286,6 @@ def test_update_note_fields_is_idempotent(anki_setup: None) -> None:
     assert after_second == new_extra
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="_word_to_note_data writes a 'Part of Speech' field but the "
-    "notetype (and the read path) use 'Part-of-Speech'; AnkiConnect "
-    "silently ignores unknown fields, so the part of speech never updates.",
-)
 def test_update_from_word_updates_part_of_speech(anki_setup: None) -> None:
     """Updating a note from a Word updates its part of speech."""
     word = _nasty_word(2004, word="renombre")

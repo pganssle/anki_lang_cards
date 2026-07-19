@@ -85,7 +85,10 @@ def _word_to_note_data(
     fields = {
         "Word": word.word,
         "Definition": word.meaning,
-        "Part of Speech": str(word.part_of_speech),
+        # The field is named "Part-of-Speech" in the notetype; AnkiConnect
+        # silently ignores unknown field names, so getting this wrong means
+        # the part of speech never updates.
+        "Part-of-Speech": str(word.part_of_speech),
     }
     if word.rank is not None:
         fields["Rank"] = str(word.rank)
