@@ -529,11 +529,6 @@ def test_load_anki_export_repairs_mangled_json() -> None:
     assert extra.source.model == "old-model"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="The JSON repair replaces &quot;, &nbsp; and <br> but not &amp;, "
-    "so escaped ampersands stay permanently corrupted.",
-)
 def test_load_anki_export_repairs_ampersands() -> None:
     """Escaped ampersands in mangled deck exports are repaired on load."""
     words = {

@@ -338,6 +338,9 @@ class AnkiConnectClient:
             json_str = json_str.replace("&quot;", '"')
             json_str = json_str.replace("&nbsp;", " ")
             json_str = json_str.replace("<br>", "\n")
+            # &amp; must come last so it does not create new entities out of
+            # doubly-escaped text before the other replacements see them.
+            json_str = json_str.replace("&amp;", "&")
             return json_str
 
         def parse_json_field(field_name: str) -> Sequence[Any] | None:
@@ -495,6 +498,7 @@ def _load_anki_word(row: Sequence[str]) -> types.Word:
             extra_sentences = extra_sentences.replace('""', '"')
             extra_sentences = extra_sentences.replace("&quot;", '"')
             extra_sentences = extra_sentences.replace("&nbsp;", " ")
+            extra_sentences = extra_sentences.replace("&amp;", "&")
             extra_sentences = tuple(json.loads(extra_sentences))
         except:
             print(f"Failed to load {row}")
