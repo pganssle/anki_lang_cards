@@ -74,10 +74,13 @@ class ModelAPIBase(Protocol):
         aiohttp.client_exceptions.ClientResponseError,
         on_backoff=[_backoff_word_logger],
     )
-    async def query_model(self, prompt: str, system_prompt: str) -> Mapping:
+    async def query_model(
+        self, prompt: str, system_prompt: str, invalidate_cache: bool = False
+    ) -> Mapping:
         """Fetch data from the API endpoint.
 
         :param prompt: The prompt to send to the model.
+        :param invalidate_cache: Ignored — this API has no response cache.
 
         :return: Returns the request response as a decoded JSON object.
         """
@@ -129,6 +132,9 @@ class ModelAPIBase(Protocol):
                             self.query_model(
                                 prompt=prompt.make_prompt(word_subset),
                                 system_prompt=prompt.system_prompt,
+                                # The bad response has already been cached, so
+                                # the retry must go back to the model.
+                                invalidate_cache=True,
                             ),
                         )
                         pending.add(task)

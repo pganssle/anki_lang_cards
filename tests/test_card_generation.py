@@ -505,12 +505,6 @@ def test_main_output_roundtrips(main_run: CliRun) -> None:
         assert line[1] == word.word
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="When a response fails to parse, the retry in make_queries reads "
-    "the just-written (poisoned) response cache back instead of re-querying, "
-    "so the whole batch is skipped after the retries run out.",
-)
 def test_main_invalid_json_response_retried(
     dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
