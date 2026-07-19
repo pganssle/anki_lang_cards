@@ -1,6 +1,127 @@
 {
   "annotations": {
     "1": {
+      "chapter": "",
+      "datetime": "2025-06-03 11:32:36",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[2]/body/section/h2/text().0",
+      "pageno": 2,
+      "pos0": "/body/DocFragment[2]/body/section/h2/text().0",
+      "pos1": "/body/DocFragment[2]/body/section/h2/text().3",
+      "text": "The"
+    },
+    "2": {
+      "chapter": "El ingenioso hidalgo don Quijote de la Mancha",
+      "datetime": "2025-06-03 11:32:45",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[2]/body/h1/text().0",
+      "pageno": 3,
+      "pos0": "/body/DocFragment[2]/body/h1/text().0",
+      "pos1": "/body/DocFragment[2]/body/h1/text().2",
+      "text": "El"
+    },
+    "3": {
+      "chapter": "por Miguel de Cervantes Saavedra",
+      "datetime": "2025-06-03 11:32:57",
+      "drawer": "lighten",
+      "note": "Skip me",
+      "page": "/body/DocFragment[2]/body/div[2]/text().3",
+      "pageno": 3,
+      "pos0": "/body/DocFragment[2]/body/div[2]/text().3",
+      "pos1": "/body/DocFragment[2]/body/div[2]/text().45",
+      "text": "ingenioso hidalgo don Quijote de la Mancha"
+    },
+    "4": {
+      "chapter": "El ingenioso hidalgo don Quijote de la Mancha",
+      "datetime": "2025-06-03 11:33:44",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/h2/text().13",
+      "pageno": 22,
+      "pos0": "/body/DocFragment[3]/body/div/h2/text().13",
+      "pos1": "/body/DocFragment[3]/body/div/h2/text().20",
+      "text": "hidalgo"
+    },
+    "5": {
+      "chapter": "TASA",
+      "datetime": "2025-06-03 11:33:49",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/h3[1]/text().0",
+      "pageno": 22,
+      "pos0": "/body/DocFragment[3]/body/div/h3[1]/text().0",
+      "pos1": "/body/DocFragment[3]/body/div/h3[1]/text().4",
+      "text": "TASA"
+    },
+    "6": {
+      "chapter": "TASA",
+      "datetime": "2025-06-03 11:33:59",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[1]/text().27",
+      "pageno": 22,
+      "pos0": "/body/DocFragment[3]/body/div/p[1]/text().27",
+      "pos1": "/body/DocFragment[3]/body/div/p[1]/text().36",
+      "text": "escribano"
+    },
+    "7": {
+      "chapter": "EL REY",
+      "datetime": "2025-06-03 11:34:11",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[5]/text().1170",
+      "pageno": 24,
+      "pos0": "/body/DocFragment[3]/body/div/p[5]/text().1170",
+      "pos1": "/body/DocFragment[3]/body/div/p[5]/text().1178",
+      "text": "vendiere"
+    },
+    "8": {
+      "chapter": "PRÓLOGO",
+      "datetime": "2025-06-03 11:34:34",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[12]/text().884",
+      "pageno": 29,
+      "pos0": "/body/DocFragment[3]/body/div/p[12]/text().884",
+      "pos1": "/body/DocFragment[3]/body/div/p[12]/text().892",
+      "text": "Acontece"
+    },
+    "9": {
+      "chapter": "PRÓLOGO",
+      "datetime": "2025-06-03 11:34:44",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[14]/text().154",
+      "pageno": 31,
+      "pos0": "/body/DocFragment[3]/body/div/p[14]/text().154",
+      "pos1": "/body/DocFragment[3]/body/div/p[14]/text().160",
+      "text": "duermo"
+    },
+    "10": {
+      "chapter": "PRÓLOGO",
+      "datetime": "2025-06-03 11:34:59",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[17]/text().2",
+      "pageno": 34,
+      "pos0": "/body/DocFragment[3]/body/div/p[17]/text().2",
+      "pos1": "/body/DocFragment[3]/body/div/p[17]/text().7",
+      "text": "Decid"
+    },
+    "11": {
+      "chapter": "PRÓLOGO",
+      "datetime": "2025-06-03 11:35:23",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[20]/text().1",
+      "pageno": 35,
+      "pos0": "/body/DocFragment[3]/body/div/p[20]/text().1",
+      "pos1": "/body/DocFragment[3]/body/div/p[20]/text().31",
+      "text": "En lo de citar en las márgenes"
+    },
+    "12": {
+      "chapter": "AL LIBRO DE DON QUIJOTE DE LA MANCHA",
+      "datetime": "2025-06-03 11:35:49",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[42]/text()[9].16",
+      "pageno": 48,
+      "pos0": "/body/DocFragment[3]/body/div/p[42]/text()[9].16",
+      "pos1": "/body/DocFragment[3]/body/div/p[42]/text()[9].26",
+      "text": "castamente"
+    },
+    "13": {
       "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
       "datetime": "2025-06-03 11:36:09",
       "drawer": "lighten",
@@ -10,7 +131,157 @@
       "pos1": "/body/DocFragment[3]/body/div/p[61]/text().40",
       "text": "nombre"
     },
-    "2": {
+    "14": {
+      "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+      "datetime": "2025-06-03 11:36:04",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[61]/text().51",
+      "pageno": 54,
+      "pos0": "/body/DocFragment[3]/body/div/p[61]/text().51",
+      "pos1": "/body/DocFragment[3]/body/div/p[61]/text().60",
+      "text": "acordarme"
+    },
+    "15": {
+      "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+      "datetime": "2025-06-03 11:36:13",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[61]/text().121",
+      "pageno": 54,
+      "pos0": "/body/DocFragment[3]/body/div/p[61]/text().121",
+      "pos1": "/body/DocFragment[3]/body/div/p[61]/text().130",
+      "text": "astillero"
+    },
+    "16": {
+      "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+      "datetime": "2025-06-03 11:36:44",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[63]/text().761",
+      "pageno": 57,
+      "pos0": "/body/DocFragment[3]/body/div/p[63]/text().761",
+      "pos1": "/body/DocFragment[3]/body/div/p[63]/text().772",
+      "text": "competencia"
+    },
+    "17": {
+      "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+      "datetime": "2025-06-03 11:36:33",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[63]/text().882",
+      "pageno": 57,
+      "pos0": "/body/DocFragment[3]/body/div/p[63]/text().882",
+      "pos1": "/body/DocFragment[3]/body/div/p[63]/text().890",
+      "text": "Palmerín"
+    },
+    "18": {
+      "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+      "datetime": "2025-06-03 11:36:57",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[64]/text().1488",
+      "pageno": 59,
+      "pos0": "/body/DocFragment[3]/body/div/p[64]/text().1488",
+      "pos1": "/body/DocFragment[3]/body/div/p[64]/text().1495",
+      "text": "sobrina"
+    },
+    "19": {
+      "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+      "datetime": "2025-06-03 11:36:53",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[65]/text().163",
+      "pageno": 59,
+      "pos0": "/body/DocFragment[3]/body/div/p[65]/text().163",
+      "pos1": "/body/DocFragment[3]/body/div/p[65]/text().170",
+      "text": "aumento"
+    },
+    "20": {
+      "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+      "datetime": "2025-06-03 11:37:08",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[65]/text().554",
+      "pageno": 59,
+      "pos0": "/body/DocFragment[3]/body/div/p[65]/text().554",
+      "pos1": "/body/DocFragment[3]/body/div/p[65]/text().559",
+      "text": "pobre"
+    },
+    "21": {
+      "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+      "datetime": "2025-06-03 11:37:45",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[71]/text().725",
+      "pageno": 64,
+      "pos0": "/body/DocFragment[3]/body/div/p[71]/text().725",
+      "pos1": "/body/DocFragment[3]/body/div/p[71]/text().731",
+      "text": "puesto"
+    },
+    "22": {
+      "chapter": "Capítulo II. Que trata de la primera salida que de su tierra hizo el ingenioso don Quijote",
+      "datetime": "2025-06-03 11:37:39",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[72]/text().0",
+      "pageno": 65,
+      "pos0": "/body/DocFragment[3]/body/div/p[72]/text().0",
+      "pos1": "/body/DocFragment[3]/body/div/p[72]/text().6",
+      "text": "Hechas"
+    },
+    "23": {
+      "chapter": "Capítulo XIV. Donde se ponen los versos desesperados del difunto pastor, con otros no esperados sucesos",
+      "datetime": "2025-07-19 13:05:32",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[497]/text().123",
+      "pageno": 244,
+      "pos0": "/body/DocFragment[3]/body/div/p[497]/text().123",
+      "pos1": "/body/DocFragment[3]/body/div/p[497]/text().150",
+      "text": "claras aguas destos arroyos"
+    },
+    "24": {
+      "chapter": "Capítulo XIV. Donde se ponen los versos desesperados del difunto pastor, con otros no esperados sucesos",
+      "datetime": "2025-07-19 13:05:43",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[497]/text().136",
+      "pageno": 244,
+      "pos0": "/body/DocFragment[3]/body/div/p[497]/text().136",
+      "pos1": "/body/DocFragment[3]/body/div/p[497]/text().142",
+      "text": "destos"
+    },
+    "25": {
+      "chapter": "Capítulo XIV. Donde se ponen los versos desesperados del difunto pastor, con otros no esperados sucesos",
+      "datetime": "2025-07-19 13:04:53",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[497]/text().235",
+      "pageno": 244,
+      "pos0": "/body/DocFragment[3]/body/div/p[497]/text().235",
+      "pos1": "/body/DocFragment[3]/body/div/p[497]/text().253",
+      "text": "Fuego soy apartado"
+    },
+    "26": {
+      "chapter": "Capítulo XIV. Donde se ponen los versos desesperados del difunto pastor, con otros no esperados sucesos",
+      "datetime": "2025-07-19 13:05:02",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[497]/text().245",
+      "pageno": 244,
+      "pos0": "/body/DocFragment[3]/body/div/p[497]/text().245",
+      "pos1": "/body/DocFragment[3]/body/div/p[497]/text().253",
+      "text": "apartado"
+    },
+    "27": {
+      "chapter": "Capítulo XIV. Donde se ponen los versos desesperados del difunto pastor, con otros no esperados sucesos",
+      "datetime": "2025-07-19 13:04:48",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[497]/text().256",
+      "pageno": 244,
+      "pos0": "/body/DocFragment[3]/body/div/p[497]/text().256",
+      "pos1": "/body/DocFragment[3]/body/div/p[497]/text().262",
+      "text": "espada"
+    },
+    "28": {
+      "chapter": "Capítulo XIV. Donde se ponen los versos desesperados del difunto pastor, con otros no esperados sucesos",
+      "datetime": "2025-07-19 13:04:33",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[3]/body/div/p[497]/text().256",
+      "pageno": 244,
+      "pos0": "/body/DocFragment[3]/body/div/p[497]/text().256",
+      "pos1": "/body/DocFragment[3]/body/div/p[497]/text().275",
+      "text": "espada puesta lejos"
+    },
+    "29": {
       "chapter": "Capítulo XXV. Que trata de las estrañas cosas que en Sierra Morena sucedieron al valiente caballero de la Mancha, y de la imitación que hizo a la penitencia de Beltenebros",
       "datetime": "2025-06-03 11:38:36",
       "drawer": "lighten",
@@ -20,7 +291,77 @@
       "pos1": "/body/DocFragment[4]/body/div/p[504]/text().618",
       "text": "diamante"
     },
-    "3": {
+    "30": {
+      "chapter": "Capítulo XXV. Que trata de las estrañas cosas que en Sierra Morena sucedieron al valiente caballero de la Mancha, y de la imitación que hizo a la penitencia de Beltenebros",
+      "datetime": "2025-06-03 11:38:26",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[5]/body/div/p[1]/text().5",
+      "pageno": 482,
+      "pos0": "/body/DocFragment[5]/body/div/p[1]/text().5",
+      "pos1": "/body/DocFragment[5]/body/div/p[1]/text().14",
+      "text": "agradezco"
+    },
+    "31": {
+      "chapter": "Capítulo II. Que trata de la notable pendencia que Sancho Panza tuvo con la sobrina y ama de don Quijote, con otros sujetos graciosos",
+      "datetime": "2025-06-03 11:48:51",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[7]/body/div/p[102]/text().174",
+      "pageno": 601,
+      "pos0": "/body/DocFragment[7]/body/div/p[102]/text().174",
+      "pos1": "/body/DocFragment[7]/body/div/p[102]/text().186",
+      "text": "peregrinamos"
+    },
+    "32": {
+      "chapter": "Capítulo II. Que trata de la notable pendencia que Sancho Panza tuvo con la sobrina y ama de don Quijote, con otros sujetos graciosos",
+      "datetime": "2025-06-03 11:49:22",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[7]/body/div/p[108]/text().406",
+      "pageno": 603,
+      "pos0": "/body/DocFragment[7]/body/div/p[108]/text().406",
+      "pos1": "/body/DocFragment[7]/body/div/p[108]/text().411",
+      "text": "vulgo"
+    },
+    "33": {
+      "chapter": "Capítulo LXXI. De lo que a don Quijote le sucedió con su escudero Sancho yendo a su aldea",
+      "datetime": "2025-06-03 11:47:25",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[8]/body/div/p[5]/text().56",
+      "pageno": 629,
+      "pos0": "/body/DocFragment[8]/body/div/p[5]/text().56",
+      "pos1": "/body/DocFragment[8]/body/div/p[5]/text().70",
+      "text": "vuestra merced"
+    },
+    "34": {
+      "chapter": "Capítulo LXXI. De lo que a don Quijote le sucedió con su escudero Sancho yendo a su aldea",
+      "datetime": "2025-06-03 11:47:45",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[8]/body/div/p[19]/text().110",
+      "pageno": 634,
+      "pos0": "/body/DocFragment[8]/body/div/p[19]/text().110",
+      "pos1": "/body/DocFragment[8]/body/div/p[19]/text().124",
+      "text": "vuestra merced"
+    },
+    "35": {
+      "chapter": "Capítulo LXXIV. De cómo don Quijote cayó malo, y del testamento que hizo, y su muerte",
+      "datetime": "2025-06-03 11:40:04",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[8]/body/div/p[141]/text()[1].15",
+      "pageno": 674,
+      "pos0": "/body/DocFragment[8]/body/div/p[141]/text()[1].15",
+      "pos1": "/body/DocFragment[8]/body/div/p[141]/text()[1].26",
+      "text": "folloncicos"
+    },
+    "36": {
+      "chapter": "Capítulo LXXIV. De cómo don Quijote cayó malo, y del testamento que hizo, y su muerte",
+      "datetime": "2025-06-03 11:40:26",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[8]/body/div/p[142]/text().150",
+      "pageno": 674,
+      "pos0": "/body/DocFragment[8]/body/div/p[142]/text().150",
+      "pos1": "/body/DocFragment[8]/body/div/p[142]/text().163",
+      "text": "tordesillesco"
+    },
+    "37": {
       "chapter": "Capítulo LXXIV. De cómo don Quijote cayó malo, y del testamento que hizo, y su muerte",
       "datetime": "2025-06-03 11:40:36",
       "drawer": "lighten",
@@ -30,7 +371,17 @@
       "pos1": "/body/DocFragment[8]/body/div/p[142]/text().1339",
       "text": "tropezando"
     },
-    "4": {
+    "38": {
+      "chapter": "El ingenioso hidalgo don Quijote de la Mancha",
+      "datetime": "2025-06-03 11:41:30",
+      "drawer": "lighten",
+      "page": "/body/DocFragment[2]/body/ol[1]/li[3]/a/text().19",
+      "pageno": 4,
+      "pos0": "/body/DocFragment[2]/body/ol[1]/li[3]/a/text().19",
+      "pos1": "/body/DocFragment[2]/body/ol[1]/li[3]/a/text().27",
+      "text": "graciosa"
+    },
+    "39": {
       "chapter": "Malformed fixture annotation",
       "datetime": "2025-06-03 11:40:36",
       "drawer": "lighten",

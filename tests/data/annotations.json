@@ -8,10 +8,199 @@
     },
     "annotations": [
       {
+        "text": "The",
+        "context": "The Project Gutenberg eBook of Don Quijote This ebook is for the use of anyone anywhere in the United States and most other parts of the world at no cost and with almost no restrictions whatsoever.",
+        "chapter": "",
+        "page_number": 2,
+        "note": ""
+      },
+      {
+        "text": "El",
+        "context": "Title: Don Quijote Author: Miguel de Cervantes Saavedra Release date: December 1, 1999 [eBook #2000] Most recently updated: January 2, 2021 Language: Spanish Credits: an anonymous Project Gutenberg volunteer and Joaquin Cuenca Abela *** START OF THE PROJECT GUTENBERG EBOOK DON QUIJOTE *** El ingenioso hidalgo don Quijote de la Mancha por Miguel de Cervantes Saavedra El ingenioso hidalgo don Quijote de la Mancha Tasa Testimonio de las erratas El Rey Al Duque de Béjar Prólogo Al libro de don Quijote de la Mancha",
+        "chapter": "El ingenioso hidalgo don Quijote de la Mancha",
+        "page_number": 3,
+        "note": ""
+      },
+      {
+        "text": "ingenioso hidalgo don Quijote de la Mancha",
+        "context": "Title: Don Quijote Author: Miguel de Cervantes Saavedra Release date: December 1, 1999 [eBook #2000] Most recently updated: January 2, 2021 Language: Spanish Credits: an anonymous Project Gutenberg volunteer and Joaquin Cuenca Abela *** START OF THE PROJECT GUTENBERG EBOOK DON QUIJOTE *** El ingenioso hidalgo don Quijote de la Mancha por Miguel de Cervantes Saavedra El ingenioso hidalgo don Quijote de la Mancha Tasa Testimonio de las erratas El Rey Al Duque de Béjar Prólogo Al libro de don Quijote de la Mancha",
+        "chapter": "por Miguel de Cervantes Saavedra",
+        "page_number": 3,
+        "note": "Skip me"
+      },
+      {
+        "text": "hidalgo",
+        "context": "El ingenioso hidalgo don Quijote de la Mancha TASA Yo, Juan Gallo de Andrada, escribano de Cámara del Rey nuestro señor, de los que residen en su Consejo, certifico y doy fe que, habiendo visto por los señores dél un libro intitulado El ingenioso hidalgo de la Mancha, compuesto por Miguel de Cervantes Saavedra, tasaron cada pliego del dicho libro a tres maravedís y medio;",
+        "chapter": "El ingenioso hidalgo don Quijote de la Mancha",
+        "page_number": 22,
+        "note": ""
+      },
+      {
+        "text": "TASA",
+        "context": "El ingenioso hidalgo don Quijote de la Mancha TASA Yo, Juan Gallo de Andrada, escribano de Cámara del Rey nuestro señor, de los que residen en su Consejo, certifico y doy fe que, habiendo visto por los señores dél un libro intitulado El ingenioso hidalgo de la Mancha, compuesto por Miguel de Cervantes Saavedra, tasaron cada pliego del dicho libro a tres maravedís y medio;",
+        "chapter": "TASA",
+        "page_number": 22,
+        "note": ""
+      },
+      {
+        "text": "escribano",
+        "context": "El ingenioso hidalgo don Quijote de la Mancha TASA Yo, Juan Gallo de Andrada, escribano de Cámara del Rey nuestro señor, de los que residen en su Consejo, certifico y doy fe que, habiendo visto por los señores dél un libro intitulado El ingenioso hidalgo de la Mancha, compuesto por Miguel de Cervantes Saavedra, tasaron cada pliego del dicho libro a tres maravedís y medio;",
+        "chapter": "TASA",
+        "page_number": 22,
+        "note": ""
+      },
+      {
+        "text": "vendiere",
+        "context": "so pena que la persona o personas que, sin tener vuestro poder, lo imprimiere o vendiere, o hiciere imprimir o vender, por el mesmo caso pierda la impresión que hiciere, con los moldes y aparejos della;",
+        "chapter": "EL REY",
+        "page_number": 24,
+        "note": ""
+      },
+      {
+        "text": "Acontece",
+        "context": "Acontece tener un padre un hijo feo y sin gracia alguna, y el amor que le tiene le pone una venda en los ojos para que no vea sus faltas, antes las juzga por discreciones y lindezas y las cuenta a sus amigos por agudezas y donaires.",
+        "chapter": "PRÓLOGO",
+        "page_number": 29,
+        "note": ""
+      },
+      {
+        "text": "duermo",
+        "context": "— Porque, ¿cómo queréis vos que no me tenga confuso el qué dirá el antiguo legislador que llaman vulgo cuando vea que, al cabo de tantos años como ha que duermo en el silencio del olvido, salgo ahora, con todos mis años a cuestas, con una leyenda seca como un esparto, ajena de invención, menguada de estilo, pobre de concetos y falta de toda erudición y doctrina;",
+        "chapter": "PRÓLOGO",
+        "page_number": 31,
+        "note": ""
+      },
+      {
+        "text": "Decid",
+        "context": "— Decid —le repliqué yo, oyendo lo que me decía—: ¿de qué modo pensáis llenar el vacío de mi temor y reducir a claridad el caos de mi confusión?",
+        "chapter": "PRÓLOGO",
+        "page_number": 34,
+        "note": ""
+      },
+      {
+        "text": "En lo de citar en las márgenes",
+        "context": "»En lo de citar en las márgenes los libros y autores de donde sacáredes las sentencias y dichos que pusiéredes en vuestra historia, no hay más sino hacer, de manera que venga a pelo, algunas sentencias o latines que vos sepáis de memoria, o, a lo menos, que os cuesten poco trabajo el buscalle;",
+        "chapter": "PRÓLOGO",
+        "page_number": 35,
+        "note": ""
+      },
+      {
+        "text": "castamente",
+        "context": "¡Oh, quién tan castamente se escapara del señor Amadís como tú hiciste del comedido hidalgo don Quijote!",
+        "chapter": "AL LIBRO DE DON QUIJOTE DE LA MANCHA",
+        "page_number": 48,
+        "note": ""
+      },
+      {
         "text": "nombre",
         "context": "Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha En un lugar de la Mancha, de cuyo nombre no quiero acordarme, no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero, adarga antigua, rocín flaco y galgo corredor.",
         "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
         "page_number": 54,
+        "note": ""
+      },
+      {
+        "text": "acordarme",
+        "context": "Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha En un lugar de la Mancha, de cuyo nombre no quiero acordarme, no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero, adarga antigua, rocín flaco y galgo corredor.",
+        "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+        "page_number": 54,
+        "note": ""
+      },
+      {
+        "text": "astillero",
+        "context": "Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha En un lugar de la Mancha, de cuyo nombre no quiero acordarme, no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero, adarga antigua, rocín flaco y galgo corredor.",
+        "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+        "page_number": 54,
+        "note": ""
+      },
+      {
+        "text": "competencia",
+        "context": "Tuvo muchas veces competencia con el cura de su lugar —que era hombre docto, graduado en Sigüenza—, sobre cuál había sido mejor caballero: Palmerín de Ingalaterra o Amadís de Gaula;",
+        "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+        "page_number": 57,
+        "note": ""
+      },
+      {
+        "text": "Palmerín",
+        "context": "Tuvo muchas veces competencia con el cura de su lugar —que era hombre docto, graduado en Sigüenza—, sobre cuál había sido mejor caballero: Palmerín de Ingalaterra o Amadís de Gaula;",
+        "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+        "page_number": 57,
+        "note": ""
+      },
+      {
+        "text": "sobrina",
+        "context": "Diera él, por dar una mano de coces al traidor de Galalón, al ama que tenía, y aun a su sobrina de añadidura.",
+        "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+        "page_number": 59,
+        "note": ""
+      },
+      {
+        "text": "aumento",
+        "context": "y fue que le pareció convenible y necesario, así para el aumento de su honra como para el servicio de su república, hacerse caballero andante, y irse por todo el mundo con sus armas y caballo a buscar las aventuras y a ejercitarse en todo aquello que él había leído que los caballeros andantes se ejercitaban, deshaciendo todo género de agravio, y poniéndose en ocasiones y peligros donde, acabándolos, cobrase eterno nombre y fama.",
+        "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+        "page_number": 59,
+        "note": ""
+      },
+      {
+        "text": "pobre",
+        "context": "Imaginábase el pobre ya coronado por el valor de su brazo, por lo menos, del imperio de Trapisonda;",
+        "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+        "page_number": 59,
+        "note": ""
+      },
+      {
+        "text": "puesto",
+        "context": "nombre, a su parecer, músico y peregrino y significativo, como todos los demás que a él y a sus cosas había puesto.",
+        "chapter": "Capítulo primero. Que trata de la condición y ejercicio del famoso hidalgo don Quijote de la Mancha",
+        "page_number": 64,
+        "note": ""
+      },
+      {
+        "text": "Hechas",
+        "context": "Que trata de la primera salida que de su tierra hizo el ingenioso don Quijote Hechas, pues, estas prevenciones, no quiso aguardar más tiempo a poner en efeto su pensamiento, apretándole a ello la falta que él pensaba que hacía en el mundo su tardanza, según eran los agravios que pensaba deshacer, tuertos que enderezar, sinrazones que emendar, y abusos que mejorar y deudas que satisfacer.",
+        "chapter": "Capítulo II. Que trata de la primera salida que de su tierra hizo el ingenioso don Quijote",
+        "page_number": 65,
+        "note": ""
+      },
+      {
+        "text": "claras aguas destos arroyos",
+        "context": "Los árboles destas montañas son mi compañía, las claras aguas destos arroyos mis espejos;",
+        "chapter": "Capítulo XIV. Donde se ponen los versos desesperados del difunto pastor, con otros no esperados sucesos",
+        "page_number": 244,
+        "note": ""
+      },
+      {
+        "text": "destos",
+        "context": "Los árboles destas montañas son mi compañía, las claras aguas destos arroyos mis espejos;",
+        "chapter": "Capítulo XIV. Donde se ponen los versos desesperados del difunto pastor, con otros no esperados sucesos",
+        "page_number": 244,
+        "note": ""
+      },
+      {
+        "text": "Fuego soy apartado",
+        "context": "Fuego soy apartado y espada puesta lejos.",
+        "chapter": "Capítulo XIV. Donde se ponen los versos desesperados del difunto pastor, con otros no esperados sucesos",
+        "page_number": 244,
+        "note": ""
+      },
+      {
+        "text": "apartado",
+        "context": "Fuego soy apartado y espada puesta lejos.",
+        "chapter": "Capítulo XIV. Donde se ponen los versos desesperados del difunto pastor, con otros no esperados sucesos",
+        "page_number": 244,
+        "note": ""
+      },
+      {
+        "text": "espada",
+        "context": "Fuego soy apartado y espada puesta lejos.",
+        "chapter": "Capítulo XIV. Donde se ponen los versos desesperados del difunto pastor, con otros no esperados sucesos",
+        "page_number": 244,
+        "note": ""
+      },
+      {
+        "text": "espada puesta lejos",
+        "context": "Fuego soy apartado y espada puesta lejos.",
+        "chapter": "Capítulo XIV. Donde se ponen los versos desesperados del difunto pastor, con otros no esperados sucesos",
+        "page_number": 244,
         "note": ""
       },
       {
@@ -22,10 +211,66 @@
         "note": ""
       },
       {
+        "text": "agradezco",
+        "context": "— Yo agradezco tu buena intención, amigo Sancho —respondió don Quijote—, mas quiérote hacer sabidor de que todas estas cosas que hago no son de burlas, sino muy de veras;",
+        "chapter": "Capítulo XXV. Que trata de las estrañas cosas que en Sierra Morena sucedieron al valiente caballero de la Mancha, y de la imitación que hizo a la penitencia de Beltenebros",
+        "page_number": 482,
+        "note": ""
+      },
+      {
+        "text": "peregrinamos",
+        "context": "y, estando solos, le dijo: — Mucho me pesa, Sancho, que hayas dicho y digas que yo fui el que te saqué de tus casillas, sabiendo que yo no me quedé en mis casas: juntos salimos, juntos fuimos y juntos peregrinamos;",
+        "chapter": "Capítulo II. Que trata de la notable pendencia que Sancho Panza tuvo con la sobrina y ama de don Quijote, con otros sujetos graciosos",
+        "page_number": 601,
+        "note": ""
+      },
+      {
+        "text": "vulgo",
+        "context": "¿En qué opinión me tiene el vulgo, en qué los hidalgos y en qué los caballeros?",
+        "chapter": "Capítulo II. Que trata de la notable pendencia que Sancho Panza tuvo con la sobrina y ama de don Quijote, con otros sujetos graciosos",
+        "page_number": 603,
+        "note": ""
+      },
+      {
+        "text": "vuestra merced",
+        "context": "y dijo a su amo: — Agora bien, señor, yo quiero disponerme a dar gusto a vuestra merced en lo que desea, con provecho mío;",
+        "chapter": "Capítulo LXXI. De lo que a don Quijote le sucedió con su escudero Sancho yendo a su aldea",
+        "page_number": 629,
+        "note": ""
+      },
+      {
+        "text": "vuestra merced",
+        "context": "Apártese vuestra merced otro poco y déjeme dar otros mil azotes siquiera, que a dos levadas déstas habremos cumplido con esta partida, y aún nos sobrará ropa.",
+        "chapter": "Capítulo LXXI. De lo que a don Quijote le sucedió con su escudero Sancho yendo a su aldea",
+        "page_number": 634,
+        "note": ""
+      },
+      {
+        "text": "folloncicos",
+        "context": "Pero, antes que a ti lleguen, les puedes advertir, y decirles en el mejor modo que pudieres: ''¡Tate, tate, folloncicos!",
+        "chapter": "Capítulo LXXIV. De cómo don Quijote cayó malo, y del testamento que hizo, y su muerte",
+        "page_number": 674,
+        "note": ""
+      },
+      {
+        "text": "tordesillesco",
+        "context": "solos los dos somos para en uno, a despecho y pesar del escritor fingido y tordesillesco que se atrevió, o se ha de atrever, a escribir con pluma de avestruz grosera y mal deliñada las hazañas de mi valeroso caballero, porque no es carga de sus hombros ni asunto de su resfriado ingenio;",
+        "chapter": "Capítulo LXXIV. De cómo don Quijote cayó malo, y del testamento que hizo, y su muerte",
+        "page_number": 674,
+        "note": ""
+      },
+      {
         "text": "tropezando",
         "context": "Y con esto cumplirás con tu cristiana profesión, aconsejando bien a quien mal te quiere, y yo quedaré satisfecho y ufano de haber sido el primero que gozó el fruto de sus escritos enteramente, como deseaba, pues no ha sido otro mi deseo que poner en aborrecimiento de los hombres las fingidas y disparatadas historias de los libros de caballerías, que, por las de mi verdadero don Quijote, van ya tropezando, y han de caer del todo, sin duda alguna.",
         "chapter": "Capítulo LXXIV. De cómo don Quijote cayó malo, y del testamento que hizo, y su muerte",
         "page_number": 675,
+        "note": ""
+      },
+      {
+        "text": "graciosa",
+        "context": "Donde se cuenta la graciosa manera que tuvo don Quijote en armarse caballero",
+        "chapter": "El ingenioso hidalgo don Quijote de la Mancha",
+        "page_number": 4,
         "note": ""
       }
     ]

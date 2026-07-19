@@ -35,6 +35,12 @@ SENTENCE_END_REGEX_REVERSED: Final[regex.Pattern] = regex.compile(
     _SENTENCE_END_REGEX_PATTERN, flags=regex.REVERSE
 )
 
+# A <ul>/<ol> this long with (almost) no sentence-ending punctuation is
+# probably tabular data — a table of contents, an index, etc. — rather than
+# running prose, so each list item is treated as its own sentence.
+TABULAR_LIST_MIN_WORDS: Final[int] = 500
+TABULAR_LIST_MAX_SENTENCE_END_DENSITY: Final[float] = 0.01  # ends per word
+
 
 @attrs.frozen
 class Position:
@@ -125,6 +131,31 @@ def _next_position(cpos: DocPosition) -> DocPosition:
     return cpos
 
 
+def _previous_position(cpos: DocPosition) -> DocPosition:
+    """The reverse of :func:`_next_position`.
+
+    Nodes are visited in reverse of the order that ``_next_position`` (and
+    ``DocPositionRange.text``) traverses them, so the two walkers agree on
+    what text lies between two positions.
+    """
+    # The <body> is where the searchable content begins; walking further up
+    # (or into a preceding <head>) would search titles and stylesheets.
+    if cpos.node.tag == "body":
+        return DocPosition(node=cpos.node, index=0, document_beginning=True)
+
+    if (previous_node := cpos.node.getprevious()) is not None:
+        # A parent is visited before its children, so walking backwards we
+        # want the last child of the previous element (recursively).
+        while node_children := previous_node.getchildren():
+            previous_node = node_children[-1]
+        return DocPosition(node=previous_node, index=-1)
+
+    parent = cpos.node.getparent()
+    if parent is None:
+        return DocPosition(node=cpos.node, index=0, document_beginning=True)
+    return DocPosition(node=parent, index=-1)
+
+
 @attrs.frozen
 class DocPositionRange:
     start: DocPosition
@@ -196,13 +227,15 @@ class EPUBContext:
 
     book: epub.EpubBook
     _doc_cache: MutableMapping[str | int, etree._Element] = attrs.field(factory=dict)
+    _tabular_cache: MutableMapping[etree._Element, bool] = attrs.field(factory=dict)
 
     def get_document_from_id(self, doc_id: str | int) -> etree._Element:
         if doc_id not in self._doc_cache:
             if isinstance(doc_id, int):
-                doc_id -= 1
-                if 0 <= doc_id < len(self.book.spine):
-                    item_id = self.book.spine[doc_id][0]
+                # DocFragment indices are 1-based, the spine is 0-based.
+                spine_index = doc_id - 1
+                if 0 <= spine_index < len(self.book.spine):
+                    item_id = self.book.spine[spine_index][0]
                     item = self.book.get_item_with_id(item_id)
             elif isinstance(doc_id, str):
                 for item in self.book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
@@ -255,7 +288,9 @@ class EPUBContext:
         ):
             # Expand backwards
             if not out_range.start.document_beginning:
-                out_range = self._expand_range_backward(out_range)
+                out_range = self._expand_range_backward(
+                    out_range, require_progress=True
+                )
                 if out_range.start.document_beginning:
                     sentence_count = self._count_sentences(out_range)
                 else:
@@ -266,7 +301,7 @@ class EPUBContext:
 
             # Expand forwards
             if not out_range.end.document_end:
-                out_range = self._expand_range_forward(out_range)
+                out_range = self._expand_range_forward(out_range, require_progress=True)
                 if out_range.end.document_end:
                     sentence_count = self._count_sentences(out_range)
                 else:
@@ -277,8 +312,51 @@ class EPUBContext:
 
         return out_range.text
 
-    def _next_sentence_end(self, position: DocPosition) -> DocPosition:
+    def _is_tabular_list(self, list_node: etree._Element) -> bool:
+        """Whether a <ul>/<ol> is tabular data rather than running prose.
+
+        Long lists with (almost) no sentence-ending punctuation — tables of
+        contents, indexes, etc. — have no usable sentence boundaries, so each
+        list item is treated as a sentence of its own.
+        """
+        if list_node not in self._tabular_cache:
+            text = " ".join(list_node.itertext())
+            word_count = len(text.split())
+            sentence_end_count = len(SENTENCE_END_REGEX.findall(text))
+            self._tabular_cache[list_node] = (
+                word_count >= TABULAR_LIST_MIN_WORDS
+                and sentence_end_count
+                < word_count * TABULAR_LIST_MAX_SENTENCE_END_DENSITY
+            )
+        return self._tabular_cache[list_node]
+
+    def _tabular_item(self, node: etree._Element) -> etree._Element | None:
+        """The <li> of a tabular list that contains ``node``, if any."""
+        current: etree._Element | None = node
+        while current is not None:
+            parent = current.getparent()
+            if (
+                current.tag == "li"
+                and parent is not None
+                and parent.tag in ("ul", "ol")
+                and self._is_tabular_list(parent)
+            ):
+                return current
+            current = parent
+        return None
+
+    def _crosses_tabular_boundary(
+        self, node_a: etree._Element, node_b: etree._Element
+    ) -> bool:
+        """Whether moving between two nodes enters, leaves, or switches
+        items of a tabular list — an implicit sentence boundary."""
+        return self._tabular_item(node_a) is not self._tabular_item(node_b)
+
+    def _next_sentence_end(
+        self, position: DocPosition, *, require_progress: bool = False
+    ) -> DocPosition:
         cpos = position
+        skip_next_boundary = require_progress
 
         while True:
             # Search the current node and any "tails". This covers situations like:
@@ -289,62 +367,117 @@ class EPUBContext:
             if match:
                 return DocPosition(node=cpos.node, index=cpos.index + match.end())
 
-            cpos = _next_position(cpos)
-            if cpos.document_end:
-                return cpos
+            npos = _next_position(cpos)
+            if npos.document_end:
+                return npos
+
+            if self._crosses_tabular_boundary(cpos.node, npos.node):
+                # If the range already ends exactly at this boundary, it has
+                # been used as a sentence end before; keep going so that the
+                # expansion makes progress.
+                at_start = (
+                    cpos.node is position.node and len(cpos.node_text) == position.index
+                )
+                if not (skip_next_boundary and at_start):
+                    return DocPosition(node=cpos.node, index=len(cpos.node_text))
+                skip_next_boundary = False
+
+            cpos = npos
 
     def _expand_range_forward(
         self,
         doc_pos_range: DocPositionRange,
+        *,
+        require_progress: bool = False,
     ) -> DocPositionRange:
         return attrs.evolve(
             doc_pos_range,
-            end=self._next_sentence_end(doc_pos_range.end),
+            end=self._next_sentence_end(
+                doc_pos_range.end, require_progress=require_progress
+            ),
         )
 
-    def _previous_sentence_end(self, position: DocPosition) -> DocPosition:
+    def _previous_sentence_end(
+        self, position: DocPosition, *, require_progress: bool = False
+    ) -> DocPosition:
+        """Find where the sentence containing ``position`` begins.
+
+        The returned position points just *after* the previous sentence's
+        terminator, so the terminator itself is not part of the new range.
+        With ``require_progress``, the first sentence boundary found (the one
+        that begins the current range) is skipped, expanding the range by
+        exactly one sentence.
+        """
         cpos = position
-        last_pos = cpos
+        skip_next_boundary = require_progress
         while True:
             if cpos.index != 0:
-                match = SENTENCE_END_REGEX_REVERSED.search(
-                    cpos.node_text[: cpos.index - 1]
+                window = (
+                    cpos.node_text if cpos.index < 0 else cpos.node_text[: cpos.index]
                 )
-                if match:
-                    if match.end() == len(cpos.node_text.rstrip()):
-                        return DocPosition(node=last_pos.node, index=0)
-                    else:
-                        return DocPosition(
-                            node=cpos.node, index=max(0, match.end() - 1)
-                        )
+                match = SENTENCE_END_REGEX_REVERSED.search(window)
+                if match is not None and skip_next_boundary:
+                    skip_next_boundary = False
+                    match = SENTENCE_END_REGEX_REVERSED.search(window[: match.start()])
+                if match is not None:
+                    return DocPosition(node=cpos.node, index=match.end())
 
-            next_sibling = cpos.node.getprevious()
-            if next_sibling is None:
-                next_sibling = cpos.node.getprevious()
+            ppos = _previous_position(cpos)
+            if ppos.document_beginning:
+                return ppos
 
-            if next_sibling is None:
-                return DocPosition(node=cpos.node, index=0, document_beginning=True)
+            if self._crosses_tabular_boundary(ppos.node, cpos.node):
+                if not skip_next_boundary:
+                    return DocPosition(node=cpos.node, index=0)
+                skip_next_boundary = False
 
-            # We want the last child of the previous element (recursively)
-            while node_children := next_sibling.getchildren():
-                next_sibling = node_children[-1]
-
-            last_pos = cpos
-            cpos = DocPosition(node=next_sibling, index=-1)
+            cpos = ppos
 
     def _expand_range_backward(
         self,
         doc_pos_range: DocPositionRange,
+        *,
+        require_progress: bool = False,
     ) -> DocPositionRange:
 
-        new_start = self._previous_sentence_end(doc_pos_range.start)
+        new_start = self._previous_sentence_end(
+            doc_pos_range.start, require_progress=require_progress
+        )
         return attrs.evolve(doc_pos_range, start=new_start)
 
     def _count_sentences(
         self,
         drange: DocPositionRange,
     ) -> int:
-        count = len(SENTENCE_END_REGEX.findall(drange.text))
+        return len(SENTENCE_END_REGEX.findall(drange.text)) + (
+            self._count_tabular_sentence_ends(drange)
+        )
+
+    def _count_tabular_sentence_ends(self, drange: DocPositionRange) -> int:
+        """Count the sentence ends implied by tabular-list item boundaries.
+
+        These are invisible to the regex-based count because they contribute
+        no punctuation to the range's text, but the expansion logic treats
+        them as sentence ends, so the two counts must agree.
+        """
+        count = 0
+        cpos = drange.start
+        while cpos.node is not drange.end.node:
+            npos = _next_position(cpos)
+            if npos.document_end:
+                break
+            if self._crosses_tabular_boundary(cpos.node, npos.node):
+                count += 1
+            cpos = npos
+
+        # A range ending right at a tabular boundary ends a sentence there.
+        end = drange.end
+        if end.index is not None and end.index >= len(end.node_text):
+            npos = _next_position(end)
+            if not npos.document_end and self._crosses_tabular_boundary(
+                end.node, npos.node
+            ):
+                count += 1
         return count
 
     def _extract_text_content(
