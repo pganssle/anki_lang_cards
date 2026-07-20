@@ -19,7 +19,7 @@
     </div>
     <div class="model_source">
         <span class="model"></span>
-        <span class="date"><span>
+        <span class="date"></span>
     </div>
 </div>
 
@@ -57,8 +57,8 @@
                         page_ranges.push(page);
                         return;
                     }
-                    last_page = page_ranges.pop();
-                    if (typeof last_page === "array") {
+                    const last_page = page_ranges.pop();
+                    if (Array.isArray(last_page)) {
                         // This will always be an array of size 2.
                         if (last_page[1] === page-1) {
                             page_ranges.push([last_page[0], page])
@@ -66,8 +66,11 @@
                             page_ranges.push(last_page);
                             page_ranges.push(page)
                         }
-                    } else if (last_page = page-1) {
+                    } else if (last_page === page-1) {
                         page_ranges.push([last_page, page]);
+                    } else {
+                        page_ranges.push(last_page);
+                        page_ranges.push(page);
                     }
                 };
 
