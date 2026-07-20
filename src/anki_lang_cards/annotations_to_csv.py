@@ -647,7 +647,18 @@ async def main() -> None:
         "as a junk note; it is useful mainly for matching up columns in "
         "the import dialog.",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Process at most this many annotation entries; useful for a "
+        "trial run over a subset before committing to a full one. The "
+        "processed-pages output is not written for a limited run.",
+    )
     args = parser.parse_args()
+
+    if args.limit is not None and args.limit < 1:
+        parser.error("--limit must be a positive integer")
 
     if args.skip_response_cache and args.invalidate_response_cache:
         raise ValueError(
@@ -683,6 +694,10 @@ async def main() -> None:
 
     word_map = lookup_words(engine, combined_annotations)
     prompt_inputs = list(prepare_prompt_inputs(combined_annotations, word_map))
+    limited = args.limit is not None and args.limit < len(prompt_inputs)
+    if limited:
+        print(f"Limiting to the first {args.limit} of {len(prompt_inputs)} entries.")
+        prompt_inputs = prompt_inputs[: args.limit]
     source_mapping = _prepare_source_mapping(prompt_inputs)
 
     existing: dict[Word, Word] = {}
@@ -748,13 +763,19 @@ async def main() -> None:
             writer.writerow(word.to_csv_line())
 
     print(f"Written to {args.output}")
-    print(f"Writing rules for processed pages to {args.processed_pages_output}")
     # Generate and save processed pages JSON if requested
     if args.processed_pages_output:
-        processed_pages = generate_processed_pages_json(combined_annotations)
-        with open(args.processed_pages_output, "w") as f:
-            json.dump(processed_pages, f, indent=2)
-        print(f"Processed pages written to {args.processed_pages_output}")
+        if limited:
+            # The processed-pages rules are generated from every loaded
+            # annotation, so after a partial run they would mark pages as
+            # processed that never were.
+            print("Not writing processed pages: --limit skipped part of the input.")
+        else:
+            print(f"Writing rules for processed pages to {args.processed_pages_output}")
+            processed_pages = generate_processed_pages_json(combined_annotations)
+            with open(args.processed_pages_output, "w") as f:
+                json.dump(processed_pages, f, indent=2)
+            print(f"Processed pages written to {args.processed_pages_output}")
 
 
 if __name__ == "__main__":

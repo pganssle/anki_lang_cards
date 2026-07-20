@@ -20,7 +20,7 @@ KOReader highlights ──sync──> Calibre library (#raw_sidecar column)
                      anki_lang_cards.annotations_to_csv  (LLM)
                                      │  output/words_from_annotations.csv
                                      ▼
-org-mode word list ──> org_to_csv ──┤
+ org-mode word list ──> org_to_csv ──┤
                                      ▼
                         python -m anki_lang_cards  (LLM + dedup/merge)
                                      │  output/diff_from_existing.csv
@@ -152,6 +152,11 @@ Things to know:
   cheap and doesn't re-query the model. `--invalidate-response-cache` and
   `--skip-response-cache` override this when you actually want fresh
   responses.
+- **Trial runs**: `--limit N` processes only the first N annotation entries,
+  which is a cheap way to sanity-check the output format before committing
+  to a full run (the responses are cached, so the full run reuses them). A
+  limited run doesn't write the processed-pages file, since it would
+  otherwise claim pages were processed that never were.
 
 After this step, review `output/words_from_annotations.csv` by hand — fix up
 meanings, drop junk annotations, etc. This is the cheapest place in the
@@ -181,7 +186,9 @@ python -m anki_lang_cards --model-service anthropic --inputs output/words_from_a
 ```
 
 (The default `--inputs` is `input/words.csv`, so point it at whichever CSV
-the earlier steps produced.)
+the earlier steps produced. `--limit N` processes only the first N input
+words — useful for a trial run, ideally with `--output` and `--diff-output`
+pointed somewhere disposable.)
 
 This generates additional example sentences for each word, assigns ranks, and
 merges the input against the existing deck: words already in the deck are

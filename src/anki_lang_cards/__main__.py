@@ -174,7 +174,17 @@ async def main():
         "imports as a junk note; it is useful mainly for matching up "
         "columns in the import dialog.",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Process at most this many input words; useful for a trial "
+        "run over a subset before committing to a full one.",
+    )
     args = parser.parse_args()
+
+    if args.limit is not None and args.limit < 1:
+        parser.error("--limit must be a positive integer")
 
     if WORD_MERGER_AVAILABLE:
         match args.conflict_cache_behavior:
@@ -194,6 +204,9 @@ async def main():
     word_getter = operator.attrgetter("word")
 
     words = types.Word.words_from_csv(args.inputs)
+    if args.limit is not None and args.limit < len(words):
+        print(f"Limiting to the first {args.limit} of {len(words)} input words.")
+        words = words[: args.limit]
     if args.output.exists():
         output_words = types.Word.words_from_csv(args.output)
     else:

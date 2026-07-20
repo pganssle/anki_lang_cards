@@ -426,6 +426,7 @@ def _run_main(
     workdir: pathlib.Path,
     inputs: pathlib.Path,
     dictionaries: DictionaryPaths,
+    extra_args: Sequence[str] = (),
 ) -> CliRun:
     config_path = _write_config(workdir, dictionaries)
     output_dir = workdir / "output"
@@ -450,6 +451,7 @@ def _run_main(
             str(CARDS_DIR / "exported_deck.txt"),
             "--diff-output",
             str(output_dir / "diff.csv"),
+            *extra_args,
         ),
         check=True,
         capture_output=True,
@@ -578,3 +580,35 @@ def test_main_output_has_no_header_by_default(main_run: CliRun) -> None:
     with main_run.output_csv.open(encoding="utf-8", newline="") as f:
         first_row = next(csv.reader(f))
     assert first_row[:2] != ["rank", "word"]
+
+
+def test_annotations_limit(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """--limit 1 processes only the first annotation entry and suppresses
+    the processed-pages output, which would otherwise mark every loaded
+    page as processed."""
+    workdir = tmp_path_factory.mktemp("annotations-limit-run")
+    run = _run_annotations_to_csv(
+        workdir,
+        CARDS_DIR / "combined_annotations.json",
+        dictionary_paths,
+        extra_args=("--limit", "1"),
+    )
+    assert "Limiting to the first 1 of 5 entries." in run.stdout
+    assert set(_words_by_headword(run.output_csv)) == {"gatos", "fiambres (comida)"}
+    assert not (workdir / "processed_pages.json").exists()
+
+
+def test_main_limit(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """--limit 1 sends only the first input word to the model."""
+    run = _run_main(
+        tmp_path_factory.mktemp("main-limit-run"),
+        CARDS_DIR / "words.csv",
+        dictionary_paths,
+        extra_args=("--limit", "1"),
+    )
+    assert "Limiting to the first 1 of 4 input words." in run.stdout
+    assert set(_words_by_headword(run.output_csv)) == {"gato"}
