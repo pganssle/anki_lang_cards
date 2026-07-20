@@ -15,6 +15,7 @@
     <tts service="android" voice="es_ES" id="sentence-tts"></tts>
     <span class="ankitts native-spanish-tts"></span>
     <button class="ankidroidTtsButton native-spanish-tts" onclick="_speak_contents(this.previousElementSibling);">▶</button>
+    <button id="refresh-sentence-btn" onclick="refresh_sentence();" title="Pick a different sentence">🔄</button>
 </div>
 
 <!-- Settings UI -->
@@ -38,6 +39,8 @@
         <input type="number" id="sentence-delay" name="sentence-delay" min="0" onchange="update_settings();"> <label for="sentence-delay">Delay before sentence (ms)</label> </div>
 </div>
 
+<div id="errors" class="error-reporting"></div>
+
 <script>
     // Default settings for new users
     DEFAULT_SETTINGS = {
@@ -47,8 +50,23 @@
         sentence_delay: 2500
     };
 
+    function report_error(error_str, ...args) {
+        console.error(error_str, ...args);
+        const errorsDiv = document.getElementById('errors');
+        const p = document.createElement('p');
+        p.className = 'error_line';
+        p.textContent = error_str + args.map(a => String(a)).join('');
+        errorsDiv.appendChild(p);
+    }
+
     // Key used for storing settings in localStorage
     let SETTINGS_KEY = "anki-spanish-vocab-settings";
+
+    // Key used for storing per-session sentence offsets in sessionStorage
+    let SESSION_SENTENCE_KEY = "sentence_index";
+
+    // The rank of this card (used as key in the session sentence index map)
+    const CARD_RANK = `{{Rank}}`;
 
     // Global state variables
     let settings = null;
@@ -60,6 +78,9 @@
         english: '',
         source: ''
     }; // Currently displayed sentence
+
+    // Cached sentence pool (set during initialize, reused on refresh)
+    let _sentence_pool = null;
 
     // AnkiDroid API support detection
     let api = undefined;
@@ -156,13 +177,39 @@
         }
     }
 
+    // Session sentence offset helpers
+
+    // Get the current session offset for this card (defaults to 0)
+    function get_session_offset() {
+        try {
+            const raw = sessionStorage.getItem(SESSION_SENTENCE_KEY);
+            if (raw === null) return 0;
+            const map = JSON.parse(raw);
+            return map[CARD_RANK] || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    // Set the session offset for this card
+    function set_session_offset(value) {
+        try {
+            const raw = sessionStorage.getItem(SESSION_SENTENCE_KEY);
+            const map = raw !== null ? JSON.parse(raw) : {};
+            map[CARD_RANK] = value;
+            sessionStorage.setItem(SESSION_SENTENCE_KEY, JSON.stringify(map));
+        } catch (e) {
+            report_error("Failed to save session sentence offset: ", e);
+        }
+    }
+
     // Random Sentence Selection Functions
 
     // Generate a deterministic seed based on the current date and word
     function get_rand_seed() {
         // Start with milliseconds since Jan 1, 2000
         const epoch = new Date(2000, 0, 1, 0, 0, 0, 0);
-        let today = new Date();
+        let today = new Date(new Date() - (3 * 60 * 60 * 1000));
         today.setHours(0, 0, 0, 0);
         let seed = today - epoch;
 
@@ -182,32 +229,32 @@
         return Math.floor((x - Math.floor(x)) * max);
     }
 
-    // Select a random sentence from available sentences
-    function select_sentence() {
+    // Build and cache the sentence pool (parses field data once)
+    function get_sentence_pool() {
+        if (_sentence_pool !== null) return _sentence_pool;
+
         const current_spanish = `{{text:Spanish}}`;
         const current_english = `{{text:English}}`;
         let json_data = `{{text:Extra Sentences}}`.trim();
 
-        // Parse extra sentences, defaulting to empty array if parsing fails
         let sentences = [];
         try {
             if (json_data) {
-                // Decode HTML entities (specifically &quot;) before parsing JSON
                 sentences = JSON.parse(json_data);
             }
         } catch (e) {
-            console.error("Failed to parse extra sentences:", e);
+            report_error("Failed to parse extra sentences:", e);
             console.error("Raw JSON data:", json_data);
         }
 
-        let source_json = `{{text:Sentence Source}}`;
+        let source_json = `{{text::Sentence Source}}`;
         let source = {};
         try {
             if (source_json) {
                 source = JSON.parse(source_json);
             }
         } catch(e) {
-            console.error("Failed to parse sentence source: ", e);
+            report_error("Failed to parse sentence source: ", e);
             console.error("Raw source data: ", source_json);
         }
 
@@ -217,7 +264,7 @@
                 try {
                     sentence.source = JSON.parse(sentence.source);
                 } catch (e) {
-                    console.error("Failed to parse source:", e);
+                    report_error("Failed to parse source:", e);
                     console.error("Raw source data: ", sentence.source);
                 }
             }
@@ -230,26 +277,83 @@
             source: current_source
         });
 
-        // Select a random sentence using deterministic randomization
+        _sentence_pool = sentences;
+        return _sentence_pool;
+    }
+
+    // Select a sentence using the base seed + a session offset.
+    // Returns { sentence, index } where index is the pool index chosen.
+    function select_sentence() {
+        const sentences = get_sentence_pool();
         const rand_seed = get_rand_seed();
-        const selectedIndex = _randint(sentences.length, rand_seed);
-        console.log(`Selected sentence ${selectedIndex} of ${sentences.length}`);
+        const offset = get_session_offset();
+
+        // Incorporate the offset into the seed so each increment yields a
+        // different (but still deterministic) pick.
+        const effective_seed = rand_seed + offset * 2654435761; // large prime-ish multiplier
+        const selectedIndex = _randint(sentences.length, effective_seed);
+
+        console.log(`Selected sentence ${selectedIndex} of ${sentences.length} (offset=${offset})`);
         console.log("Selected sentence:", sentences[selectedIndex]);
-        return sentences[selectedIndex];
+        return { sentence: sentences[selectedIndex], index: selectedIndex };
     }
 
     // Update the DOM with the selected sentence
     function updateSentenceDisplay(sentence) {
-        // Get all relevant elements
         const ttsElem = document.querySelector("tts#sentence-tts");
         const spanElem = document.querySelector("span.native-spanish-tts");
 
-        // Update text content
         ttsElem.textContent = sentence.spanish;
         spanElem.textContent = sentence.spanish;
 
-        // Store current sentence for TTS
         currentSentence = sentence;
+    }
+
+    // Update the refresh button: grey out if only 1 sentence available
+    function update_refresh_button() {
+        const btn = document.getElementById("refresh-sentence-btn");
+        if (!btn) return;
+        const pool = get_sentence_pool();
+        btn.disabled = pool.length <= 1;
+        btn.style.opacity = pool.length <= 1 ? "0.4" : "1";
+        btn.style.cursor = pool.length <= 1 ? "default" : "pointer";
+    }
+
+    // Refresh button handler: increment offset until a new sentence is chosen,
+    // then update the display (and auto-read if enabled).
+    function refresh_sentence() {
+        const pool = get_sentence_pool();
+        if (pool.length <= 1) return;
+
+        const oldSpanish = currentSentence.spanish;
+        let offset = get_session_offset();
+        let attempts = 0;
+        let chosen;
+
+        // Increment offset until we land on a different sentence (cap attempts
+        // at pool.length to avoid an infinite loop on pathological seeds).
+        do {
+            offset += 1;
+            set_session_offset(offset);
+            chosen = select_sentence();
+            attempts++;
+        } while (chosen.sentence.spanish === oldSpanish && attempts < pool.length);
+
+        updateSentenceDisplay(chosen.sentence);
+
+        // If sentence panel is hidden, show it
+        if (hidden) {
+            show_sentence();
+        }
+
+        // Auto-read if the setting is on
+        if (SUPPORTS_ANKIDROID_JS && get_settings().read_sentence) {
+            speak(currentSentence.spanish);
+        }
+
+        // Reset the "already spoken" guard so the on_sentence_shown callback
+        // would fire again if needed
+        sentence_shown = true; // mark as shown so the existing callback won't double-speak
     }
 
     // Show the sentence and trigger TTS if enabled
@@ -279,9 +383,12 @@
         // Load and apply settings
         load_settings_ui();
 
-        // Select and display random sentence
-        const selectedSentence = select_sentence();
+        // Build pool once, select sentence, display it
+        const { sentence: selectedSentence } = select_sentence();
         updateSentenceDisplay(selectedSentence);
+
+        // Grey out refresh button when only 1 sentence available
+        update_refresh_button();
 
         // Check if we're on the back of the card
         const is_back = typeof IS_BACK !== 'undefined';
@@ -295,7 +402,7 @@
 
             console.log(articles);
 
-            // In situatons like `el/la perro/a`, we want to split it
+            // In situations like `el/la perro/a`, we want to split it
             // up to `el perro / la perra`
             if (word.endsWith("o/a") || word.endsWith("a/o")) {
                 let word_base = word.substr(0, word.length-3);
@@ -310,8 +417,8 @@
                 words.push(word_base); // Masculine
 
                 // Handle situations like soplón/a, which needs to expand to
-                // soplona instead of soplóna though in practice these are
-                // pronounced the same.
+                // soplona instead of soplóna, though in practice these are
+                // pronounced the same
                 const accentMap = {
                   'á': 'a',
                   'é': 'e',
@@ -320,7 +427,6 @@
                   'ú': 'u'
                 };
                 const vowels = [...Object.keys(accentMap), ...Object.values(accentMap)];
-                // Helper function to check if a character is an accented vowel
                 const is_accented = char => Object.keys(accentMap).includes(char);
                 for (let i = word_base.length -1; i>= 0; i--) {
                     c = word_base[i];

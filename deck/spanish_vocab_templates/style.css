@@ -3,8 +3,7 @@
   font-size: 20px;
   text-align: center;
   color: black;
-  background-color: white;
-}
+  background-color: white; }
 
 .word {
   color: #f08700;
@@ -95,4 +94,15 @@ div.model_source > span.date {
 div.model_source > span.date::before {
     display: block;
     content: ' ';
+}
+
+div.note {
+    margin-top: 1em;
+    font-style: italic;
+    font-size: 0.75em;
+}
+
+div.error-reporting {
+    font-size: 0.5em;
+    color: red;
 }
