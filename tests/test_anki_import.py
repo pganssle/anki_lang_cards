@@ -4,9 +4,10 @@ These use the ``anki`` Python package (the same Rust-backed importer the
 desktop import dialog drives) against a scratch collection, and verify that
 the JSON-bearing fields written by ``Word.to_csv_line`` survive the trip into
 Anki — or document exactly how they get mangled when the import is
-misconfigured. The historical damage repaired by ``fix_json_field`` and
-``scripts/fix_example_sentences.py`` (``&quot;``, ``<br>``, ``&amp;``) is
-reproduced here by importing with "allow HTML" disabled.
+misconfigured. The historical damage repaired by
+``parse_json_field_with_repair`` and ``scripts/repair_json_fields.py``
+(``&quot;``, ``<br>``, ``&amp;``) is reproduced here by importing with
+"allow HTML" disabled.
 """
 
 import csv
@@ -19,6 +20,7 @@ from typing import Final
 import pytest
 
 from anki_lang_cards import _types as types
+from anki_lang_cards import anki_import
 
 anki_collection = pytest.importorskip(
     "anki.collection", reason="the anki package is required for import tests"
@@ -165,9 +167,13 @@ def test_import_with_html_enabled_is_faithful(
 def test_import_with_html_disabled_mangles_json(
     collection, tmp_path: pathlib.Path
 ) -> None:
-    """With "allow HTML" disabled the importer HTML-escapes the fields,
-    producing exactly the damage the fix-up scripts repair: quotes become
-    &quot;, newlines become <br>, and ampersands become &amp;."""
+    """With "allow HTML" disabled the importer HTML-escapes the fields.
+
+    Because the serializer writes ``<``, ``>`` and ``&`` as ``\\uXXXX``
+    escapes, the only remaining damage is quotes becoming &quot; — which
+    the repair chain undoes losslessly. Imports should still use "allow
+    HTML", but a misconfigured import is no longer permanently corrupting.
+    """
     word = _nasty_word(rank=1402)
     csv_path = tmp_path / "words.csv"
     csv_path.write_text(_word_csv([word], header=False), encoding="utf-8")
@@ -176,22 +182,14 @@ def test_import_with_html_disabled_mangles_json(
     fields = _notes_by_word(collection, "html-off")["gato"]
 
     assert "&quot;" in fields["Extra Sentences"]
-    # Sentence Source is pretty-printed JSON, so its newlines become <br>.
-    assert "<br>" in fields["Sentence Source"]
+    assert "&quot;" in fields["Sentence Source"]
     with pytest.raises(json.JSONDecodeError):
         json.loads(fields["Sentence Source"])
 
-    # The repair performed by fix_json_field recovers the structure...
-    repaired = (
-        fields["Sentence Source"]
-        .replace("&quot;", '"')
-        .replace("&nbsp;", " ")
-        .replace("<br>", "\n")
-    )
-    source = json.loads(repaired)
-    # ...but not the content: &amp; is not repaired, so the ampersand stays
-    # permanently corrupted. This is why imports must use "allow HTML".
-    assert source["title"] == "Libro &amp; Cosas"
+    source = anki_import.parse_json_field_with_repair(fields["Sentence Source"])
+    assert source["title"] == "Libro & Cosas"
+    extra = anki_import.parse_json_field_with_repair(fields["Extra Sentences"])
+    assert extra[0]["english"] == 'They say \\"gato\\" is key.'
 
 
 def test_header_row_imports_as_junk_note(collection, tmp_path: pathlib.Path) -> None:

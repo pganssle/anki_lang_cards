@@ -19,6 +19,24 @@ from . import part_of_speech as pos
 Url = NewType("Url", str)
 
 
+def json_for_anki_field(obj: Any) -> str:
+    """Serialize ``obj`` as JSON suitable for storage in an Anki note field.
+
+    Anki renders note fields as HTML, so a field holding JSON must not
+    contain HTML-active characters: a literal ``<`` could be parsed as a
+    tag and swallowed by the browser before the card template's JavaScript
+    reads the field back. ``<``, ``>`` and ``&`` are therefore written as
+    ``\\uXXXX`` escapes inside the JSON strings, which keeps the output
+    valid JSON that parses to exactly the same object.
+    """
+    return (
+        json.dumps(obj, ensure_ascii=False)
+        .replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+    )
+
+
 def _non_nulls[T](v1: T | None, v2: T | None) -> Sequence[T]:
     if v1 and not v2:
         assert v1 is not None
@@ -314,7 +332,7 @@ class Word:
 
     def to_csv_line(self, require_rank: bool = False) -> Sequence[str]:
         if self.example_sentences:
-            example_sentences = json.dumps(
+            example_sentences = json_for_anki_field(
                 _cattrs_converter().unstructure(self.example_sentences)
             )
         else:
@@ -328,7 +346,10 @@ class Word:
             rank = self.rank
 
         if self.sentence_source is not None:
-            sentence_source = self.sentence_source.to_json()
+            # json_for_anki_field rather than to_json: this lands in an Anki
+            # field, and to_json's indented output would also put literal
+            # newlines in the CSV.
+            sentence_source = json_for_anki_field(self.sentence_source.to_dict())
         else:
             sentence_source = ""
 

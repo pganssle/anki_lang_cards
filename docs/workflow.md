@@ -218,6 +218,11 @@ The CSVs are written without a header row by default, since Anki's importer
 has no option to skip one; pass `--csv-header` to the previous step if you
 want a header for matching up columns in the import dialog.
 
+Import with "Allow HTML in fields" enabled. The JSON-bearing fields are
+written with `<`, `>` and `&` as `\uXXXX` escapes, so with HTML allowed
+they survive byte-for-byte; even a misconfigured import only mangles
+quotes into `&quot;`, which the repair tooling (see step 7) undoes.
+
 ## Step 7: periodic maintenance
 
 Not part of every run, but worth doing occasionally, with Anki Connect
@@ -233,6 +238,11 @@ running:
   `Rank` field above `--start-at` (default 5000, i.e. the words added by this
   pipeline rather than the original frequency deck) and renumbers to close
   them. Supports `--dry-run`.
+- **`python scripts/repair_json_fields.py`** — re-parses the `Sentence
+  Source` and `Extra Sentences` fields on every note (repairing historical
+  mangling: HTML entities from imports, hand-doubled or stripped `\"`
+  escapes, sources stored as nested JSON strings) and rewrites them in the
+  canonical HTML-inert form. Dry run by default; pass `--apply` to write.
 
 Both scripts take a `--cache-file` argument to avoid re-fetching the whole
 deck from Anki Connect on repeated runs.

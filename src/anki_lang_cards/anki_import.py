@@ -100,7 +100,9 @@ def _word_to_note_data(
         fields["Spanish"] = word.spanish_sentence
         fields["English"] = word.english_sentence
         if word.sentence_source:
-            fields["Sentence Source"] = word.sentence_source.to_json()
+            fields["Sentence Source"] = types.json_for_anki_field(
+                word.sentence_source.to_dict()
+            )
         else:
             fields["Sentence Source"] = ""
 
@@ -112,14 +114,40 @@ def _word_to_note_data(
     return {"id": note_id, "fields": fields}
 
 
+def _reescape_interior_quotes(json_str: str, max_repairs: int = 200) -> str:
+    """Re-insert backslashes for interior quotes that lost their escapes.
+
+    Some hand-edited fields had their ``\\"`` escapes stripped to bare
+    quotes (``"english": ""Very good," he said."``). Each round parses the
+    candidate and, on failure, escapes the closest quote before the error
+    position — the quote that prematurely terminated the string — until
+    the field parses or the repair budget runs out.
+    """
+    candidate = json_str
+    for _ in range(max_repairs):
+        try:
+            json.loads(candidate)
+        except json.JSONDecodeError as e:
+            quote_pos = candidate.rfind('"', 0, e.pos)
+            if quote_pos <= 0:
+                break
+            candidate = candidate[:quote_pos] + "\\" + candidate[quote_pos:]
+        else:
+            break
+    return candidate
+
+
 def _json_repair_candidates(json_str: str) -> Iterator[str]:
     """Yield progressively more aggressively repaired forms of a JSON field.
 
     The first candidate is the field verbatim; the second undoes the HTML
-    escaping historically applied by Anki imports; the last also collapses
-    doubled quotes. The doubled-quote rewrite is destructive on valid JSON
-    (it corrupts legitimately empty strings), which is why it is only ever
-    applied as a last resort.
+    escaping historically applied by Anki imports; the third undoes the
+    hand-applied ``\\"`` -> ``\\\\"`` doubling that used to be necessary for
+    escapes to survive the card template's JS string parsing; the fourth
+    collapses doubled quotes; and the last re-escapes interior quotes whose
+    backslashes were stripped entirely. The later rewrites are destructive
+    on valid JSON (e.g. the doubled-quote collapse corrupts legitimately
+    empty strings), which is why they are only ever applied as a fallback.
     """
     yield json_str
     unescaped = (
@@ -131,7 +159,10 @@ def _json_repair_candidates(json_str: str) -> Iterator[str]:
         .replace("&amp;", "&")
     )
     yield unescaped
-    yield unescaped.replace('""', '"')
+    dedoubled = unescaped.replace('\\\\"', '\\"')
+    yield dedoubled
+    yield dedoubled.replace('""', '"')
+    yield _reescape_interior_quotes(dedoubled)
 
 
 def parse_json_field_with_repair(json_str: str) -> Any:
@@ -151,6 +182,33 @@ def parse_json_field_with_repair(json_str: str) -> Any:
             last_error = e
     assert last_error is not None
     raise last_error
+
+
+def canonicalize_sentence_source(field_value: str) -> str:
+    """Repair a ``Sentence Source`` field and re-serialize it canonically.
+
+    :raises json.JSONDecodeError: If the field cannot be repaired.
+    """
+    return types.json_for_anki_field(parse_json_field_with_repair(field_value))
+
+
+def canonicalize_extra_sentences(field_value: str) -> str:
+    """Repair an ``Extra Sentences`` field and re-serialize it canonically.
+
+    Beyond the escape repairs, this also unwraps the historical damage
+    where a sentence's ``source`` was stored as a JSON string rather than
+    an object.
+
+    :raises json.JSONDecodeError: If the field cannot be repaired.
+    """
+    sentences = parse_json_field_with_repair(field_value)
+    fixed = []
+    for sentence in sentences:
+        source = sentence.get("source")
+        if isinstance(source, str) and source:
+            sentence = {**sentence, "source": parse_json_field_with_repair(source)}
+        fixed.append(sentence)
+    return types.json_for_anki_field(fixed)
 
 
 class AnkiConnectClient:

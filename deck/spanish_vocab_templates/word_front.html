@@ -41,6 +41,16 @@
 
 <div id="errors" class="error-reporting"></div>
 
+<!-- Raw note fields for the script to read. Reading field data out of the
+     DOM (rather than substituting it into JS string literals) means the JS
+     parser never mangles escape sequences like \" inside the JSON fields,
+     and any HTML entities Anki has introduced (&quot;, &amp;, ...) are
+     decoded for free by textContent. -->
+<div id="data-spanish" hidden>{{Spanish}}</div>
+<div id="data-english" hidden>{{English}}</div>
+<div id="data-sentence-source" hidden>{{Sentence Source}}</div>
+<div id="data-extra-sentences" hidden>{{Extra Sentences}}</div>
+
 <script>
     // Default settings for new users
     DEFAULT_SETTINGS = {
@@ -229,13 +239,18 @@
         return Math.floor((x - Math.floor(x)) * max);
     }
 
+    // Read a field's text out of one of the hidden data divs
+    function get_field_data(id) {
+        return document.getElementById(id).textContent.trim();
+    }
+
     // Build and cache the sentence pool (parses field data once)
     function get_sentence_pool() {
         if (_sentence_pool !== null) return _sentence_pool;
 
-        const current_spanish = `{{text:Spanish}}`;
-        const current_english = `{{text:English}}`;
-        let json_data = `{{text:Extra Sentences}}`.trim();
+        const current_spanish = get_field_data("data-spanish");
+        const current_english = get_field_data("data-english");
+        let json_data = get_field_data("data-extra-sentences");
 
         let sentences = [];
         try {
@@ -247,7 +262,7 @@
             console.error("Raw JSON data:", json_data);
         }
 
-        let source_json = `{{text::Sentence Source}}`;
+        let source_json = get_field_data("data-sentence-source");
         let source = {};
         try {
             if (source_json) {
