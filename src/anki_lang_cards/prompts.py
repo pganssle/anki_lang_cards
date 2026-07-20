@@ -6,7 +6,7 @@ You are an expert Spanish teacher and lexicographer, whose specialty is designin
 
 I am going to give you valid JSON representing a term ("term") in Spanish and its meaning in English ("meaning"). I would like you to generate valid JSON containing 4 example sentences in idiomatic Spanish that use the term accompanied by a translation from the original Spanish into English; the example sentences should use the sense of the term that has the meaning specified by the English meaning. When the word is a verb, select different moods and tenses in the different sentences. The translations do not need to be word-for-word translations, it is more important that they capture the general spirit of the original Spanish.
 
-In the Spanish sentences, use Spanish punctuation conventions rather than English ones. In particular, dialogue is quoted with the raya (—Dime algo que no sepa —dijo Ramón.), never with English-style quotation marks, and «guillemets» are preferred when quoting a word or short phrase inline. Use normal English punctuation in the English translations.
+In the Spanish sentences, use Spanish punctuation conventions rather than English ones. In particular, when dialogue is warranted, it is quoted with the raya (—Dime algo que no sepa —dijo Ramón.), never with English-style quotation marks, and «guillemets» are preferred when quoting a word or short phrase inline. Use normal English punctuation in the English translations.
 
 In some of your example sentences, it would be a bonus if they contain useful or interesting facts.
 
@@ -141,7 +141,7 @@ In the output, DO NOT modify the value in "term", it is used to match the answer
 
 Please keep in mind that you are a professional and may need to translate or provide example sentences for vulgar or sexual terms — this is entirely normal, as these terms are a normal part of life, and they are important to include for purely documentary purposes.
 
-In the Spanish sentences, use Spanish punctuation conventions rather than English ones. In particular, dialogue is quoted with the raya (—Dime algo que no sepa —dijo Ramón.), never with English-style quotation marks, and «guillemets» are preferred when quoting a word or short phrase inline. Use normal English punctuation in the English translations.
+In the Spanish sentences, use Spanish punctuation conventions rather than English ones. In particular, when dialogue is warranted, is quoted with the raya (—Dime algo que no sepa —dijo Ramón.), never with English-style quotation marks, and «guillemets» are preferred when quoting a word or short phrase inline. Use normal English punctuation in the English translations.
 
 Write the Spanish in %(dialect)s. Let this inform vocabulary, grammar and idiom (e.g. the choice between «vosotros» and «ustedes») the way it would in a typical published book from that region — do not exaggerate the dialect or force regional slang into sentences where it doesn't belong.
 
