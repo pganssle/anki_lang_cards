@@ -114,14 +114,20 @@ class WordEditor(Screen):
         pos_value = self.query_one("#pos").value
         article_value = self.query_one("#article").value
 
-        self.result = attrs.evolve(
-            self.merged_word,
-            rank=rank_value if rank_value else None,
-            word=word_value,
-            meaning=meaning_value,
-            part_of_speech=pos_value,
-            article=article_value,
-        )
+        try:
+            self.result = attrs.evolve(
+                self.merged_word,
+                rank=int(rank_value) if rank_value else None,
+                word=word_value,
+                meaning=meaning_value,
+                part_of_speech=pos_value,
+                article=article_value,
+            )
+        except ValueError as e:
+            # Reject the edit but keep the editor (and the app) alive; an
+            # uncaught error here would take down the whole merge session.
+            self.app.notify(f"Invalid value: {e}", severity="error", timeout=8)
+            return
         self.dismiss(self.result)
 
     def action_cancel(self):

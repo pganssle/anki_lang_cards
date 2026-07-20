@@ -279,3 +279,16 @@ def test_parse_part_of_speech(pos_str: str, expected: pos.PartOfSpeech) -> None:
 
     assert actual == expected
     assert actual.phrasal == expected.phrasal
+
+
+@pytest.mark.parametrize(
+    "pos_str",
+    ["", " ", "zzz", "nx", "vx", "nm x", "vtr x y", "prep x"],
+)
+def test_parse_part_of_speech_invalid(pos_str: str) -> None:
+    """Invalid inputs raise PartOfSpeechParseError, not IndexError/KeyError.
+
+    An empty string previously raised a bare IndexError, which escaped the
+    merge UI's error handling and took down the whole merge session."""
+    with pytest.raises(pos.PartOfSpeechParseError):
+        pos.parse_part_of_speech(pos_str)

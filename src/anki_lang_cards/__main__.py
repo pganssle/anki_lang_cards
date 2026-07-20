@@ -304,6 +304,14 @@ async def main():
                 cache=merge_cache,
                 cache_behavior=conflict_cache_behavior,
             )
+            if merge_results is None:
+                # The merge UI died or was dismissed without returning
+                # results. Merges accepted before that point were saved to
+                # the merge cache, so a re-run picks up where this left off.
+                raise RuntimeError(
+                    "The merge UI exited without returning results; "
+                    "re-run to continue from the merges cached so far."
+                )
 
             conflicting_sets = dict(zip(to_merge, merge_results, strict=True))
         else:

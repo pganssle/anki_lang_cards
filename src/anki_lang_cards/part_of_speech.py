@@ -322,6 +322,8 @@ def parse_part_of_speech(s: str, /) -> PartOfSpeech:
 
     components = s.split(" ")
     base = components[0]
+    if not base:
+        raise PartOfSpeechParseError(f"Empty part of speech: {s!r}")
 
     if base[0] == "n":
         if s == "n":
@@ -398,7 +400,11 @@ def parse_part_of_speech(s: str, /) -> PartOfSpeech:
         else:
             phrasality = Phrasality.UNSPECIFIED
 
-        return PartOfSpeech(base_pos=_BASE_POS_MAP[base], phrasal=phrasality)
+        try:
+            base_pos = _BASE_POS_MAP[base]
+        except KeyError:
+            raise PartOfSpeechParseError(f"Unknown part of speech: {s}") from None
+        return PartOfSpeech(base_pos=base_pos, phrasal=phrasality)
 
 
 class ParseError(ValueError):
