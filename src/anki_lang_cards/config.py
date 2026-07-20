@@ -3,7 +3,7 @@
 import pathlib
 import tomllib
 from collections.abc import Mapping, Sequence
-from typing import Any, Self
+from typing import Any, Final, Self
 
 import attrs
 
@@ -32,6 +32,20 @@ class TGWConfig:
         return cls(**vals)
 
 
+DEFAULT_DIALECT: Final[str] = "international Spanish"
+
+
+@attrs.frozen
+class SentencesConfig:
+    """Config options for LLM sentence generation."""
+
+    dialect: str = DEFAULT_DIALECT
+
+    @classmethod
+    def from_values(cls, vals: Mapping[str, Any]) -> Self:
+        return cls(**vals)
+
+
 @attrs.frozen
 class AnnotationsConfig:
     """Default config options for annotations."""
@@ -53,6 +67,7 @@ class Config:
     annotations: AnnotationsConfig
     tgw: TGWConfig | None = None
     anthropic: AnthropicConfig | None = None
+    sentences: SentencesConfig = SentencesConfig()
 
     @classmethod
     def from_file(cls, path: pathlib.Path) -> Self:
@@ -74,8 +89,14 @@ class Config:
         else:
             annotations_config = AnnotationsConfig()
 
+        if (sentences_values := config.get("sentences", None)) is not None:
+            sentences_config = SentencesConfig.from_values(sentences_values)
+        else:
+            sentences_config = SentencesConfig()
+
         return cls(
             tgw=tgw_config,
             anthropic=anthropic_config,
             annotations=annotations_config,
+            sentences=sentences_config,
         )

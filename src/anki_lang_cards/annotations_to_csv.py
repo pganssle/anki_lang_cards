@@ -375,7 +375,9 @@ def prepare_prompt_inputs(
     return output
 
 
-def _generate_prompt(prompt_inputs: Sequence[PromptInput]) -> str:
+def _generate_prompt(
+    prompt_inputs: Sequence[PromptInput], dialect: str = config.DEFAULT_DIALECT
+) -> str:
     annotation_input = json.dumps(
         [prompt_input.annotation_entry for prompt_input in prompt_inputs],
         indent=2,
@@ -394,6 +396,7 @@ def _generate_prompt(prompt_inputs: Sequence[PromptInput]) -> str:
     return prompts.BOOK_ANNOTATION_PROMPT % {
         "input": annotation_input,
         "rag_entries": "\n\n".join(all_rag_entries),
+        "dialect": dialect,
     }
 
 
@@ -402,7 +405,9 @@ def _estimate_tokens(prompt: str) -> int:
 
 
 def generate_prompts(
-    prompt_inputs: Sequence[PromptInput], max_tokens: int = 2048
+    prompt_inputs: Sequence[PromptInput],
+    max_tokens: int = 2048,
+    dialect: str = config.DEFAULT_DIALECT,
 ) -> Iterable[str]:
     # TODO: Can use heuristic to estimate how many fit in the context window to
     # make this faster
@@ -415,7 +420,7 @@ def generate_prompts(
     for prompt_input in prompt_inputs:
         current_prompt_stack.append(prompt_input)
 
-        prompt: str = _generate_prompt(current_prompt_stack)
+        prompt: str = _generate_prompt(current_prompt_stack, dialect=dialect)
         if _estimate_tokens(prompt) > max_tokens:
             if not last_prompt:
                 raise RuntimeError(
@@ -708,7 +713,9 @@ async def main() -> None:
     )
 
     semaphore = asyncio.Semaphore(args.max_simultaneous_queries)
-    prompts_to_process = list(generate_prompts(prompt_inputs))
+    prompts_to_process = list(
+        generate_prompts(prompt_inputs, dialect=conf.sentences.dialect)
+    )
 
     async def process_single_prompt(prompt: str) -> Sequence[Word]:
         """Helper to process one prompt with retries and semaphore."""

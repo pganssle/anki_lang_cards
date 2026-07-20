@@ -53,6 +53,9 @@ Most of this only needs to be done once:
 - **Config file**: a `config.toml` in the working directory (see
   [`examples/example_config.toml`](../examples/example_config.toml)) with at
   least an Anthropic API key, and optionally `annotations.dictionaries`.
+  `sentences.dialect` controls which variety of Spanish generated sentences
+  are written in (default "international Spanish"); note that changing it
+  changes the prompts, which invalidates any cached LLM responses.
 - **Dictionaries** (annotation path only): a hunspell dictionary for the
   target language (default location `/usr/share/hunspell/es_ES.dic`) and one
   or more bilingual STARDICT dictionaries, e.g. from

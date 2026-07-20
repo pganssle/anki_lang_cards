@@ -453,7 +453,8 @@ async def main():
     needs_header = args.csv_header and not args.output.exists()
     prompt_handler = query.MultiSentencePromptHandler(
         prompts.MULTI_SENTENCE_PROMPT_TEMPLATE,
-        system_prompt=prompts.MULTI_SENTENCE_SYSTEM_PROMPT,
+        system_prompt=prompts.MULTI_SENTENCE_SYSTEM_PROMPT
+        % {"dialect": conf_obj.sentences.dialect},
     )
 
     diff_word_set = set(diff_words)

@@ -120,16 +120,22 @@ class CliRun(NamedTuple):
     stdout: str
 
 
-def _write_config(workdir: pathlib.Path, dictionaries: DictionaryPaths) -> pathlib.Path:
+def _write_config(
+    workdir: pathlib.Path,
+    dictionaries: DictionaryPaths,
+    dialect: str | None = None,
+) -> pathlib.Path:
     config_path = workdir / "config.toml"
-    config_path.write_text(
+    config_text = (
         "[anthropic]\n"
         'api_key="fake-key"\n'
         'default_model="fake-cards"\n'
         "[annotations]\n"
-        f'dictionaries = ["{dictionaries.stardict_prefix.as_posix()}"]\n',
-        encoding="utf-8",
+        f'dictionaries = ["{dictionaries.stardict_prefix.as_posix()}"]\n'
     )
+    if dialect is not None:
+        config_text += f'[sentences]\ndialect = "{dialect}"\n'
+    config_path.write_text(config_text, encoding="utf-8")
     return config_path
 
 
@@ -139,9 +145,10 @@ def _run_annotations_to_csv(
     dictionaries: DictionaryPaths,
     output_name: str = "words_from_annotations.csv",
     extra_args: Sequence[str] = (),
+    dialect: str | None = None,
 ) -> CliRun:
     output_csv = workdir / output_name
-    config_path = _write_config(workdir, dictionaries)
+    config_path = _write_config(workdir, dictionaries, dialect=dialect)
     result = subprocess.run(
         (
             sys.executable,
@@ -612,3 +619,38 @@ def test_main_limit(
     )
     assert "Limiting to the first 1 of 4 input words." in run.stdout
     assert set(_words_by_headword(run.output_csv)) == {"gato"}
+
+
+def _cached_annotation_prompts(workdir: pathlib.Path) -> Sequence[str]:
+    cache_dir = workdir / ".cache" / "annotations"
+    return [
+        json.loads(path.read_text(encoding="utf-8"))["input"]["prompt"]
+        for path in cache_dir.rglob("*.json")
+    ]
+
+
+def test_default_dialect_reaches_the_prompt(annotations_run: CliRun) -> None:
+    """With no [sentences] config, the prompt asks for international Spanish
+    and for native Spanish punctuation."""
+    cached_prompts = _cached_annotation_prompts(annotations_run.workdir)
+    assert cached_prompts
+    for prompt in cached_prompts:
+        assert "international Spanish" in prompt
+        assert "—Dime algo que no sepa —dijo Ramón." in prompt
+
+
+def test_configured_dialect_reaches_the_prompt(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """The [sentences] dialect from config.toml lands in the prompt."""
+    workdir = tmp_path_factory.mktemp("dialect-run")
+    _run_annotations_to_csv(
+        workdir,
+        CARDS_DIR / "combined_annotations.json",
+        dictionary_paths,
+        dialect="Martian Spanish",
+    )
+    cached_prompts = _cached_annotation_prompts(workdir)
+    assert cached_prompts
+    for prompt in cached_prompts:
+        assert "Martian Spanish" in prompt

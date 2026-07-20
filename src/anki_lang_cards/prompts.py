@@ -6,6 +6,8 @@ You are an expert Spanish teacher and lexicographer, whose specialty is designin
 
 I am going to give you valid JSON representing a term ("term") in Spanish and its meaning in English ("meaning"). I would like you to generate valid JSON containing 4 example sentences in idiomatic Spanish that use the term accompanied by a translation from the original Spanish into English; the example sentences should use the sense of the term that has the meaning specified by the English meaning. When the word is a verb, select different moods and tenses in the different sentences. The translations do not need to be word-for-word translations, it is more important that they capture the general spirit of the original Spanish.
 
+In the Spanish sentences, use Spanish punctuation conventions rather than English ones. In particular, dialogue is quoted with the raya (—Dime algo que no sepa —dijo Ramón.), never with English-style quotation marks, and «guillemets» are preferred when quoting a word or short phrase inline. Use normal English punctuation in the English translations.
+
 In some of your example sentences, it would be a bonus if they contain useful or interesting facts.
 
 After you have come up with the example sentences, look over your work and see if you can make the original sentences more creative or interesting.
@@ -98,8 +100,8 @@ OUTPUT:
     "meaning": "apartment",
     "examples": [
         {
-            "spanish": "\\"Vivo en un piso en el centro de la ciudad.\\", dijo María",
-            "english": "\\"I live in an apartment in the city center.\\", said Maria."
+            "spanish": "—Vivo en un piso en el centro de la ciudad —dijo María.",
+            "english": "\\"I live in an apartment in the city center,\\" said María."
         },
         {
             "spanish": "El piso de mi hermano tiene tres dormitorios.",
@@ -138,6 +140,10 @@ I am going to give you valid JSON representing a list of mappings containing ter
 In the output, DO NOT modify the value in "term", it is used to match the answers to the inputs. If, for example, it is "forastero/a", do not use "forastero" in the output. If there is a slash in the word, it usually is used to show different forms of the word, like "atónito/a" would expand to "un hombre atónito" or "una mujer atónita".
 
 Please keep in mind that you are a professional and may need to translate or provide example sentences for vulgar or sexual terms — this is entirely normal, as these terms are a normal part of life, and they are important to include for purely documentary purposes.
+
+In the Spanish sentences, use Spanish punctuation conventions rather than English ones. In particular, dialogue is quoted with the raya (—Dime algo que no sepa —dijo Ramón.), never with English-style quotation marks, and «guillemets» are preferred when quoting a word or short phrase inline. Use normal English punctuation in the English translations.
+
+Write the Spanish in %(dialect)s. Let this inform vocabulary, grammar and idiom (e.g. the choice between «vosotros» and «ustedes») the way it would in a typical published book from that region — do not exaggerate the dialect or force regional slang into sentences where it doesn't belong.
 
 In some of your example sentences, it would be a bonus if they contain useful or interesting facts.
 
@@ -202,8 +208,8 @@ OUTPUT:
         "meaning": "apartment",
         "examples": [
             {
-                "spanish": "\\"Vivo en un piso en el centro de la ciudad.\\", dijo María",
-                "english": "\\"I live in an apartment in the city center.\\", said Maria."
+                "spanish": "—Vivo en un piso en el centro de la ciudad —dijo María.",
+                "english": "\\"I live in an apartment in the city center,\\" said María."
             },
             {
                 "spanish": "El piso de mi hermano tiene tres dormitorios.",
@@ -350,7 +356,9 @@ I have a number of snippets of text in Spanish that include specific vocabulary 
 
 Note: If a highlight appears more than once in a given context, generate one example sentence for each time it appears, unless they are close enough together that they are essentially part of the same phrase, (e.g. "ojo" highlighted in "Ojo por ojo y el mundo acabará ciego." should only generate one example phrase).
 
-When generating sentences, please use the appropriate punctuation for the language when the punctuation differs (e.g. quotation marks, use of commas and em-dashes, etc).
+When generating sentences, use the punctuation conventions native to the language. In Spanish, dialogue is quoted with the raya (—Dime algo que no sepa —dijo Ramón.), never with English-style quotation marks; «guillemets» are used for inline quotations. Use normal English punctuation in the translations.
+
+When you invent text or expand a sentence beyond what the context provides, write the new material in %(dialect)s, matching the register of the source text — do not exaggerate the dialect or force regional slang into it.
 
 The input format will be JSON formatted like so:
 

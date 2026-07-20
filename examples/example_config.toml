@@ -9,3 +9,9 @@ api_key="sk-ant-...."
 dictionaries = [
     "input/dicts/sp-en-wik/sp-en-wik"
 ]
+
+[sentences]
+# Free-text description of the variety of Spanish the model should write in.
+# It is interpolated into the prompt as "Write the Spanish in <dialect>."
+# The default is "international Spanish".
+dialect = "peninsular Spanish (the variety spoken in Spain)"
