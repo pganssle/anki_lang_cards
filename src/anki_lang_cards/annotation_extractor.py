@@ -180,12 +180,14 @@ class DocPositionRange:
 class AnnotationData(TypedDict):
     chapter: str
     datetime: str
-    drawer: str
+    # drawer, pos0 and pos1 are absent for page bookmarks, which KOReader
+    # stores alongside highlights in the same annotations table.
+    drawer: NotRequired[str]
     note: NotRequired[str]
     page: str
     pageno: int
-    pos0: str
-    pos1: str
+    pos0: NotRequired[str]
+    pos1: NotRequired[str]
     text: str
 
 
@@ -576,6 +578,10 @@ def process_annotations(
     for annotation in raw_annotations.values():
         annotation_data = AnnotationData(**annotation)
         if "pos0" not in annotation_data:
+            if "pos1" not in annotation_data and "drawer" not in annotation_data:
+                # A page bookmark rather than a highlight: there is no
+                # selection to extract, so drop it without comment.
+                continue
             print("Warning: Skipping annotation")
             print(annotation_data)
             print(book_info)

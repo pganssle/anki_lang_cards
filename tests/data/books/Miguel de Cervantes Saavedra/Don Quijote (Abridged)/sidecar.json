@@ -389,6 +389,13 @@
       "pageno": 676,
       "pos1": "invalid",
       "text": "missing position"
+    },
+    "40": {
+      "chapter": "Capítulo primero",
+      "datetime": "2025-06-04 23:58:12",
+      "page": "/body/DocFragment[4]/body/p[1]/text().0",
+      "pageno": 8,
+      "text": "in Capítulo primero"
     }
   }
 }

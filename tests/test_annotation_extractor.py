@@ -335,7 +335,15 @@ def test_annotation_without_positions_is_skipped(extraction: ExtractorRun) -> No
     """The sidecar contains one malformed annotation with no pos0; it must be
     skipped with a warning rather than aborting the whole book."""
     assert not _annotations_with_text(extraction, "missing position")
-    assert "Warning: Skipping annotation" in extraction.stdout
+    assert extraction.stdout.count("Warning: Skipping annotation") == 1
+
+
+@pytest.mark.e2e
+def test_bookmark_is_skipped_silently(extraction: ExtractorRun) -> None:
+    """The sidecar contains one page bookmark (no pos0/pos1/drawer); it must be
+    dropped without producing a warning."""
+    assert not _annotations_with_text(extraction, "in Capítulo primero")
+    assert "in Capítulo primero" not in extraction.stdout
 
 
 @pytest.mark.e2e
