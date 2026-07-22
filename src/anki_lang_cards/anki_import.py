@@ -185,40 +185,70 @@ def parse_json_field_with_repair(json_str: str) -> Any:
     raise last_error
 
 
-def canonicalize_text_field(field_value: str) -> str:
-    """Undo the HTML-entity escaping imports apply to plain-text fields.
+def _unescape_entities(text: str) -> str:
+    """Unescape HTML entities to a fixed point and normalize nbsp.
 
-    Importing with "allow HTML" disabled makes Anki HTML-escape the field
-    content (``'`` becomes ``&#x27;``, ``"`` becomes ``&quot;``, ...), and
-    repeated bad imports can stack an ``&amp;`` layer each time, so this
-    unescapes to a fixed point. ``<`` is kept escaped: a literal ``<`` in
-    a field could be swallowed as a tag when the card template renders.
+    Repeated bad imports can stack an ``&amp;`` layer each time, so a
+    single ``html.unescape`` pass is not always enough. The iteration cap
+    is purely a safety net; this converges in one or two passes.
     """
-    text = field_value.replace("<br>", " ")
-    # Bounded rather than while-True purely as a safety net; each pass
-    # removes one layer of &amp;-escaping and it converges in one or two.
     for _ in range(10):
         unescaped = html.unescape(text)
         if unescaped == text:
             break
         text = unescaped
-    return text.replace("\xa0", " ").replace("<", "&lt;").strip()
+    return text.replace("\xa0", " ")
+
+
+def _unescape_json_strings(obj: Any) -> Any:
+    """Recursively unescape HTML entities in the string values of ``obj``.
+
+    Entity damage inside JSON string values (``didn&#x27;t``) leaves the
+    field parseable, so the structural repairs never see it; the content
+    still needs unescaping after parsing. Keys are left alone: they are
+    schema (``spanish``, ``english``, ...), not imported content.
+    """
+    if isinstance(obj, str):
+        return _unescape_entities(obj)
+    if isinstance(obj, list):
+        return [_unescape_json_strings(item) for item in obj]
+    if isinstance(obj, dict):
+        return {key: _unescape_json_strings(value) for key, value in obj.items()}
+    return obj
+
+
+def canonicalize_text_field(field_value: str) -> str:
+    """Undo the HTML-entity escaping imports apply to plain-text fields.
+
+    Importing with "allow HTML" disabled makes Anki HTML-escape the field
+    content (``'`` becomes ``&#x27;``, ``"`` becomes ``&quot;``, ...).
+    ``<`` is kept escaped: a literal ``<`` in a field could be swallowed
+    as a tag when the card template renders.
+    """
+    text = _unescape_entities(field_value.replace("<br>", " "))
+    return text.replace("<", "&lt;").strip()
 
 
 def canonicalize_sentence_source(field_value: str) -> str:
     """Repair a ``Sentence Source`` field and re-serialize it canonically.
 
+    Repairs both structural damage (escapes broken by imports or hand
+    edits) and entity damage inside the string values, which leaves the
+    JSON parseable but the content mangled.
+
     :raises json.JSONDecodeError: If the field cannot be repaired.
     """
-    return types.json_for_anki_field(parse_json_field_with_repair(field_value))
+    return types.json_for_anki_field(
+        _unescape_json_strings(parse_json_field_with_repair(field_value))
+    )
 
 
 def canonicalize_extra_sentences(field_value: str) -> str:
     """Repair an ``Extra Sentences`` field and re-serialize it canonically.
 
-    Beyond the escape repairs, this also unwraps the historical damage
-    where a sentence's ``source`` was stored as a JSON string rather than
-    an object.
+    Beyond the escape and in-string entity repairs, this also unwraps the
+    historical damage where a sentence's ``source`` was stored as a JSON
+    string rather than an object.
 
     :raises json.JSONDecodeError: If the field cannot be repaired.
     """
@@ -229,7 +259,7 @@ def canonicalize_extra_sentences(field_value: str) -> str:
         if isinstance(source, str) and source:
             sentence = {**sentence, "source": parse_json_field_with_repair(source)}
         fixed.append(sentence)
-    return types.json_for_anki_field(fixed)
+    return types.json_for_anki_field(_unescape_json_strings(fixed))
 
 
 class AnkiConnectClient:

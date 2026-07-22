@@ -227,3 +227,32 @@ def test_canonicalize_extra_sentences_is_idempotent() -> None:
 
     assert once == twice
     assert HTML_ACTIVE.isdisjoint(once)
+
+
+def test_canonicalize_repairs_entities_inside_valid_json() -> None:
+    """Entity damage inside string values leaves the JSON parseable, so it
+    survives the structural repairs; the content still needs unescaping."""
+    field = json.dumps(
+        [
+            {
+                "spanish": "Una frase.",
+                "english": "Alice, I didn&#x27;t mean it",
+                "source": {"title": "Tom &amp; Jerry", "source_type": "book"},
+            }
+        ]
+    )
+    assert json.loads(field)  # the mangled field parses as-is
+
+    parsed = json.loads(anki_import.canonicalize_extra_sentences(field))
+
+    assert parsed[0]["english"] == "Alice, I didn't mean it"
+    assert parsed[0]["source"]["title"] == "Tom & Jerry"
+
+
+def test_canonicalize_sentence_source_repairs_in_string_entities() -> None:
+    source = {"source_type": "book", "title": "El se&#xF1;or &quot;X&quot;"}
+    field = json.dumps(source)
+
+    parsed = json.loads(anki_import.canonicalize_sentence_source(field))
+
+    assert parsed["title"] == 'El señor "X"'
