@@ -29,25 +29,10 @@ from anki.import_export_pb2 import CsvMetadata, ImportCsvRequest  # noqa: E402
 
 pytestmark = pytest.mark.e2e
 
-# Field names as they exist in the real deck's notetype. Note that these are
-# the names the AnkiConnect *read* path expects (see NoteFields /
-# word_from_anki_connect_response); `_word_to_note_data` writes
-# "Part of Speech" instead, which does not match.
-NOTETYPE_FIELDS: Final[Sequence[str]] = (
-    "Rank",
-    "Word",
-    "Part-of-Speech",
-    "Definition",
-    "Spanish",
-    "English",
-    "Freq",
-    "Image",
-    "Article",
-    "Sentence Source",
-    "Note",
-    "Extra Sentences",
-    "model_used",
-)
+# Field names as they exist in the real deck's notetype (shared with the
+# #columns: directive writer). Note that these are the names the AnkiConnect
+# *read* path expects (see NoteFields / word_from_anki_connect_response).
+NOTETYPE_FIELDS: Final[Sequence[str]] = types.ANKI_NOTETYPE_FIELDS
 
 CSV_HEADER: Final = types.Word.make_csv_header()
 
@@ -70,7 +55,7 @@ def _nasty_word(rank: int) -> types.Word:
         sentences=(
             types.Sentence(
                 spanish='La palabra "gato" apareció.',
-                english='The word "gato" appeared.',
+                english='The word "gato" didn\'t appear.',
                 source=citation,
             ),
             types.Sentence(
@@ -229,6 +214,37 @@ def test_directive_header_imports_cleanly(collection, tmp_path: pathlib.Path) ->
     fields = _notes_by_word(collection, "directives")["gato"]
     assert fields["Rank"] == "1404"
     assert json.loads(fields["Sentence Source"])["title"] == "Libro & Cosas"
+
+
+def test_make_anki_directives_import_is_faithful(
+    collection, tmp_path: pathlib.Path
+) -> None:
+    """A CSV prefixed with Word.make_anki_directives imports byte-for-byte,
+    with no junk note and no manual importer configuration beyond the
+    notetype — in particular #html:true prevents the entity mangling
+    (&quot;, &#x27;) that a misconfigured GUI import applies."""
+    word = _nasty_word(rank=1406)
+    directives = "\n".join(
+        (
+            *types.Word.make_anki_directives("generated-directives"),
+            "#notetype:Spanish Vocab Test",
+        )
+    )
+    csv_path = tmp_path / "words.csv"
+    csv_path.write_text(
+        directives + "\n" + _word_csv([word], header=False), encoding="utf-8"
+    )
+
+    metadata = collection.get_csv_metadata(str(csv_path), None)
+    log = collection.import_csv(ImportCsvRequest(path=str(csv_path), metadata=metadata))
+    assert len(log.log.new) == 1
+
+    fields = _notes_by_word(collection, "generated-directives")["gato"]
+    expected = dict(zip(NOTETYPE_FIELDS, word.to_csv_line(require_rank=True)))
+    for name in NOTETYPE_FIELDS:
+        assert fields[name] == str(expected[name]), f"field {name!r} mangled"
+    assert "&quot;" not in fields["Definition"]
+    assert "&#" not in fields["English"]
 
 
 def test_reimport_is_idempotent(collection, tmp_path: pathlib.Path) -> None:

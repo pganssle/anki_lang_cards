@@ -1,20 +1,24 @@
-"""Repair the JSON-bearing fields of existing notes over AnkiConnect.
+"""Repair mangled fields of existing notes over AnkiConnect.
 
-The card template used to read the ``Extra Sentences`` and ``Sentence
-Source`` fields through a JS template literal, which consumed the ``\\"``
-escapes inside the JSON; the workaround was to hand-edit ``\\"`` to
-``\\\\"`` in the affected cards. Now that the template reads the fields out
-of the DOM instead, those hand-edited fields are the broken ones, along
-with older damage (``&quot;``/``&amp;`` mangling, ``source`` stored as a
-nested JSON string).
+Two kinds of damage are repaired:
 
-This script re-parses both fields on every note in the deck (using the
-same repair chain the pipeline uses when loading a deck export) and
-rewrites them in the canonical form the generator now emits: valid JSON
-with ``<``, ``>`` and ``&`` written as ``\\uXXXX`` escapes so the field is
-inert as HTML. By default it only reports what it would change; pass
-``--apply`` to write the changes back. Anki must be running with the
-AnkiConnect add-on enabled.
+- The JSON-bearing fields (``Extra Sentences``, ``Sentence Source``) carry
+  historical escape damage: the old card template read them through a JS
+  template literal that consumed the ``\\"`` escapes, and the manual
+  workarounds (doubling or stripping the backslashes) left fields that are
+  not valid JSON. These are re-parsed with the pipeline's repair chain and
+  rewritten in the canonical form the generator now emits: valid JSON with
+  ``<``, ``>`` and ``&`` written as ``\\uXXXX`` escapes so the field is
+  inert as HTML.
+
+- The plain-text fields (``Spanish``, ``English``, ``Definition``, ...)
+  accumulate HTML entities (``&#x27;``, ``&quot;``, ``&amp;``) from GUI
+  imports done with "allow HTML in fields" disabled. These are unescaped
+  back to plain text.
+
+By default the script only reports what it would change; pass ``--apply``
+to write the changes back. Anki must be running with the AnkiConnect
+add-on enabled.
 """
 
 import argparse
@@ -26,9 +30,18 @@ from collections.abc import Sequence
 
 from anki_lang_cards import anki_import
 
+# Note and Image are deliberately absent: both may contain intentional
+# HTML (user-authored notes, <img> tags).
 FIELD_CANONICALIZERS = {
     "Sentence Source": anki_import.canonicalize_sentence_source,
     "Extra Sentences": anki_import.canonicalize_extra_sentences,
+    "Word": anki_import.canonicalize_text_field,
+    "Part-of-Speech": anki_import.canonicalize_text_field,
+    "Definition": anki_import.canonicalize_text_field,
+    "Spanish": anki_import.canonicalize_text_field,
+    "English": anki_import.canonicalize_text_field,
+    "Article": anki_import.canonicalize_text_field,
+    "model_used": anki_import.canonicalize_text_field,
 }
 
 

@@ -214,14 +214,19 @@ first field is the rank, so Anki's default duplicate handling (match on
 first field) makes updated words overwrite the existing notes rather than
 creating duplicates.
 
-The CSVs are written without a header row by default, since Anki's importer
-has no option to skip one; pass `--csv-header` to the previous step if you
-want a header for matching up columns in the import dialog.
+The CSVs start with Anki file directives (`#separator:Comma`,
+`#html:true`, `#deck:...`, `#columns:...`) that configure the importer
+from the file itself — in particular "Allow HTML in fields" is forced on.
+Importing with it off makes Anki HTML-escape every field (`'` becomes
+`&#x27;`, `"` becomes `&quot;`), mangling both the visible text and the
+JSON fields; with the directives in place the fields survive
+byte-for-byte and there is no GUI setting to get wrong. If you'd rather
+have a spreadsheet-style header row (no directives), pass `--csv-header`
+to the previous step.
 
-Import with "Allow HTML in fields" enabled. The JSON-bearing fields are
-written with `<`, `>` and `&` as `\uXXXX` escapes, so with HTML allowed
-they survive byte-for-byte; even a misconfigured import only mangles
-quotes into `&quot;`, which the repair tooling (see step 7) undoes.
+Should a misconfigured import happen anyway, the JSON-bearing fields are
+written with `<`, `>` and `&` as `\uXXXX` escapes, so the only damage is
+`&quot;`-style entities — which the repair tooling (see step 7) undoes.
 
 ## Step 7: periodic maintenance
 
@@ -242,7 +247,10 @@ running:
   Source` and `Extra Sentences` fields on every note (repairing historical
   mangling: HTML entities from imports, hand-doubled or stripped `\"`
   escapes, sources stored as nested JSON strings) and rewrites them in the
-  canonical HTML-inert form. Dry run by default; pass `--apply` to write.
+  canonical HTML-inert form; also unescapes the HTML entities that imports
+  with "allow HTML" disabled left in the plain-text fields (`Spanish`,
+  `English`, `Definition`, ...). Dry run by default; pass `--apply` to
+  write.
 
 Both scripts take a `--cache-file` argument to avoid re-fetching the whole
 deck from Anki Connect on repeated runs.

@@ -450,7 +450,12 @@ async def main():
     rank = start_rank_at or 5001
 
     # TODO: Check size here as well
+    # By default new CSVs start with Anki file directives, which configure
+    # the GUI importer (separator, allow HTML, deck, column mapping) from
+    # the file itself; --csv-header replaces them with a spreadsheet-style
+    # header row instead.
     needs_header = args.csv_header and not args.output.exists()
+    needs_directives = not args.csv_header and not args.output.exists()
     prompt_handler = query.MultiSentencePromptHandler(
         prompts.MULTI_SENTENCE_PROMPT_TEMPLATE,
         system_prompt=prompts.MULTI_SENTENCE_SYSTEM_PROMPT
@@ -477,6 +482,10 @@ async def main():
             )
 
             with open(args.output, "at") as f:
+                if needs_directives:
+                    f.write(
+                        "\n".join(types.Word.make_anki_directives(deck_name)) + "\n"
+                    )
                 writer = csv.writer(f)
 
                 if needs_header:
@@ -509,6 +518,10 @@ async def main():
     print("\n".join(map(word_getter, diff_out)))
     if diff_words and diff_out:
         with open(args.diff_output, "wt") as f:
+            if args.csv_header:
+                csv.writer(f).writerow(types.Word.make_csv_header())
+            else:
+                f.write("\n".join(types.Word.make_anki_directives(deck_name)) + "\n")
             writer = csv.writer(f)
             for word in diff_out:
                 writer.writerow(word.to_csv_line(word))

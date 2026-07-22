@@ -18,6 +18,25 @@ from . import part_of_speech as pos
 
 Url = NewType("Url", str)
 
+# The field names of the real deck's notetype, in CSV column order. These
+# must match the notetype exactly for Anki's importer to map the columns
+# automatically from the #columns: directive.
+ANKI_NOTETYPE_FIELDS: Final[Sequence[str]] = (
+    "Rank",
+    "Word",
+    "Part-of-Speech",
+    "Definition",
+    "Spanish",
+    "English",
+    "Freq",
+    "Image",
+    "Article",
+    "Sentence Source",
+    "Note",
+    "Extra Sentences",
+    "model_used",
+)
+
 
 def json_for_anki_field(obj: Any) -> str:
     """Serialize ``obj`` as JSON suitable for storage in an Anki note field.
@@ -371,6 +390,26 @@ class Word:
         )
 
     @classmethod
+    def make_anki_directives(cls, deck_name: str | None = None) -> Sequence[str]:
+        """Anki file-header directives for the start of an importable CSV.
+
+        These configure the importer from the file itself, so there is no
+        GUI setting to get wrong. Most importantly ``#html:true``: importing
+        with "allow HTML" disabled makes Anki HTML-escape every field
+        (``'`` becomes ``&#x27;``, ``"`` becomes ``&quot;``, ...), mangling
+        both the JSON-bearing fields and the visible text.
+        """
+        directives = [
+            "#separator:Comma",
+            "#html:true",
+        ]
+        if deck_name is not None:
+            directives.append(f"#deck:{deck_name}")
+        directives.append("#columns:" + ",".join((*ANKI_NOTETYPE_FIELDS, "tags")))
+        directives.append(f"#tags column:{len(ANKI_NOTETYPE_FIELDS) + 1}")
+        return tuple(directives)
+
+    @classmethod
     def make_csv_header(cls) -> Sequence[str]:
         return (
             "rank",
@@ -400,12 +439,20 @@ class Word:
 
         header = cls.make_csv_header()
         with cm as f:
+            # Skip any Anki file directives (#separator:..., #html:true, ...)
+            # at the top of the file.
+            while True:
+                data_start = f.tell()
+                if not f.readline().startswith("#"):
+                    f.seek(data_start)
+                    break
+
             # The header row is optional: sniff the first record and fall
             # back to the canonical column order when it is not a header.
             first_row = next(csv.reader(f), None)
             if first_row is None:
                 return out
-            f.seek(0)
+            f.seek(data_start)
             stripped = tuple(cell.strip().lower() for cell in first_row)
             if stripped == tuple(header):
                 reader = csv.DictReader(f)

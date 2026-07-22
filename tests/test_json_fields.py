@@ -165,6 +165,58 @@ def test_canonicalize_extra_sentences_unwraps_nested_source() -> None:
     assert parsed[0]["source"] == {"source_type": "model", "model": "m", "id": 2}
 
 
+@pytest.mark.parametrize(
+    ("mangled", "expected"),
+    [
+        ("Alice, I didn&#x27;t mean it", "Alice, I didn't mean it"),
+        ("Alice, I didn&#39;t mean it", "Alice, I didn't mean it"),
+        ("&quot;Hola&quot;, dijo María", '"Hola", dijo María'),
+        # Each bad re-import stacks another &amp; layer.
+        ("Tom &amp;amp; Jerry", "Tom & Jerry"),
+        ("Tom & Jerry", "Tom & Jerry"),
+        ("una&nbsp;frase", "una frase"),
+        ("uno<br>dos", "uno dos"),
+        # A literal < stays escaped so the field remains inert as HTML.
+        ("1 &lt; 2", "1 &lt; 2"),
+        ("ya limpio", "ya limpio"),
+    ],
+)
+def test_canonicalize_text_field(mangled: str, expected: str) -> None:
+    assert anki_import.canonicalize_text_field(mangled) == expected
+
+
+@hypothesis.given(st.text())
+def test_canonicalize_text_field_is_idempotent(text: str) -> None:
+    once = anki_import.canonicalize_text_field(text)
+
+    assert anki_import.canonicalize_text_field(once) == once
+
+
+def test_make_anki_directives() -> None:
+    directives = types.Word.make_anki_directives("My::Deck")
+
+    assert "#separator:Comma" in directives
+    assert "#html:true" in directives
+    assert "#deck:My::Deck" in directives
+    assert f"#tags column:{len(types.ANKI_NOTETYPE_FIELDS) + 1}" in directives
+    columns = next(d for d in directives if d.startswith("#columns:"))
+    assert columns == "#columns:" + ",".join((*types.ANKI_NOTETYPE_FIELDS, "tags"))
+
+    assert not any(d.startswith("#deck:") for d in types.Word.make_anki_directives())
+
+
+def test_words_from_csv_skips_anki_directives() -> None:
+    word = _nasty_word()
+    output = io.StringIO()
+    output.write("\n".join(types.Word.make_anki_directives("My::Deck")) + "\n")
+    csv.writer(output).writerow(word.to_csv_line())
+
+    (loaded,) = types.Word.words_from_csv(output.getvalue())
+
+    assert loaded.word == word.word
+    assert [s.spanish for s in loaded.sentences] == [s.spanish for s in word.sentences]
+
+
 def test_canonicalize_extra_sentences_is_idempotent() -> None:
     field = json.dumps(
         [{"spanish": "s & t", "english": '"quoted" <text>', "source": None}]

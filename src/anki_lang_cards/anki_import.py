@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import csv
+import html
 import json
 import math
 import pathlib
@@ -182,6 +183,26 @@ def parse_json_field_with_repair(json_str: str) -> Any:
             last_error = e
     assert last_error is not None
     raise last_error
+
+
+def canonicalize_text_field(field_value: str) -> str:
+    """Undo the HTML-entity escaping imports apply to plain-text fields.
+
+    Importing with "allow HTML" disabled makes Anki HTML-escape the field
+    content (``'`` becomes ``&#x27;``, ``"`` becomes ``&quot;``, ...), and
+    repeated bad imports can stack an ``&amp;`` layer each time, so this
+    unescapes to a fixed point. ``<`` is kept escaped: a literal ``<`` in
+    a field could be swallowed as a tag when the card template renders.
+    """
+    text = field_value.replace("<br>", " ")
+    # Bounded rather than while-True purely as a safety net; each pass
+    # removes one layer of &amp;-escaping and it converges in one or two.
+    for _ in range(10):
+        unescaped = html.unescape(text)
+        if unescaped == text:
+            break
+        text = unescaped
+    return text.replace("\xa0", " ").replace("<", "&lt;").strip()
 
 
 def canonicalize_sentence_source(field_value: str) -> str:
