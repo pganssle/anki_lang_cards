@@ -128,7 +128,7 @@ async def repair_deck(
 
         updates: list[dict] = []
         failures: list[tuple[str, str, str]] = []
-        async for note in client.get_anki_notes(note_ids):
+        async for note in client.get_anki_notes(note_ids, batch_size=batch_size):
             new_fields: dict[str, str] = {}
             for field_name, canonicalize in FIELD_CANONICALIZERS.items():
                 field = note["fields"].get(field_name)

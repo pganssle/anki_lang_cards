@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import csv
 import html
+import itertools
 import json
 import math
 import pathlib
@@ -308,13 +309,17 @@ class AnkiConnectClient:
         return next(iter(result["result"].values()))
 
     async def fetch_note(self, note_id: NoteId) -> NoteData:
+        (note,) = await self.fetch_notes((note_id,))
+        return note
+
+    async def fetch_notes(self, note_ids: Sequence[NoteId]) -> Sequence[NoteData]:
         data = {
             "action": "notesInfo",
             "version": AC_VERSION,
-            "params": {"notes": [note_id]},
+            "params": {"notes": list(note_ids)},
         }
         result = await self._post(data=data)
-        return result["result"][0]
+        return result["result"]
 
     async def are_suspended(self, card_ids: Sequence[CardId]) -> Mapping[CardId, bool]:
         data = {
@@ -370,26 +375,32 @@ class AnkiConnectClient:
         return tuple(map(NoteId, self._unwrap_result(result)))
 
     async def get_anki_notes(
-        self, note_list: Iterable[NoteId]
+        self, note_list: Iterable[NoteId], batch_size: int = 1
     ) -> AsyncIterator[NoteData]:
         """
-        Retrieve a list of existing notes in the specified Anki deck.
+        Retrieve existing notes by id, yielding them as they arrive.
 
         Args:
-            deck_name (str): The name of the Anki deck to retrieve notes from.
+            note_list: The ids of the notes to fetch.
+            batch_size: How many notes to request per ``notesInfo`` call.
 
         Yields:
-            list: A list of dicts, where each dict represents an Anki note with
-            its fields.
+            A dict per note, each representing an Anki note with its
+            fields. Notes are yielded in completion order, not input
+            order.
         """
 
-        pending = {
-            asyncio.create_task(self.fetch_note(note_id), name=str(note_id))
-            for note_id in note_list
-        }
+        def _spawn(batch: tuple[NoteId, ...]) -> asyncio.Task[Sequence[NoteData]]:
+            return asyncio.create_task(self.fetch_notes(batch))
 
-        errors: dict[NoteId, Exception] = {}
-        retries: dict[NoteId, int] = {}
+        batches: dict[asyncio.Task[Sequence[NoteData]], tuple[NoteId, ...]] = {
+            _spawn(batch): batch
+            for batch in itertools.batched(note_list, batch_size)
+        }
+        pending = set(batches)
+
+        errors: dict[tuple[NoteId, ...], Exception] = {}
+        retries: dict[tuple[NoteId, ...], int] = {}
 
         while pending:
             done, pending = await asyncio.wait(
@@ -397,20 +408,18 @@ class AnkiConnectClient:
             )
 
             for task in done:
-                note_id = NoteId(int(task.get_name()))
+                batch = batches.pop(task)
                 try:
-                    result = await task
-                    yield result
+                    for note in await task:
+                        yield note
                 except Exception as e:  # noqa: BLE001
-                    if retries.setdefault(note_id, 0) < 3:
-                        pending.add(
-                            asyncio.create_task(
-                                self.fetch_note(note_id), name=str(note_id)
-                            )
-                        )
-                        retries[note_id] += 1
+                    if retries.setdefault(batch, 0) < 3:
+                        retries[batch] += 1
+                        new_task = _spawn(batch)
+                        batches[new_task] = batch
+                        pending.add(new_task)
                     else:
-                        errors[note_id] = e
+                        errors[batch] = e
 
         if errors:
             raise ValueError(f"Failed to fetch notes: {errors}")
