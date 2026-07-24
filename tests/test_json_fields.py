@@ -249,6 +249,48 @@ def test_canonicalize_repairs_entities_inside_valid_json() -> None:
     assert parsed[0]["source"]["title"] == "Tom & Jerry"
 
 
+def test_repair_br_inside_string_becomes_newline() -> None:
+    """A ``<br>`` inside a string value must become the two-character
+    ``\\n`` escape, not a raw newline (an invalid control character)."""
+    obj = [{"spanish": "–¿Duele mucho?<br>–Sí, es nefasta.", "english": "Dialogue."}]
+    field = json.dumps(obj).replace('"', "&quot;")
+
+    parsed = anki_import.parse_json_field_with_repair(field)
+
+    assert parsed[0]["spanish"] == "–¿Duele mucho?\n–Sí, es nefasta."
+
+
+def test_repair_br_between_tokens_is_whitespace() -> None:
+    """Editing a pretty-printed field in the Anki GUI turns its structural
+    newlines into ``<br>``; those must become plain whitespace."""
+    obj = {"title": "Todo Arde", "pages": [17]}
+    field = json.dumps(obj, indent=2).replace("\n", "<br>").replace('"', "&quot;")
+
+    assert anki_import.parse_json_field_with_repair(field) == obj
+
+
+def test_repair_br_after_escaped_quote() -> None:
+    """An escaped quote must not flip the scanner's in-string state."""
+    obj = [{"english": 'She said "no."<br>Then she left.'}]
+    field = json.dumps(obj).replace('"', "&quot;")
+
+    parsed = anki_import.parse_json_field_with_repair(field)
+
+    assert parsed[0]["english"] == 'She said "no."\nThen she left.'
+
+
+def test_repair_br_with_doubled_backslashes() -> None:
+    """Doubled-backslash damage makes quote tracking lie until it is
+    undone, so the ``<br>`` replacement must run per candidate, after
+    each candidate's structural repairs."""
+    obj = [{"english": '"What?"<br>A shout.', "spanish": "¿Qué?"}]
+    field = json.dumps(obj).replace('\\"', '\\\\"').replace('"', "&quot;")
+
+    parsed = anki_import.parse_json_field_with_repair(field)
+
+    assert parsed[0]["english"] == '"What?"\nA shout.'
+
+
 def test_canonicalize_sentence_source_repairs_in_string_entities() -> None:
     source = {"source_type": "book", "title": "El se&#xF1;or &quot;X&quot;"}
     field = json.dumps(source)

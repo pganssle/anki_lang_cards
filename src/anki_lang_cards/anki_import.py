@@ -139,6 +139,38 @@ def _reescape_interior_quotes(json_str: str, max_repairs: int = 200) -> str:
     return candidate
 
 
+def _replace_br(json_str: str) -> str:
+    """Replace ``<br>`` with a newline that keeps the JSON parseable.
+
+    Inside a quoted string a raw newline is an invalid control character,
+    so the two-character ``\\n`` escape is substituted (parsing to a real
+    newline in the content); outside strings ``<br>`` is inter-token
+    debris and becomes plain whitespace.
+
+    The in/out-of-string classification tracks quotes with escape
+    awareness, so it is only as trustworthy as the input's quoting: it
+    must run on text whose quote structure has already been repaired.
+    """
+    out: list[str] = []
+    in_string = False
+    i = 0
+    while i < len(json_str):
+        if json_str.startswith("<br>", i):
+            out.append("\\n" if in_string else "\n")
+            i += 4
+            continue
+        char = json_str[i]
+        if in_string and char == "\\":
+            out.append(json_str[i : i + 2])
+            i += 2
+            continue
+        if char == '"':
+            in_string = not in_string
+        out.append(char)
+        i += 1
+    return "".join(out)
+
+
 def _json_repair_candidates(json_str: str) -> Iterator[str]:
     """Yield progressively more aggressively repaired forms of a JSON field.
 
@@ -150,21 +182,26 @@ def _json_repair_candidates(json_str: str) -> Iterator[str]:
     backslashes were stripped entirely. The later rewrites are destructive
     on valid JSON (e.g. the doubled-quote collapse corrupts legitimately
     empty strings), which is why they are only ever applied as a fallback.
+
+    ``<br>`` replacement is applied separately to each candidate rather
+    than once up front: _replace_br decides between ``\\n`` (in-string)
+    and plain whitespace (between tokens) by tracking quotes, so it has
+    to run after the quoting damage a given candidate repairs, not
+    before.
     """
     yield json_str
     unescaped = (
         json_str.replace("&quot;", '"')
         .replace("&nbsp;", " ")
-        .replace("<br>", "\n")
         # &amp; must come last so it unwraps double escaping one layer at
         # a time.
         .replace("&amp;", "&")
     )
-    yield unescaped
+    yield _replace_br(unescaped)
     dedoubled = unescaped.replace('\\\\"', '\\"')
-    yield dedoubled
-    yield dedoubled.replace('""', '"')
-    yield _reescape_interior_quotes(dedoubled)
+    yield _replace_br(dedoubled)
+    yield _replace_br(dedoubled.replace('""', '"'))
+    yield _replace_br(_reescape_interior_quotes(dedoubled))
 
 
 def parse_json_field_with_repair(json_str: str) -> Any:
