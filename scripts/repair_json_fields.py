@@ -25,9 +25,10 @@ import argparse
 import asyncio
 import itertools
 import json
+import pathlib
 import sys
 from collections.abc import Callable, Sequence
-from typing import Final
+from typing import Final, TypedDict
 
 from anki_lang_cards import anki_import
 
@@ -118,35 +119,111 @@ def damage_query() -> str:
     return " or ".join(terms)
 
 
+DEFAULT_CACHE_PATH: Final[pathlib.Path] = (
+    pathlib.Path(__file__).parent.parent / "local" / "repair_json_fields.cache.jsonl"
+)
+
+
+class CacheEntry(TypedDict):
+    """The outcome of examining one note, as stored in the cache."""
+
+    note_id: int
+    word: str
+    fields: dict[str, str]
+    failures: list[list[str]]  # [field_name, error] pairs
+
+
+class RepairCache:
+    """Append-only JSONL record of already-examined notes.
+
+    Each line is one ``CacheEntry``; appending after each note means an
+    interrupted run can resume without re-fetching what it already
+    examined. A partially-written final line (from a hard interruption)
+    is discarded on load. Note ids are collection-global, so entries
+    from different decks cannot collide.
+    """
+
+    def __init__(self, path: pathlib.Path):
+        self._path = path
+
+    def load(self) -> dict[int, CacheEntry]:
+        entries: dict[int, CacheEntry] = {}
+        if not self._path.exists():
+            return entries
+        with self._path.open(encoding="utf-8") as f:
+            for line in f:
+                try:
+                    entry: CacheEntry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                entries[entry["note_id"]] = entry
+        return entries
+
+    def append(self, entry: CacheEntry) -> None:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        with self._path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+
+    def clear(self) -> None:
+        self._path.unlink(missing_ok=True)
+
+
+def _examine_note(note: anki_import.NoteData) -> CacheEntry:
+    word = note["fields"].get("Word", {}).get("value", "<unknown>")
+    new_fields: dict[str, str] = {}
+    failures: list[list[str]] = []
+    for field_name, canonicalize in FIELD_CANONICALIZERS.items():
+        field = note["fields"].get(field_name)
+        if field is None or not field["value"].strip():
+            continue
+        try:
+            canonical = canonicalize(field["value"])
+        except json.JSONDecodeError as e:
+            failures.append([field_name, str(e)])
+            continue
+        if canonical != field["value"]:
+            new_fields[field_name] = canonical
+
+    return CacheEntry(
+        note_id=note["noteId"], word=word, fields=new_fields, failures=failures
+    )
+
+
 async def repair_deck(
-    deck_name: str, *, apply: bool, full_scan: bool = False, batch_size: int = 50
+    deck_name: str,
+    *,
+    apply: bool,
+    full_scan: bool = False,
+    cache: RepairCache | None = None,
+    batch_size: int = 50,
 ) -> int:
+    entries = cache.load() if cache is not None else {}
+
     async with anki_import.create_client() as client:
         query = None if full_scan else damage_query()
         note_ids = await client.get_note_ids(deck_name, query)
-        print(f"Checking {len(note_ids)} notes in {deck_name!r}.")
+        to_fetch = [note_id for note_id in note_ids if note_id not in entries]
+        cached = len(note_ids) - len(to_fetch)
+        print(
+            f"Checking {len(note_ids)} notes in {deck_name!r}"
+            f" ({cached} already examined)."
+        )
+
+        async for note in client.get_anki_notes(to_fetch, batch_size=batch_size):
+            entry = _examine_note(note)
+            entries[entry["note_id"]] = entry
+            if cache is not None:
+                cache.append(entry)
 
         updates: list[dict] = []
         failures: list[tuple[str, str, str]] = []
-        async for note in client.get_anki_notes(note_ids, batch_size=batch_size):
-            new_fields: dict[str, str] = {}
-            for field_name, canonicalize in FIELD_CANONICALIZERS.items():
-                field = note["fields"].get(field_name)
-                if field is None or not field["value"].strip():
-                    continue
-                try:
-                    canonical = canonicalize(field["value"])
-                except json.JSONDecodeError as e:
-                    word = note["fields"].get("Word", {}).get("value", "<unknown>")
-                    failures.append((word, field_name, str(e)))
-                    continue
-                if canonical != field["value"]:
-                    new_fields[field_name] = canonical
-
-            if new_fields:
-                word = note["fields"].get("Word", {}).get("value", "<unknown>")
-                print(f"{word}: {', '.join(sorted(new_fields))}")
-                updates.append({"id": note["noteId"], "fields": new_fields})
+        for note_id in note_ids:
+            entry = entries[note_id]
+            for field_name, error in entry["failures"]:
+                failures.append((entry["word"], field_name, error))
+            if entry["fields"]:
+                print(f"{entry['word']}: {', '.join(sorted(entry['fields']))}")
+                updates.append({"id": note_id, "fields": entry["fields"]})
 
         print(f"\n{len(updates)} notes need repair.")
         if failures:
@@ -161,6 +238,10 @@ async def repair_deck(
             for batch in itertools.batched(updates, batch_size):
                 await client.update_note_info(list(batch))
             print(f"Updated {len(updates)} notes.")
+            # The examination results describe pre-repair contents;
+            # they are stale the moment the updates are written.
+            if cache is not None:
+                cache.clear()
 
     return 1 if failures else 0
 
@@ -185,10 +266,34 @@ def main(argv: Sequence[str] | None = None) -> int:
         "whitespace-only and stripped-escape damage; a full scan is the "
         "ground truth.",
     )
+    parser.add_argument(
+        "--cache-path",
+        type=pathlib.Path,
+        default=DEFAULT_CACHE_PATH,
+        help="Where to record examined notes so an interrupted run can "
+        "resume (default: %(default)s).",
+    )
+    cache_group = parser.add_mutually_exclusive_group()
+    cache_group.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Ignore the local cache entirely: neither read nor write it.",
+    )
+    cache_group.add_argument(
+        "--new-cache",
+        action="store_true",
+        help="Discard any existing cache and start recording a fresh one.",
+    )
     args = parser.parse_args(argv)
 
+    cache = None if args.no_cache else RepairCache(args.cache_path)
+    if args.new_cache and cache is not None:
+        cache.clear()
+
     return asyncio.run(
-        repair_deck(args.deck, apply=args.apply, full_scan=args.full_scan)
+        repair_deck(
+            args.deck, apply=args.apply, full_scan=args.full_scan, cache=cache
+        )
     )
 
 
