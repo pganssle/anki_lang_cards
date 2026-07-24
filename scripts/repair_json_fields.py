@@ -30,6 +30,8 @@ import sys
 from collections.abc import Callable, Sequence
 from typing import Final, TypedDict
 
+import tqdm
+
 from anki_lang_cards import anki_import
 
 # Note and Image are deliberately absent: both may contain intentional
@@ -209,11 +211,16 @@ async def repair_deck(
             f" ({cached} already examined)."
         )
 
-        async for note in client.get_anki_notes(to_fetch, batch_size=batch_size):
-            entry = _examine_note(note)
-            entries[entry["note_id"]] = entry
-            if cache is not None:
-                cache.append(entry)
+        with tqdm.tqdm(
+            total=len(note_ids), initial=cached, unit="note", desc="Examining"
+        ) as progress:
+            async for note in client.get_anki_notes(to_fetch, batch_size=batch_size):
+                entry = _examine_note(note)
+                entries[entry["note_id"]] = entry
+                if cache is not None:
+                    cache.append(entry)
+                progress.set_description(f"Examining {entry['word']}")
+                progress.update(1)
 
         updates: list[dict] = []
         failures: list[tuple[str, str, str]] = []
@@ -222,7 +229,6 @@ async def repair_deck(
             for field_name, error in entry["failures"]:
                 failures.append((entry["word"], field_name, error))
             if entry["fields"]:
-                print(f"{entry['word']}: {', '.join(sorted(entry['fields']))}")
                 updates.append({"id": note_id, "fields": entry["fields"]})
 
         print(f"\n{len(updates)} notes need repair.")
@@ -235,7 +241,11 @@ async def repair_deck(
             if updates:
                 print("Dry run: nothing written. Re-run with --apply to repair.")
         else:
-            for batch in itertools.batched(updates, batch_size):
+            batches = itertools.batched(updates, batch_size)
+            n_batches = -(-len(updates) // batch_size)
+            for batch in tqdm.tqdm(
+                batches, total=n_batches, unit="batch", desc="Applying"
+            ):
                 await client.update_note_info(list(batch))
             print(f"Updated {len(updates)} notes.")
             # The examination results describe pre-repair contents;
