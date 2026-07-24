@@ -131,6 +131,7 @@ class CacheEntry(TypedDict):
 
     note_id: int
     word: str
+    rank: int | None
     fields: dict[str, str]
     failures: list[list[str]]  # [field_name, error] pairs
 
@@ -158,8 +159,23 @@ class RepairCache:
                     entry: CacheEntry = json.loads(line)
                 except json.JSONDecodeError:
                     continue
+                if "rank" not in entry:  # pre-rank cache format
+                    continue
                 entries[entry["note_id"]] = entry
         return entries
+
+    def remove(self, note_ids: Sequence[int]) -> None:
+        """Drop entries whose repairs have been applied (they describe the
+        pre-repair field contents); entries for other notes stay valid."""
+        entries = self.load()
+        for note_id in note_ids:
+            entries.pop(note_id, None)
+        if not entries:
+            self.clear()
+            return
+        with self._path.open("w", encoding="utf-8") as f:
+            for entry in entries.values():
+                f.write(json.dumps(entry) + "\n")
 
     def append(self, entry: CacheEntry) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -172,6 +188,10 @@ class RepairCache:
 
 def _examine_note(note: anki_import.NoteData) -> CacheEntry:
     word = note["fields"].get("Word", {}).get("value", "<unknown>")
+    try:
+        rank = int(note["fields"]["Rank"]["value"])
+    except (KeyError, ValueError):
+        rank = None
     new_fields: dict[str, str] = {}
     failures: list[list[str]] = []
     for field_name, canonicalize in FIELD_CANONICALIZERS.items():
@@ -187,7 +207,11 @@ def _examine_note(note: anki_import.NoteData) -> CacheEntry:
             new_fields[field_name] = canonical
 
     return CacheEntry(
-        note_id=note["noteId"], word=word, fields=new_fields, failures=failures
+        note_id=note["noteId"],
+        word=word,
+        rank=rank,
+        fields=new_fields,
+        failures=failures,
     )
 
 
@@ -197,6 +221,7 @@ async def repair_deck(
     apply: bool,
     full_scan: bool = False,
     cache: RepairCache | None = None,
+    start_from: int | None = None,
     batch_size: int = 50,
 ) -> int:
     entries = cache.load() if cache is not None else {}
@@ -224,14 +249,22 @@ async def repair_deck(
 
         updates: list[dict] = []
         failures: list[tuple[str, str, str]] = []
+        skipped = 0
         for note_id in note_ids:
             entry = entries[note_id]
+            if start_from is not None and (
+                entry["rank"] is None or entry["rank"] < start_from
+            ):
+                skipped += 1
+                continue
             for field_name, error in entry["failures"]:
                 failures.append((entry["word"], field_name, error))
             if entry["fields"]:
                 updates.append({"id": note_id, "fields": entry["fields"]})
 
         print(f"\n{len(updates)} notes need repair.")
+        if skipped:
+            print(f"{skipped} notes below rank {start_from} left alone.")
         if failures:
             print(f"{len(failures)} fields could not be repaired:", file=sys.stderr)
             for word, field_name, error in failures:
@@ -248,10 +281,8 @@ async def repair_deck(
             ):
                 await client.update_note_info(list(batch))
             print(f"Updated {len(updates)} notes.")
-            # The examination results describe pre-repair contents;
-            # they are stale the moment the updates are written.
             if cache is not None:
-                cache.clear()
+                cache.remove([update["id"] for update in updates])
 
     return 1 if failures else 0
 
@@ -275,6 +306,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         "the damage-signature search query. The query deliberately ignores "
         "whitespace-only and stripped-escape damage; a full scan is the "
         "ground truth.",
+    )
+    parser.add_argument(
+        "--start-from",
+        type=int,
+        default=None,
+        metavar="RANK",
+        help="Only repair notes whose Rank is at least this value, e.g. to "
+        "try the repairs out on the rare tail of the deck first. Notes "
+        "below the rank are still examined and cached, just not touched.",
     )
     parser.add_argument(
         "--cache-path",
@@ -302,7 +342,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     return asyncio.run(
         repair_deck(
-            args.deck, apply=args.apply, full_scan=args.full_scan, cache=cache
+            args.deck,
+            apply=args.apply,
+            full_scan=args.full_scan,
+            cache=cache,
+            start_from=args.start_from,
         )
     )
 
