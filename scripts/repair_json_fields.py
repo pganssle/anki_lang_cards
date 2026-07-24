@@ -130,6 +130,7 @@ class CacheEntry(TypedDict):
     """The outcome of examining one note, as stored in the cache."""
 
     note_id: int
+    mod: int  # the note's modification time when it was examined
     word: str
     rank: int | None
     fields: dict[str, str]
@@ -140,10 +141,15 @@ class RepairCache:
     """Append-only JSONL record of already-examined notes.
 
     Each line is one ``CacheEntry``; appending after each note means an
-    interrupted run can resume without re-fetching what it already
-    examined. A partially-written final line (from a hard interruption)
-    is discarded on load. Note ids are collection-global, so entries
-    from different decks cannot collide.
+    interrupted run can resume where it left off. A cached result is
+    only reused while the live note's ``mod`` matches the one recorded
+    at examination time — notes change out from under the cache more
+    easily than one would hope (merely opening a note in Anki's editor
+    can rewrite its fields). A partially-written final line (from a
+    hard interruption) is discarded on load, as is any entry from an
+    older cache format. Note ids are collection-global, so entries from
+    different decks cannot collide; a re-examined note appends a fresh
+    line, and the last line for a given note wins.
     """
 
     def __init__(self, path: pathlib.Path):
@@ -159,7 +165,7 @@ class RepairCache:
                     entry: CacheEntry = json.loads(line)
                 except json.JSONDecodeError:
                     continue
-                if "rank" not in entry:  # pre-rank cache format
+                if "rank" not in entry or "mod" not in entry:  # older formats
                     continue
                 entries[entry["note_id"]] = entry
         return entries
@@ -208,6 +214,7 @@ def _examine_note(note: anki_import.NoteData) -> CacheEntry:
 
     return CacheEntry(
         note_id=note["noteId"],
+        mod=note["mod"],
         word=word,
         rank=rank,
         fields=new_fields,
@@ -229,23 +236,26 @@ async def repair_deck(
     async with anki_import.create_client() as client:
         query = None if full_scan else damage_query()
         note_ids = await client.get_note_ids(deck_name, query)
-        to_fetch = [note_id for note_id in note_ids if note_id not in entries]
-        cached = len(note_ids) - len(to_fetch)
-        print(
-            f"Checking {len(note_ids)} notes in {deck_name!r}"
-            f" ({cached} already examined)."
-        )
+        print(f"Checking {len(note_ids)} notes in {deck_name!r}.")
 
-        with tqdm.tqdm(
-            total=len(note_ids), initial=cached, unit="note", desc="Examining"
-        ) as progress:
-            async for note in client.get_anki_notes(to_fetch, batch_size=batch_size):
-                entry = _examine_note(note)
-                entries[entry["note_id"]] = entry
-                if cache is not None:
-                    cache.append(entry)
-                progress.set_description(f"Examining {entry['word']}")
+        # Every note is fetched (batched, this is cheap); the cache only
+        # short-circuits the examination, and only while the note is
+        # unchanged since it was examined.
+        reused = 0
+        with tqdm.tqdm(total=len(note_ids), unit="note", desc="Examining") as progress:
+            async for note in client.get_anki_notes(note_ids, batch_size=batch_size):
+                cached_entry = entries.get(note["noteId"])
+                if cached_entry is not None and cached_entry["mod"] == note["mod"]:
+                    reused += 1
+                else:
+                    entry = _examine_note(note)
+                    entries[entry["note_id"]] = entry
+                    if cache is not None:
+                        cache.append(entry)
+                    progress.set_description(f"Examining {entry['word']}")
                 progress.update(1)
+        if reused:
+            print(f"{reused} notes unchanged since their last examination.")
 
         updates: list[dict] = []
         failures: list[tuple[str, str, str]] = []
