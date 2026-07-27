@@ -346,7 +346,7 @@ class TestDecisionCache:
         revised = attrs.evolve(
             candidate,
             disposition=triage.Disposition.MERGE,
-            revisions=(
+            replacements=(
                 make_word("segundo/a", "adj", "second", rank=223),
                 make_word("segundo", "nm", "second", rank=1693),
             ),
@@ -357,8 +357,8 @@ class TestDecisionCache:
         (again,) = triage.find_candidates(
             words, comparer, decisions=triage.DecisionCache(cache.cache_path)
         )
-        assert again.is_revised
-        assert {w.word for w in again.revisions} == {"segundo/a", "segundo"}
+        assert again.has_replacements
+        assert {w.word for w in again.replacements} == {"segundo/a", "segundo"}
 
     def test_an_undecided_group_is_not_remembered(
         self, tmp_path: pathlib.Path, comparer
@@ -385,7 +385,7 @@ class TestDecisionCache:
         (candidate,) = triage.find_candidates(words, comparer)
         revised = attrs.evolve(
             candidate,
-            revisions=(
+            replacements=(
                 make_word("segundo/a", "adj", "second", rank=223),
                 make_word("segundo", "nm", "second", rank=1693),
             ),
@@ -454,6 +454,105 @@ class TestDecisionCache:
         cache = triage.DecisionCache(tmp_path / "deep" / "nested" / "d.json")
         cache.save()
         assert cache.cache_path.exists()
+
+    def test_the_revisions_key_still_loads(self, tmp_path: pathlib.Path) -> None:
+        """Replacements were called revisions before splits existed, and the
+        decisions recorded under that name must keep replaying."""
+        words = (
+            make_word("segundo", "adj", "second", rank=223),
+            make_word("segundo", "nm", "second", rank=1693),
+        )
+        rewritten = (
+            make_word("segundo/a", "adj", "second", rank=223),
+            make_word("segundo", "nm", "second", rank=1693),
+        )
+        new = triage.DecisionCache(tmp_path / "new.json")
+        new.remember(
+            triage.Candidate(
+                words=words,
+                reason=triage.Reason.BASE_PART_OF_SPEECH,
+                comparison=definition_similarity.Comparison(0.0, frozenset()),
+                disposition=triage.Disposition.KEEP_SEPARATE,
+                replacements=rewritten,
+            )
+        )
+        new.save()
+        payload = json.loads(new.cache_path.read_text())
+        for entry in payload:
+            entry["revisions"] = entry.pop("replacements")
+
+        legacy = tmp_path / "legacy.json"
+        legacy.write_text(json.dumps(payload))
+        decision = triage.DecisionCache(legacy).get(words)
+
+        assert decision is not None
+        assert decision.disposition is triage.Disposition.KEEP_SEPARATE
+        assert decision.replacements is not None
+        assert {w.word for w in decision.replacements} == {"segundo/a", "segundo"}
+
+
+class TestSplit:
+    """A group can become several new cards instead of one or none."""
+
+    def make_candidate(self) -> triage.Candidate:
+        return triage.Candidate(
+            words=(
+                make_word("llave", "nf", "key, faucet", rank=810),
+                make_word("llave", "nf", "wrestling hold", rank=9241),
+            ),
+            reason=triage.Reason.COMPATIBLE,
+            comparison=definition_similarity.Comparison(0.1, frozenset()),
+            disposition=triage.Disposition.SPLIT,
+            replacements=(
+                make_word("llave", "nf", "key, faucet", rank=810),
+                make_word("llave (lucha)", "nf", "wrestling hold", rank=9241),
+                make_word("llave (grifo)", "nf", "tap, faucet", rank=None),
+            ),
+        )
+
+    def test_a_split_round_trips_through_the_cache(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        candidate = self.make_candidate()
+        cache = triage.DecisionCache(tmp_path / "decisions.json")
+        cache.remember(candidate)
+        cache.save()
+
+        decision = triage.DecisionCache(cache.cache_path).get(candidate.words)
+        assert decision is not None
+        assert decision.disposition is triage.Disposition.SPLIT
+        assert len(decision.replacements) == 3
+        assert decision.replacements[2].rank is None
+
+    def test_a_split_round_trips_through_the_triage_file(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        candidate = self.make_candidate()
+        path = tmp_path / "candidates.json"
+        triage.write_triage_file(path, [candidate])
+        (reloaded,) = triage.read_triage_file(path)
+
+        assert reloaded.disposition is triage.Disposition.SPLIT
+        assert reloaded.replacements == candidate.replacements
+
+    def test_a_split_counts_as_answered(self, tmp_path: pathlib.Path) -> None:
+        cache = triage.DecisionCache(tmp_path / "decisions.json")
+        assert triage.record_decisions([self.make_candidate()], cache) == 1
+
+    def test_a_split_group_stays_out_of_merge_sets(self) -> None:
+        assert triage.to_merge_sets([self.make_candidate()]) == ()
+
+    def test_a_split_never_reads_as_a_notewise_rewrite(self) -> None:
+        """Split cards are not paired with the notes they came from, even when
+        the counts happen to line up."""
+        candidate = attrs.evolve(
+            self.make_candidate(),
+            replacements=(
+                make_word("llave", "nf", "key, faucet", rank=810),
+                make_word("llave (lucha)", "nf", "wrestling hold", rank=9241),
+            ),
+        )
+        assert triage.collect_revisions([candidate]) == ()
 
 
 class TestFocus:

@@ -209,7 +209,7 @@ class TestPersistence:
                     attrs.evolve(
                         candidate,
                         disposition=triage.Disposition.KEEP_SEPARATE,
-                        revisions=revised,
+                        replacements=revised,
                     )
                 )
             return tuple(out)

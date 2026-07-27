@@ -262,8 +262,8 @@ class TestEditing:
     def test_a_headword_can_be_rewritten(self) -> None:
         (resolved,) = edit([segundo_candidate()], {"word-0": "segundo/a"}, then=["k"])
 
-        assert resolved.is_revised
-        revised = {w.rank: w for w in resolved.revisions}
+        assert resolved.has_replacements
+        revised = {w.rank: w for w in resolved.replacements}
         assert revised[223].word == "segundo/a"
         assert revised[1693].word == "segundo"
 
@@ -274,7 +274,7 @@ class TestEditing:
             then=["k"],
         )
 
-        revised = {w.rank: w for w in resolved.revisions}
+        revised = {w.rank: w for w in resolved.replacements}
         assert revised[1693].article == "el"
         assert revised[223].article is None
 
@@ -294,8 +294,8 @@ class TestEditing:
             then=["k"],
         )
 
-        assert not resolved.is_revised
-        assert resolved.revisions is None
+        assert not resolved.has_replacements
+        assert resolved.replacements is None
 
     def test_an_unparseable_part_of_speech_is_rejected(self) -> None:
         """A bad edit must not take down the session."""
@@ -305,14 +305,14 @@ class TestEditing:
             then=["ctrl+x", "k"],
         )
 
-        assert not resolved.is_revised
+        assert not resolved.has_replacements
         assert resolved.disposition is triage.Disposition.KEEP_SEPARATE
 
     def test_editing_does_not_decide(self) -> None:
         """Rewriting is a separate act from choosing what happens to the group."""
         (resolved,) = edit([segundo_candidate()], {"word-0": "segundo/a"}, then=["q"])
 
-        assert resolved.is_revised
+        assert resolved.has_replacements
         assert resolved.disposition is triage.Disposition.REVIEW
 
     def test_editing_stays_on_the_same_group(self) -> None:
@@ -334,8 +334,8 @@ class TestEditing:
         triage.write_triage_file(path, [resolved])
 
         (restored,) = triage.read_triage_file(path)
-        assert restored.is_revised
-        assert {w.word for w in restored.revisions} == {"segundo/a", "segundo"}
+        assert restored.has_replacements
+        assert {w.word for w in restored.replacements} == {"segundo/a", "segundo"}
         assert {w.word for w in restored.words} == {"segundo"}
 
     def test_collect_revisions_returns_only_what_changed(self) -> None:

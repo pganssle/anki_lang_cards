@@ -60,7 +60,7 @@ def decide(
     cache: triage.DecisionCache,
     words: Sequence[types.Word],
     disposition: triage.Disposition,
-    revisions: Sequence[types.Word] | None = None,
+    replacements: Sequence[types.Word] | None = None,
 ) -> None:
     cache.remember(
         triage.Candidate(
@@ -68,7 +68,7 @@ def decide(
             reason=triage.Reason.COMPATIBLE,
             comparison=definition_similarity.Comparison(1.0, frozenset()),
             disposition=disposition,
-            revisions=None if revisions is None else tuple(revisions),
+            replacements=None if replacements is None else tuple(replacements),
         )
     )
 
@@ -127,7 +127,7 @@ class TestRevisions:
             decisions,
             [original, make_word("segundo", "nm", "second", 1693)],
             triage.Disposition.KEEP_SEPARATE,
-            revisions=[revised, make_word("segundo", "nm", "second", 1693)],
+            replacements=[revised, make_word("segundo", "nm", "second", 1693)],
         )
 
         outcome = apply_merges.apply_decisions([original], decisions, comparer)
@@ -144,7 +144,7 @@ class TestRevisions:
             decisions,
             [original],
             triage.Disposition.KEEP_SEPARATE,
-            revisions=[make_word("segundo/a", "adj", "second", 223)],
+            replacements=[make_word("segundo/a", "adj", "second", 223)],
         )
 
         outcome = apply_merges.apply_decisions([original], decisions, comparer)
@@ -160,7 +160,7 @@ class TestRevisions:
             decisions,
             [noun, adjective],
             triage.Disposition.KEEP_SEPARATE,
-            revisions=[
+            replacements=[
                 make_word("metomentodo", "nm/f", "busybody, meddlesome", 5433),
                 make_word("metomentodo", "nm/f", "busybody, meddlesome", 9609),
             ],
@@ -187,7 +187,7 @@ class TestDecisionMatching:
             decisions,
             [first],
             triage.Disposition.MERGE,
-            revisions=[make_word("nodriza", "nf", "wet nurse; mother ship", 8825)],
+            replacements=[make_word("nodriza", "nf", "wet nurse; mother ship", 8825)],
         )
 
         outcome = apply_merges.apply_decisions([first, second], decisions, comparer)
@@ -340,7 +340,7 @@ class TestRegressions:
             decisions,
             [from_deck, from_import],
             triage.Disposition.MERGE,
-            revisions=[
+            replacements=[
                 make_word("prenda", "nf", "piece of clothing", 3467),
                 make_word("prenda", "nf", "piece of clothing, garment", 3467),
             ],
@@ -360,7 +360,7 @@ class TestRegressions:
             decisions,
             [word],
             triage.Disposition.MERGE,
-            revisions=[make_word("trepa", "nm/f", "social climber", 1)],
+            replacements=[make_word("trepa", "nm/f", "social climber", 1)],
         )
 
         assert apply_merges.apply_decisions([word], decisions, comparer).revised == ()
@@ -596,7 +596,7 @@ class TestRevisionPairing:
             decisions,
             [from_deck, from_import],
             triage.Disposition.MERGE,
-            revisions=sorted([from_deck, from_import]),
+            replacements=sorted([from_deck, from_import]),
         )
 
         # The deck is not loaded this run, so only the import is present.
@@ -619,7 +619,7 @@ class TestRevisionPairing:
             decisions,
             [from_deck, from_import],
             triage.Disposition.MERGE,
-            revisions=rewritten,
+            replacements=rewritten,
         )
 
         outcome = apply_merges.apply_decisions([from_import], decisions, comparer)
@@ -634,7 +634,7 @@ class TestRevisionPairing:
             decisions,
             [from_deck, from_import],
             triage.Disposition.MERGE,
-            revisions=[attrs.evolve(from_deck, meaning="something else")],
+            replacements=[attrs.evolve(from_deck, meaning="something else")],
         )
 
         outcome = apply_merges.apply_decisions([from_import], decisions, comparer)
@@ -647,6 +647,6 @@ class TestRevisionPairing:
             reason=triage.Reason.COMPATIBLE,
             comparison=definition_similarity.Comparison(0.3, frozenset()),
             disposition=triage.Disposition.MERGE,
-            revisions=tuple(sorted([from_deck, from_import])),
+            replacements=tuple(sorted([from_deck, from_import])),
         )
         assert triage.collect_revisions([candidate]) == ()

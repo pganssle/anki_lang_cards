@@ -45,6 +45,9 @@ class Disposition(enum.Enum):
     KEEP_SEPARATE = "keep-separate"
     """Deliberately distinct. Filtered out, and remembered so it stops coming back."""
 
+    SPLIT = "split"
+    """One group becomes several new cards, replacing every note in it."""
+
 
 class Reason(enum.Enum):
     """Why a group was flagged, and how far the definitions can be trusted."""
@@ -127,13 +130,16 @@ class Candidate:
     them. Empty means the whole group is one side.
     """
 
-    revisions: tuple[types.Word, ...] | None = None
-    """Rewritten notes, when the answer was to tell the two apart instead.
+    replacements: tuple[types.Word, ...] | None = None
+    """The notes this group becomes, when an answer said so.
 
-    Kept beside the originals rather than replacing them, because the two are
-    needed for different things: decisions and the rejection record are keyed on
-    the notes as they exist in the deck, while the revisions are what has to be
-    imported to change them.
+    The shape depends on the disposition: a merge is the single combined note,
+    wording included; keep-separate is the group rewritten note-for-note (in
+    sorted order) to tell the members apart; a split is however many new cards
+    the group was divided into. Kept beside the originals rather than replacing
+    them, because the two are needed for different things: decisions and the
+    rejection record are keyed on the notes as they exist in the deck, while
+    the replacements are what has to be imported to change them.
     """
 
     @property
@@ -145,9 +151,9 @@ class Candidate:
         """The sides, with any rewriting applied, or the whole group as one."""
         if not self.sides:
             return (self.current_words,)
-        if self.revisions is None:
+        if self.replacements is None:
             return self.sides
-        revised = {word.rank: word for word in self.revisions}
+        revised = {word.rank: word for word in self.replacements}
         return tuple(
             tuple(revised.get(word.rank, word) for word in side) for side in self.sides
         )
@@ -155,11 +161,11 @@ class Candidate:
     @property
     def current_words(self) -> tuple[types.Word, ...]:
         """The notes as the reviewer left them."""
-        return self.words if self.revisions is None else self.revisions
+        return self.words if self.replacements is None else self.replacements
 
     @property
-    def is_revised(self) -> bool:
-        return self.revisions is not None
+    def has_replacements(self) -> bool:
+        return self.replacements is not None
 
     def summarize(self, *, revised: bool = True) -> Sequence[str]:
         """Render the group the way it appears in the triage file."""
@@ -181,14 +187,15 @@ class Candidate:
         }
         if self.sides:
             out["sides"] = [_words_to_csv(side) for side in self.sides]
-        if self.revisions is not None:
+        if self.replacements is not None:
             out["was"] = list(self.summarize(revised=False))
-            out["revisions"] = _words_to_csv(self.revisions)
+            out["replacements"] = _words_to_csv(self.replacements)
         return out
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> Self:
-        revisions = data.get("revisions")
+        # "revisions" is the name replacements carried before splits existed.
+        replacements = data.get("replacements", data.get("revisions"))
         return cls(
             words=tuple(_words_from_csv(data["words"])),
             reason=Reason(data["reason"]),
@@ -198,29 +205,42 @@ class Candidate:
             ),
             disposition=Disposition(data["disposition"]),
             sides=tuple(tuple(_words_from_csv(side)) for side in data.get("sides", ())),
-            revisions=None if revisions is None else tuple(_words_from_csv(revisions)),
+            replacements=(
+                None if replacements is None else tuple(_words_from_csv(replacements))
+            ),
         )
 
 
 @attrs.frozen
 class Decision:
-    """What was decided about a group, and any rewriting that went with it."""
+    """What was decided about a group, and the notes it becomes.
+
+    `replacements` follows the disposition the way `Candidate.replacements`
+    does: one merged note for a merge, the group rewritten note-for-note for
+    keep-separate, the new cards for a split. A merge with no stored note is
+    legal — decisions recorded before merges carried their wording left the
+    combined text in the separate merge cache — and callers fall back
+    accordingly.
+    """
 
     disposition: Disposition
-    revisions: tuple[types.Word, ...] | None = None
+    replacements: tuple[types.Word, ...] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {"disposition": self.disposition.value}
-        if self.revisions is not None:
-            out["revisions"] = _words_to_csv(self.revisions)
+        if self.replacements is not None:
+            out["replacements"] = _words_to_csv(self.replacements)
         return out
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> Self:
-        revisions = data.get("revisions")
+        # "revisions" is the name replacements carried before splits existed.
+        replacements = data.get("replacements", data.get("revisions"))
         return cls(
             disposition=Disposition(data["disposition"]),
-            revisions=None if revisions is None else tuple(_words_from_csv(revisions)),
+            replacements=(
+                None if replacements is None else tuple(_words_from_csv(replacements))
+            ),
         )
 
 
@@ -270,7 +290,7 @@ class DecisionCache:
 
     def remember(self, candidate: Candidate) -> None:
         self._decisions[candidate.key] = Decision(
-            disposition=candidate.disposition, revisions=candidate.revisions
+            disposition=candidate.disposition, replacements=candidate.replacements
         )
 
     def get(self, words: Collection[types.Word]) -> Decision | None:
@@ -286,10 +306,10 @@ class DecisionCache:
         return attrs.evolve(
             candidate,
             disposition=decision.disposition,
-            revisions=(
-                candidate.revisions
-                if decision.revisions is None
-                else decision.revisions
+            replacements=(
+                candidate.replacements
+                if decision.replacements is None
+                else decision.replacements
             ),
         )
 
@@ -401,7 +421,8 @@ def _make_candidate(
 _DISPOSITION_ORDER: Final[Mapping[Disposition, int]] = {
     Disposition.REVIEW: 0,
     Disposition.MERGE: 1,
-    Disposition.KEEP_SEPARATE: 2,
+    Disposition.SPLIT: 2,
+    Disposition.KEEP_SEPARATE: 3,
 }
 
 
@@ -455,7 +476,7 @@ def record_decisions(candidates: Iterable[Candidate], decisions: DecisionCache) 
     recorded = 0
     for candidate in candidates:
         answered = candidate.disposition is not Disposition.REVIEW
-        if not (answered or candidate.is_revised):
+        if not (answered or candidate.has_replacements):
             continue
         if decisions.get(candidate.words) is None:
             recorded += 1
@@ -466,19 +487,25 @@ def record_decisions(candidates: Iterable[Candidate], decisions: DecisionCache) 
 def collect_revisions(candidates: Iterable[Candidate]) -> Sequence[types.Word]:
     """Gather every note that was rewritten, ready to be imported.
 
+    Only note-for-note rewrites count here — a merge or split replaces the
+    group rather than editing it, and the length guard keeps those shapes out.
     Only notes that actually changed are returned, so a group opened in the
     editor and left alone contributes nothing.
     """
     revised: list[types.Word] = []
     for candidate in candidates:
-        if candidate.revisions is None:
+        if candidate.replacements is None:
+            continue
+        if candidate.disposition is Disposition.SPLIT:
+            # Split cards are not paired with the notes they came from, even
+            # when the counts happen to line up.
             continue
         ordered = sorted(candidate.words)
-        if len(ordered) != len(candidate.revisions):
+        if len(ordered) != len(candidate.replacements):
             continue
         # Paired by position, not by rank: a group can hold two notes at one
         # rank, and matching on it writes one note's text over the other.
-        for original, rewritten in zip(ordered, candidate.revisions, strict=True):
+        for original, rewritten in zip(ordered, candidate.replacements, strict=True):
             if original != rewritten:
                 revised.append(rewritten)
     return tuple(revised)
@@ -493,7 +520,7 @@ def to_merge_sets(candidates: Iterable[Candidate]) -> Sequence[Set[types.Word]]:
     return tuple(
         frozenset(candidate.words)
         for candidate in candidates
-        if candidate.disposition is not Disposition.KEEP_SEPARATE
+        if candidate.disposition in (Disposition.MERGE, Disposition.REVIEW)
     )
 
 

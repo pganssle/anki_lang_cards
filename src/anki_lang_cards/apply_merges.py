@@ -109,26 +109,37 @@ def _apply_revisions(
 ) -> tuple[list[types.Word], list[types.Word]]:
     """Replace notes with the versions they were rewritten to.
 
-    A decision's revisions are parallel to its group in sorted order — that is
-    how the editor builds them — so they are paired by position. Matching them
-    up by rank instead cross-wires a group whose notes share one: "prenda"
-    exists twice at rank 3467, once as the deck holds it and once as the import
-    revises it, and rank-matching wrote the deck's text over the import's,
-    losing the corrected definition and all eight of its new sentences.
+    Only note-for-note rewrites apply here — a merge or split replaces its
+    group wholesale and is handled by the merge machinery, not by editing
+    notes in place.
+
+    A decision's replacements are parallel to its group in sorted order — that
+    is how the editor builds them — so they are paired by position. Matching
+    them up by rank instead cross-wires a group whose notes share one:
+    "prenda" exists twice at rank 3467, once as the deck holds it and once as
+    the import revises it, and rank-matching wrote the deck's text over the
+    import's, losing the corrected definition and all eight of its new
+    sentences.
 
     Only pairs that actually differ count as a rewrite, so opening the editor
     and saving changes nothing.
     """
     replacements: list[tuple[types.Word, types.Word]] = []
     for group, decision in decisions.entries():
-        if decision.revisions is None:
+        if decision.replacements is None:
+            continue
+        if decision.disposition is triage.Disposition.SPLIT:
+            # A split's cards are not paired with the notes they came from.
             continue
         ordered = sorted(group)
-        if len(ordered) != len(decision.revisions):
-            # Shapes disagree, so position means nothing; leave the group alone
-            # rather than guess which note each revision belongs to.
+        if len(ordered) != len(decision.replacements):
+            # Shapes disagree, so position means nothing. For a merge that is
+            # the normal case — the stored replacement is the one combined
+            # note, consumed by the merge machinery — while a note-for-note
+            # rewrite recorded alongside a merge (the older shape) still
+            # matches and still applies.
             continue
-        for original, revised in zip(ordered, decision.revisions, strict=True):
+        for original, revised in zip(ordered, decision.replacements, strict=True):
             if original != revised:
                 replacements.append((original, revised))
 

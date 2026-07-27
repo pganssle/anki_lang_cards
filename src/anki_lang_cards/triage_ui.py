@@ -330,7 +330,7 @@ class TriageScreen(Screen):
         self._per_page: Final = per_page
         """Sentences per page, or None to fit as many as the pane holds."""
         self._decisions: MutableMapping[int, triage.Disposition] = {}
-        self._revisions: MutableMapping[int, tuple[types.Word, ...]] = {}
+        self._replacements: MutableMapping[int, tuple[types.Word, ...]] = {}
         self._index = 0
         self._offset = 0
 
@@ -354,8 +354,8 @@ class TriageScreen(Screen):
         changes: dict[str, object] = {}
         if (decision := self._decisions.get(index)) is not None:
             changes["disposition"] = decision
-        if (revision := self._revisions.get(index)) is not None:
-            changes["revisions"] = revision
+        if (replacement := self._replacements.get(index)) is not None:
+            changes["replacements"] = replacement
         return attrs.evolve(candidate, **changes) if changes else candidate
 
     def _decide(self, disposition: triage.Disposition) -> None:
@@ -418,7 +418,7 @@ class TriageScreen(Screen):
         )
         if revised is None:
             return
-        self._revisions[self._index] = tuple(revised)
+        self._replacements[self._index] = tuple(revised)
         self.refresh_content()
 
     async def action_skip(self) -> None:
@@ -474,7 +474,7 @@ class TriageScreen(Screen):
         decided = self._decisions.get(self._index)
         position = f"{self._index + 1} of {len(self._candidates)}"
         state = [decided.value] if decided else []
-        if candidate.is_revised:
+        if candidate.has_replacements:
             state.append("edited")
         self.sub_title = position + (f" — {', '.join(state)}" if state else "")
 
