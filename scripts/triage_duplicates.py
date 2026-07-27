@@ -281,7 +281,11 @@ def main() -> None:
         print(f"\n{len(candidates)} candidate groups")
 
     if args.resolve:
-        candidates = resolve_in_ui(candidates, include_proposed=args.include_proposed)
+        candidates = resolve_in_ui(
+            candidates,
+            include_proposed=args.include_proposed,
+            sentence_limit=None if args.sentences < 0 else args.sentences,
+        )
 
     triage.write_triage_file(args.triage_file, candidates)
 
