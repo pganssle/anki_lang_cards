@@ -80,7 +80,7 @@ def test_no_candidates_does_not_open_the_ui() -> None:
 @pytest.mark.parametrize(
     ("key", "expected"),
     [
-        ("m", triage.Disposition.MERGE),
+        ("a", triage.Disposition.MERGE),
         ("k", triage.Disposition.KEEP_SEPARATE),
         ("u", triage.Disposition.REVIEW),
     ],
@@ -94,7 +94,7 @@ def test_each_key_records_its_disposition(
 
 def test_deciding_advances_to_the_next_candidate() -> None:
     candidates = [make_candidate("trepa"), make_candidate("cura")]
-    resolved = press(candidates, "m", "k")
+    resolved = press(candidates, "a", "k")
 
     assert [c.disposition for c in resolved] == [
         triage.Disposition.MERGE,
@@ -103,7 +103,7 @@ def test_deciding_advances_to_the_next_candidate() -> None:
 
 
 def test_deciding_the_last_candidate_exits() -> None:
-    resolved = press([make_candidate()], "m")
+    resolved = press([make_candidate()], "a")
     assert resolved is not None
     assert len(resolved) == 1
 
@@ -113,7 +113,7 @@ def test_skipping_leaves_the_suggestion_alone() -> None:
         make_candidate("trepa", disposition=triage.Disposition.MERGE),
         make_candidate("cura", disposition=triage.Disposition.REVIEW),
     ]
-    resolved = press(candidates, "s", "k")
+    resolved = press(candidates, "n", "k")
 
     assert [c.disposition for c in resolved] == [
         triage.Disposition.MERGE,
@@ -138,21 +138,21 @@ def test_quitting_early_leaves_the_rest_untouched() -> None:
 
 def test_going_back_allows_a_decision_to_be_changed() -> None:
     candidates = [make_candidate("trepa"), make_candidate("cura")]
-    resolved = press(candidates, "m", "b", "k", "q")
+    resolved = press(candidates, "a", "b", "k", "q")
 
     assert resolved[0].disposition is triage.Disposition.KEEP_SEPARATE
 
 
 def test_going_back_from_the_first_candidate_does_nothing() -> None:
     candidates = [make_candidate("trepa"), make_candidate("cura")]
-    resolved = press(candidates, "b", "m", "q")
+    resolved = press(candidates, "b", "a", "q")
 
     assert resolved[0].disposition is triage.Disposition.MERGE
 
 
 def test_decisions_do_not_disturb_the_grouped_words() -> None:
     candidate = make_candidate()
-    (resolved,) = press([candidate], "m")
+    (resolved,) = press([candidate], "a")
 
     assert resolved.words == candidate.words
     assert resolved.reason is candidate.reason
@@ -180,7 +180,7 @@ def test_every_reason_has_an_explanation(reason: triage.Reason) -> None:
 
 @pytest.mark.parametrize("reason", list(triage.Reason))
 def test_every_reason_renders(reason: triage.Reason) -> None:
-    resolved = press([make_candidate(reason=reason)], "m")
+    resolved = press([make_candidate(reason=reason)], "a")
     assert [c.disposition for c in resolved] == [triage.Disposition.MERGE]
 
 
@@ -209,7 +209,7 @@ def test_groups_of_more_than_two_are_handled() -> None:
         comparison=definition_similarity.Comparison(0.9, frozenset()),
         disposition=triage.Disposition.REVIEW,
     )
-    resolved = press([candidate], "m")
+    resolved = press([candidate], "a")
     assert len(resolved[0].words) == 3
 
 
@@ -317,7 +317,7 @@ class TestEditing:
 
     def test_editing_stays_on_the_same_group(self) -> None:
         candidates = [segundo_candidate(), make_candidate("cura")]
-        resolved = edit(candidates, {"word-0": "segundo/a"}, then=["k", "m"])
+        resolved = edit(candidates, {"word-0": "segundo/a"}, then=["k", "a"])
 
         assert resolved[0].disposition is triage.Disposition.KEEP_SEPARATE
         assert resolved[1].disposition is triage.Disposition.MERGE
@@ -408,7 +408,7 @@ class TestSentences:
         assert triage_ui.describe_source(citation) == expected
 
     def test_toggling_does_not_disturb_decisions(self) -> None:
-        resolved = press([make_candidate(), make_candidate("cura")], "v", "m", "v", "k")
+        resolved = press([make_candidate(), make_candidate("cura")], "v", "a", "v", "k")
 
         assert [c.disposition for c in resolved] == [
             triage.Disposition.MERGE,
@@ -418,7 +418,7 @@ class TestSentences:
     def test_toggling_survives_moving_between_groups(self) -> None:
         """Re-rendering used to crash on a duplicate container id."""
         candidates = [make_candidate("a"), make_candidate("b"), make_candidate("c")]
-        resolved = press(candidates, "v", "m", "m", "v", "b", "k", "q")
+        resolved = press(candidates, "v", "a", "a", "v", "b", "k", "q")
 
         assert resolved[1].disposition is triage.Disposition.KEEP_SEPARATE
 
@@ -585,7 +585,7 @@ class TestSentenceCarousel:
             async with app.run_test(size=(120, 40)) as pilot:
                 await pilot.pause()
                 await pilot.press("v")
-                await pilot.press("s")
+                await pilot.press("n")
                 await pilot.pause()
                 return app.screen.sentence_offset
 
@@ -727,3 +727,418 @@ class TestUnevenSentenceCounts:
     def test_it_wraps_once_the_longest_is_at_its_end(self) -> None:
         long_pages = [long for long, _ in self.pages(5)]
         assert long_pages[4] == ["0", "1", "2"]
+
+
+def colliding_candidate(with_sentences: bool = False) -> triage.Candidate:
+    """Two notes the lookup puts on one card: keep-separate needs a warning."""
+    sentences = (
+        (sentence("Cavaron una zanja.", "They dug a trench."),),
+        (sentence("La zanja es honda.", "The ditch is deep."),),
+    )
+    return triage.Candidate(
+        words=(
+            types.Word(
+                rank=1,
+                word="zanja",
+                meaning="trench, ditch",
+                part_of_speech="nf",
+                article="la",
+                sentences=sentences[0] if with_sentences else (),
+            ),
+            types.Word(
+                rank=2,
+                word="zanja",
+                meaning="ditch",
+                part_of_speech="nf",
+                article=None,
+                sentences=sentences[1] if with_sentences else (),
+            ),
+        ),
+        reason=triage.Reason.COMPATIBLE,
+        comparison=definition_similarity.Comparison(0.8, frozenset({"ditch"})),
+        disposition=triage.Disposition.REVIEW,
+    )
+
+
+class TestAccept:
+    """Accepting records the answer and the wording as one act."""
+
+    def test_accept_records_the_proposed_note(self) -> None:
+        (resolved,) = press([make_candidate()], "a")
+
+        assert resolved.disposition is triage.Disposition.MERGE
+        assert resolved.replacements is not None
+        (merged,) = resolved.replacements
+        assert merged.rank == 1
+        assert merged.meaning == "social climber, climber"
+
+    def test_the_proposal_is_shown_before_accepting(self) -> None:
+        async def scenario() -> str:
+            app = triage_ui.TriageApp([make_candidate()])
+            async with app.run_test(size=(140, 50)) as pilot:
+                await pilot.pause()
+                view = app.screen.query(".proposal").first()
+                return view.render()
+
+        assert "social climber, climber" in str(run(scenario()))
+
+    def test_notes_are_numbered_on_screen(self) -> None:
+        async def scenario() -> list[str]:
+            app = triage_ui.TriageApp([make_candidate()])
+            async with app.run_test(size=(140, 50)) as pilot:
+                await pilot.pause()
+                return [
+                    str(label.render()) for label in app.screen.query(".note-number")
+                ]
+
+        rendered = run(scenario())
+        assert any("#1" in text for text in rendered)
+        assert any("#2" in text for text in rendered)
+
+
+class TestKeepSeparateGuard:
+    """Keep-separate warns when the notes would just collide again."""
+
+    def test_a_colliding_group_asks_for_confirmation(self) -> None:
+        async def scenario() -> tuple[bool, Sequence[triage.Candidate]]:
+            app = triage_ui.TriageApp([colliding_candidate()])
+            async with app.run_test() as pilot:
+                await pilot.press("k")
+                await pilot.pause()
+                modal_open = isinstance(app.screen, triage_ui.ConfirmScreen)
+                await pilot.press("y")
+                await pilot.pause()
+            return modal_open, app.return_value
+
+        modal_open, resolved = run(scenario())
+        assert modal_open
+        assert resolved[0].disposition is triage.Disposition.KEEP_SEPARATE
+
+    def test_declining_the_warning_leaves_the_group_undecided(self) -> None:
+        async def scenario() -> Sequence[triage.Candidate]:
+            app = triage_ui.TriageApp([colliding_candidate()])
+            async with app.run_test() as pilot:
+                await pilot.press("k")
+                await pilot.pause()
+                await pilot.press("n")
+                await pilot.pause()
+                await pilot.press("q")
+                await pilot.pause()
+            return app.return_value
+
+        resolved = run(scenario())
+        assert resolved[0].disposition is triage.Disposition.REVIEW
+
+    def test_notes_edited_apart_need_no_confirmation(self) -> None:
+        """A sense marker changes the lookup key, so the collision is gone."""
+        (resolved,) = edit(
+            [colliding_candidate()], {"word-1": "zanja (obra)"}, then=["k"]
+        )
+        assert resolved.disposition is triage.Disposition.KEEP_SEPARATE
+
+    def test_cross_group_candidates_need_no_confirmation(self) -> None:
+        """Different parts of speech can already coexist as separate cards."""
+        (resolved,) = press([make_candidate()], "k")
+        assert resolved.disposition is triage.Disposition.KEEP_SEPARATE
+
+
+class TestChooseNote:
+    """c takes one note as the base without un-filling anything."""
+
+    @staticmethod
+    async def _choose(number: str, *then: str) -> Sequence[triage.Candidate]:
+        app = triage_ui.TriageApp([colliding_candidate()])
+        async with app.run_test() as pilot:
+            await pilot.press("c")
+            await pilot.pause()
+            prompt = app.screen.query_one(triage_ui.ChooseNoteInput)
+            prompt.value = number
+            await pilot.press("enter")
+            await pilot.pause()
+            for key in then:
+                await pilot.press(key)
+                await pilot.pause()
+        return app.return_value
+
+    def test_choosing_takes_the_wording_but_not_the_gaps(self) -> None:
+        (resolved,) = run(self._choose("2", "a"))
+
+        (merged,) = resolved.replacements
+        assert merged.meaning == "ditch"
+        assert merged.rank == 1, "the rank is the group's lowest, not note 2's"
+        assert merged.article == "la", "note 2 has no article; note 1's stays"
+
+    def test_an_out_of_range_number_changes_nothing(self) -> None:
+        (resolved,) = run(self._choose("9", "a"))
+
+        (merged,) = resolved.replacements
+        assert merged.meaning == "trench, ditch"
+
+
+class TestMergedNoteEditor:
+    """m writes the note a merge will produce."""
+
+    @staticmethod
+    async def _run_editor(
+        candidates: Sequence[triage.Candidate],
+        act,
+        *then: str,
+    ):
+        app = triage_ui.TriageApp(candidates)
+        async with app.run_test() as pilot:
+            await pilot.press("m")
+            await pilot.pause()
+            await act(app, pilot)
+            for key in then:
+                await pilot.press(key)
+                await pilot.pause()
+        return app.return_value
+
+    def test_an_edited_proposal_is_what_accept_records(self) -> None:
+        async def act(app, pilot):
+            app.screen.query_one("#meaning", Input).value = "climber (social)"
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+
+        resolved = run(self._run_editor([make_candidate()], act, "a"))
+        (merged,) = resolved[0].replacements
+        assert merged.meaning == "climber (social)"
+
+    def test_cancelling_keeps_the_mechanical_proposal(self) -> None:
+        async def act(app, pilot):
+            app.screen.query_one("#meaning", Input).value = "climber (social)"
+            await pilot.press("ctrl+x")
+            await pilot.pause()
+
+        resolved = run(self._run_editor([make_candidate()], act, "a"))
+        (merged,) = resolved[0].replacements
+        assert merged.meaning == "social climber, climber"
+
+    def test_an_explicit_rank_edit_is_kept(self) -> None:
+        async def act(app, pilot):
+            app.screen.query_one("#rank", Input).value = "7"
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+
+        resolved = run(self._run_editor([make_candidate()], act, "a"))
+        assert resolved[0].replacements[0].rank == 7
+
+    def test_pull_copies_the_focused_field_from_a_numbered_note(self) -> None:
+        async def act(app, pilot):
+            app.screen.query_one("#meaning", Input).focus()
+            await pilot.pause()
+            await pilot.press("ctrl+p")
+            await pilot.pause()
+            app.screen.query_one("#pull-input", Input).value = "2"
+            await pilot.press("enter")
+            await pilot.pause()
+            assert app.screen.query_one("#meaning", Input).value == "climber"
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+
+        resolved = run(self._run_editor([make_candidate()], act, "a"))
+        assert resolved[0].replacements[0].meaning == "climber"
+
+    def test_pull_can_name_the_field_instead(self) -> None:
+        async def act(app, pilot):
+            await pilot.press("ctrl+p")
+            await pilot.pause()
+            app.screen.query_one("#pull-input", Input).value = "1 meaning"
+            await pilot.press("enter")
+            await pilot.pause()
+            assert app.screen.query_one("#meaning", Input).value == "social climber"
+            await pilot.press("ctrl+x")
+            await pilot.pause()
+
+        run(self._run_editor([make_candidate()], act, "u"))
+
+
+class TestSplitEditor:
+    """s divides a group into new cards."""
+
+    @staticmethod
+    async def _split(candidate: triage.Candidate, act) -> Sequence[triage.Candidate]:
+        app = triage_ui.TriageApp([candidate])
+        async with app.run_test(size=(160, 60)) as pilot:
+            await pilot.press("s")
+            await pilot.pause()
+            await pilot.press("enter")  # accept the default card count
+            await pilot.pause()
+            await act(app, pilot)
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+        return app.return_value
+
+    def test_the_grid_prefills_from_the_group(self) -> None:
+        async def act(app, pilot):
+            assert app.screen.query_one("#word-0", Input).value == "zanja"
+            assert app.screen.query_one("#meaning-1", Input).value == "ditch"
+
+        (resolved,) = run(self._split(colliding_candidate(), act))
+        assert resolved.disposition is triage.Disposition.SPLIT
+
+    def test_a_split_records_its_cards(self) -> None:
+        async def act(app, pilot):
+            app.screen.query_one("#word-1", Input).value = "zanja (obra)"
+            app.screen.query_one("#meaning-1", Input).value = "ditch (works)"
+
+        (resolved,) = run(self._split(colliding_candidate(), act))
+
+        assert resolved.disposition is triage.Disposition.SPLIT
+        assert [w.word for w in resolved.replacements] == ["zanja", "zanja (obra)"]
+        assert resolved.replacements[1].meaning == "ditch (works)"
+        assert resolved.replacements[0].rank == 1
+        assert resolved.replacements[1].rank == 2
+
+    def test_sentences_follow_their_allocation(self) -> None:
+        async def act(app, pilot):
+            app.screen.query_one("#allocation-0", Input).value = "1,2"
+            app.screen.query_one("#allocation-1", Input).value = "2"
+
+        (resolved,) = run(self._split(colliding_candidate(with_sentences=True), act))
+
+        first, second = resolved.replacements
+        assert [s.spanish for s in first.sentences] == ["Cavaron una zanja."]
+        assert [s.spanish for s in second.sentences] == [
+            "Cavaron una zanja.",
+            "La zanja es honda.",
+        ]
+
+    def test_allocations_default_to_the_sentence_origin(self) -> None:
+        async def act(app, pilot):
+            assert app.screen.query_one("#allocation-0", Input).value == "1"
+            assert app.screen.query_one("#allocation-1", Input).value == "2"
+
+        run(self._split(colliding_candidate(with_sentences=True), act))
+
+    def test_a_bad_allocation_keeps_the_editor_open(self) -> None:
+        async def scenario() -> Sequence[triage.Candidate]:
+            app = triage_ui.TriageApp([colliding_candidate(with_sentences=True)])
+            async with app.run_test(size=(160, 60)) as pilot:
+                await pilot.press("s")
+                await pilot.pause()
+                await pilot.press("enter")
+                await pilot.pause()
+                app.screen.query_one("#allocation-0", Input).value = "9"
+                await pilot.press("ctrl+s")
+                await pilot.pause()
+                assert isinstance(app.screen, triage_ui.SplitEditor)
+                await pilot.press("ctrl+x")
+                await pilot.pause()
+                await pilot.press("q")
+                await pilot.pause()
+            return app.return_value
+
+        resolved = run(scenario())
+        assert resolved[0].disposition is triage.Disposition.REVIEW
+
+    def test_shift_right_copies_a_field_to_the_next_card(self) -> None:
+        async def act(app, pilot):
+            word_input = app.screen.query_one("#word-0", Input)
+            word_input.value = "zanja (nueva)"
+            word_input.focus()
+            await pilot.pause()
+            await pilot.press("shift+right")
+            await pilot.pause()
+            assert app.screen.query_one("#word-1", Input).value == "zanja (nueva)"
+            app.screen.query_one("#meaning-1", Input).value = "ditch"
+
+        (resolved,) = run(self._split(colliding_candidate(), act))
+        assert resolved.replacements[1].word == "zanja (nueva)"
+
+    def test_an_extra_card_starts_blank_and_rankless(self) -> None:
+        async def scenario() -> Sequence[triage.Candidate]:
+            app = triage_ui.TriageApp([colliding_candidate()])
+            async with app.run_test(size=(160, 60)) as pilot:
+                await pilot.press("s")
+                await pilot.pause()
+                count = app.screen.query_one("#count-input", Input)
+                count.value = "3"
+                await pilot.press("enter")
+                await pilot.pause()
+                assert app.screen.query_one("#word-2", Input).value == ""
+                assert app.screen.query_one("#rank-2", Input).value == ""
+                app.screen.query_one("#word-2", Input).value = "zanja (tercera)"
+                app.screen.query_one("#pos-2", Input).value = "nf"
+                app.screen.query_one("#meaning-2", Input).value = "third sense"
+                await pilot.press("ctrl+s")
+                await pilot.pause()
+            return app.return_value
+
+        (resolved,) = run(scenario())
+        assert len(resolved.replacements) == 3
+        assert resolved.replacements[2].rank is None
+        assert resolved.replacements[2].word == "zanja (tercera)"
+
+
+class TestOnDecision:
+    """Every answer is reported the moment it is given."""
+
+    @staticmethod
+    async def _observe(
+        candidates: Sequence[triage.Candidate], *keys: str
+    ) -> list[triage.Candidate]:
+        heard: list[triage.Candidate] = []
+        app = triage_ui.TriageApp(candidates, on_decision=heard.append)
+        async with app.run_test() as pilot:
+            for key in keys:
+                await pilot.press(key)
+                await pilot.pause()
+        return heard
+
+    def test_answers_are_reported_as_they_happen(self) -> None:
+        heard = run(
+            self._observe([make_candidate("trepa"), make_candidate("cura")], "a", "k")
+        )
+        assert [c.disposition for c in heard] == [
+            triage.Disposition.MERGE,
+            triage.Disposition.KEEP_SEPARATE,
+        ]
+        assert heard[0].replacements is not None
+
+    def test_quitting_early_reports_only_what_was_answered(self) -> None:
+        heard = run(
+            self._observe([make_candidate("trepa"), make_candidate("cura")], "a", "q")
+        )
+        assert len(heard) == 1
+
+    def test_skipping_reports_nothing(self) -> None:
+        heard = run(
+            self._observe([make_candidate("trepa"), make_candidate("cura")], "n", "q")
+        )
+        assert heard == []
+
+    def test_undecided_is_reported_for_the_caller_to_filter(self) -> None:
+        heard = run(self._observe([make_candidate("trepa")], "u"))
+        assert [c.disposition for c in heard] == [triage.Disposition.REVIEW]
+
+    def test_an_edit_is_reported_before_any_answer(self) -> None:
+        async def scenario() -> list[triage.Candidate]:
+            heard: list[triage.Candidate] = []
+            app = triage_ui.TriageApp([segundo_candidate()], on_decision=heard.append)
+            async with app.run_test() as pilot:
+                await pilot.press("e")
+                await pilot.pause()
+                app.screen.query_one("#word-0", Input).value = "segundo/a"
+                await pilot.press("ctrl+s")
+                await pilot.pause()
+                await pilot.press("q")
+                await pilot.pause()
+            return heard
+
+        heard = run(scenario())
+        assert len(heard) == 1
+        assert heard[0].disposition is triage.Disposition.REVIEW
+        assert heard[0].has_replacements
+
+    def test_changing_an_answer_reports_the_change(self) -> None:
+        heard = run(
+            self._observe(
+                [make_candidate("trepa"), make_candidate("cura")], "a", "b", "k", "q"
+            )
+        )
+        assert [(c.words[0].word, c.disposition) for c in heard] == [
+            ("trepa", triage.Disposition.MERGE),
+            ("trepa", triage.Disposition.KEEP_SEPARATE),
+        ]
+        assert heard[1].replacements is None, "the merged note went with the merge"

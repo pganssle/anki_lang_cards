@@ -225,7 +225,7 @@ def _stored_merge_result(
     )
 
 
-def _align_headwords(
+def align_headwords(
     group: Sequence[types.Word],
 ) -> tuple[Sequence[types.Word], tuple[str, ...]]:
     """Settle on one spelling for a group that is about to be merged.
@@ -328,7 +328,7 @@ def apply_decisions(
                     leftover.append(candidate)
                 continue
 
-            aligned, dropped = _align_headwords(candidate.words)
+            aligned, dropped = align_headwords(candidate.words)
             consumed.update(id(word) for word in candidate.words)
             stored = _stored_merge_result(decision, candidate.words, aligned)
             if stored is not None:
