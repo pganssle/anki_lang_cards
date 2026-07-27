@@ -234,6 +234,7 @@ def find_candidates(
     comparer: definition_similarity.DefinitionComparer,
     *,
     rejections: RejectionCache | None = None,
+    focus: Collection[types.Word] | None = None,
 ) -> Sequence[Candidate]:
     """Collect every group that might need merging, with a suggested outcome.
 
@@ -242,8 +243,15 @@ def find_candidates(
     different groups are flagged as well, because a part of speech that
     disagrees is as often the model being inconsistent as it is a real
     distinction — and the definitions say which.
+
+    `focus` narrows the result to groups touching at least one of the given
+    words. Passing the words being added keeps a run about the import at hand:
+    two notes that have sat in the deck disagreeing for a year are a real
+    finding, but not one that this import has anything to do with. Pass None to
+    look at everything.
     """
     lookup = conflict_resolver.WordLookup(words)
+    in_focus = None if focus is None else frozenset(focus)
     candidates: list[Candidate] = []
 
     for groups in _loose_index(lookup).values():
@@ -259,6 +267,12 @@ def find_candidates(
                 )
             )
 
+    if in_focus is not None:
+        candidates = [
+            candidate
+            for candidate in candidates
+            if any(word in in_focus for word in candidate.words)
+        ]
     if rejections is not None:
         candidates = [c for c in candidates if c.words not in rejections]
     return tuple(sorted(candidates, key=_ordering))

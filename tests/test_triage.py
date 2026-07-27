@@ -347,3 +347,47 @@ class TestRejectionCache:
         cache.reject((make_word("cura", "nm", "priest", rank=1),))
         cache.save()
         assert cache.cache_path.exists()
+
+
+class TestFocus:
+    """Narrowing a run to the notes being added."""
+
+    def test_groups_untouched_by_the_focus_are_dropped(self, comparer) -> None:
+        existing = [
+            make_word("segundo", "adj", "second", rank=223),
+            make_word("segundo", "nm", "second", rank=1693),
+        ]
+        added = [
+            make_word("trepa", "nm/f", "social climber", rank=8576),
+            make_word("trepa", "nf", "social climber", rank=9615),
+        ]
+        candidates = triage.find_candidates(
+            existing + added, comparer, focus=added
+        )
+
+        assert len(candidates) == 1
+        assert {w.word for w in candidates[0].words} == {"trepa"}
+
+    def test_a_group_is_kept_if_any_member_is_in_focus(self, comparer) -> None:
+        deck = make_word("trepa", "nm/f", "social climber", rank=8576)
+        added = make_word("trepa", "nf", "social climber", rank=9615)
+
+        (candidate,) = triage.find_candidates([deck, added], comparer, focus=[added])
+        assert len(candidate.words) == 2
+
+    def test_no_focus_looks_at_everything(self, comparer) -> None:
+        words = [
+            make_word("segundo", "adj", "second", rank=223),
+            make_word("segundo", "nm", "second", rank=1693),
+            make_word("trepa", "nm/f", "social climber", rank=8576),
+            make_word("trepa", "nf", "social climber", rank=9615),
+        ]
+        assert len(triage.find_candidates(words, comparer, focus=None)) == 2
+
+    def test_an_empty_focus_finds_nothing(self, comparer) -> None:
+        """Distinct from None: nothing was added, so nothing is about it."""
+        words = [
+            make_word("trepa", "nm/f", "social climber", rank=1),
+            make_word("trepa", "nf", "social climber", rank=2),
+        ]
+        assert triage.find_candidates(words, comparer, focus=()) == ()

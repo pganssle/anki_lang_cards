@@ -12,6 +12,11 @@ Edit that file — the only field that matters is "disposition", which can be
 
     python scripts/triage_duplicates.py --apply
 
+By default a run is about the words being added: groups made up entirely of
+notes already in the deck are left out, since two notes that have disagreed
+quietly for a year are a real finding but not one this import caused. Pass
+--include-existing to go over the whole deck instead.
+
 Anything marked "keep-separate" goes into the rejection cache and stops being
 offered on later runs, so a deliberate sense split only has to be dismissed
 once. Nothing is written to Anki or to the deck by either pass; this only
@@ -56,17 +61,19 @@ DEFAULT_REVISIONS_FILE = pathlib.Path("output/triage_revisions.csv")
 
 def load_words(
     inputs: Sequence[pathlib.Path], exported_deck: pathlib.Path | None
-) -> Sequence[types.Word]:
-    words: list[types.Word] = []
+) -> tuple[Sequence[types.Word], Sequence[types.Word]]:
+    """Load the deck and the words being added, keeping the two apart."""
+    deck: list[types.Word] = []
     if exported_deck is not None:
-        deck = anki_import.load_anki_words(exported_deck)
+        deck.extend(anki_import.load_anki_words(exported_deck))
         print(f"Loaded {len(deck)} words from {exported_deck}")
-        words.extend(deck)
+
+    added: list[types.Word] = []
     for path in inputs:
         from_csv = types.Word.words_from_csv(path)
         print(f"Loaded {len(from_csv)} words from {path}")
-        words.extend(from_csv)
-    return tuple(words)
+        added.extend(from_csv)
+    return tuple(deck), tuple(added)
 
 
 def report(candidates: Sequence[triage.Candidate]) -> None:
@@ -214,6 +221,11 @@ def main() -> None:
         help="Deck named in the revisions CSV directives",
     )
     parser.add_argument(
+        "--include-existing",
+        action="store_true",
+        help="Also review groups made up entirely of notes already in the deck",
+    )
+    parser.add_argument(
         "--include-proposed",
         action="store_true",
         help="With --resolve, also ask about the groups already proposed for merging",
@@ -233,15 +245,25 @@ def main() -> None:
         candidates = triage.read_triage_file(args.triage_file)
         print(f"Read {len(candidates)} candidate groups from {args.triage_file}")
     else:
-        words = load_words(args.inputs, args.exported_deck)
+        deck, added = load_words(args.inputs, args.exported_deck)
+        words = (*deck, *added)
         if not words:
             raise SystemExit("No words loaded; pass --inputs and/or --exported-deck.")
         if len(rejections):
             print(f"Ignoring {len(rejections)} previously separated groups")
+
+        # With nothing being added there is no import to be about, so a run can
+        # only sensibly mean the whole deck.
+        focus = None if args.include_existing or not added else added
+        if focus is not None:
+            print(f"Limiting to groups touching the {len(added)} added words")
+
         comparer = definition_similarity.DefinitionComparer(
             word.meaning for word in words
         )
-        candidates = triage.find_candidates(words, comparer, rejections=rejections)
+        candidates = triage.find_candidates(
+            words, comparer, rejections=rejections, focus=focus
+        )
         print(f"\n{len(candidates)} candidate groups")
 
     if args.resolve:
