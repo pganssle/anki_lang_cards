@@ -5,6 +5,7 @@ import pathlib
 from collections.abc import Sequence
 from typing import Final
 
+import attrs
 import pytest
 
 from anki_lang_cards import _types as types
@@ -280,71 +281,177 @@ class TestTriageFile:
         ]
 
 
-class TestRejectionCache:
-    def test_rejections_persist_across_runs(self, tmp_path: pathlib.Path) -> None:
+class TestDecisionCache:
+    def test_answers_persist_across_runs(self, tmp_path: pathlib.Path) -> None:
+        candidate = triage.Candidate(
+            words=(
+                make_word("cura", "nm", "priest", rank=1790),
+                make_word("cura", "nf", "cure, remedy", rank=9000),
+            ),
+            reason=triage.Reason.GENDER,
+            comparison=definition_similarity.Comparison(0.0, frozenset()),
+            disposition=triage.Disposition.KEEP_SEPARATE,
+        )
+        path = tmp_path / "decisions.json"
+
+        cache = triage.DecisionCache(path)
+        assert candidate.words not in cache
+        cache.remember(candidate)
+        cache.save()
+
+        assert candidate.words in triage.DecisionCache(path)
+
+    def test_a_separated_group_stops_being_offered(
+        self, tmp_path: pathlib.Path, comparer
+    ) -> None:
+        words = [
+            make_word("cura", "nm", "priest", rank=1790),
+            make_word("cura", "nf", "cure, remedy", rank=9000),
+        ]
+        cache = triage.DecisionCache(tmp_path / "decisions.json")
+        (candidate,) = triage.find_candidates(words, comparer)
+        cache.remember(
+            attrs.evolve(candidate, disposition=triage.Disposition.KEEP_SEPARATE)
+        )
+
+        assert triage.find_candidates(words, comparer, decisions=cache) == ()
+
+    def test_a_merge_answer_comes_back_answered(
+        self, tmp_path: pathlib.Path, comparer
+    ) -> None:
+        """The bug this fixes: only separations were remembered, so a group
+        answered "merge" was asked about again on the next run."""
+        words = [
+            make_word("no obstante", "conj", "nevertheless", rank=9087),
+            make_word("no obstante", "adv", "nevertheless, however", rank=9265),
+        ]
+        cache = triage.DecisionCache(tmp_path / "decisions.json")
+        (candidate,) = triage.find_candidates(words, comparer)
+        assert candidate.disposition is triage.Disposition.REVIEW
+
+        cache.remember(attrs.evolve(candidate, disposition=triage.Disposition.MERGE))
+        (again,) = triage.find_candidates(words, comparer, decisions=cache)
+
+        assert again.disposition is triage.Disposition.MERGE
+
+    def test_revisions_are_remembered_too(
+        self, tmp_path: pathlib.Path, comparer
+    ) -> None:
+        words = [
+            make_word("segundo", "adj", "second", rank=223),
+            make_word("segundo", "nm", "second", rank=1693),
+        ]
+        cache = triage.DecisionCache(tmp_path / "decisions.json")
+        (candidate,) = triage.find_candidates(words, comparer)
+        revised = attrs.evolve(
+            candidate,
+            disposition=triage.Disposition.MERGE,
+            revisions=(
+                make_word("segundo/a", "adj", "second", rank=223),
+                make_word("segundo", "nm", "second", rank=1693),
+            ),
+        )
+        cache.remember(revised)
+        cache.save()
+
+        (again,) = triage.find_candidates(
+            words, comparer, decisions=triage.DecisionCache(cache.cache_path)
+        )
+        assert again.is_revised
+        assert {w.word for w in again.revisions} == {"segundo/a", "segundo"}
+
+    def test_an_undecided_group_is_not_remembered(
+        self, tmp_path: pathlib.Path, comparer
+    ) -> None:
+        """Leaving something for later is not an answer."""
+        words = [
+            make_word("cura", "nm", "priest", rank=1),
+            make_word("cura", "nf", "cure, remedy", rank=2),
+        ]
+        cache = triage.DecisionCache(tmp_path / "decisions.json")
+        candidates = triage.find_candidates(words, comparer)
+
+        assert triage.record_decisions(candidates, cache) == 0
+        assert len(cache) == 0
+
+    def test_an_edit_is_remembered_even_when_undecided(
+        self, tmp_path: pathlib.Path, comparer
+    ) -> None:
+        words = [
+            make_word("segundo", "adj", "second", rank=223),
+            make_word("segundo", "nm", "second", rank=1693),
+        ]
+        cache = triage.DecisionCache(tmp_path / "decisions.json")
+        (candidate,) = triage.find_candidates(words, comparer)
+        revised = attrs.evolve(
+            candidate,
+            revisions=(
+                make_word("segundo/a", "adj", "second", rank=223),
+                make_word("segundo", "nm", "second", rank=1693),
+            ),
+        )
+
+        assert triage.record_decisions([revised], cache) == 1
+
+    def test_recording_the_same_answer_twice_counts_once(
+        self, tmp_path: pathlib.Path, comparer
+    ) -> None:
+        words = [
+            make_word("cura", "nm", "priest", rank=1),
+            make_word("cura", "nf", "cure, remedy", rank=2),
+        ]
+        cache = triage.DecisionCache(tmp_path / "decisions.json")
+        (candidate,) = triage.find_candidates(words, comparer)
+        answered = [attrs.evolve(candidate, disposition=triage.Disposition.MERGE)]
+
+        assert triage.record_decisions(answered, cache) == 1
+        assert triage.record_decisions(answered, cache) == 0
+        assert len(cache) == 1
+
+    def test_lookup_ignores_ordering(self, tmp_path: pathlib.Path) -> None:
+        first = make_word("cura", "nm", "priest", rank=1790)
+        second = make_word("cura", "nf", "cure", rank=9000)
+        cache = triage.DecisionCache(tmp_path / "decisions.json")
+        cache.remember(
+            triage.Candidate(
+                words=(first, second),
+                reason=triage.Reason.GENDER,
+                comparison=definition_similarity.Comparison(0.0, frozenset()),
+                disposition=triage.Disposition.KEEP_SEPARATE,
+            )
+        )
+        assert (second, first) in cache
+
+    def test_the_old_rejection_format_still_loads(self, tmp_path: pathlib.Path) -> None:
+        """Earlier versions stored bare CSV strings meaning "keep separate"."""
         words = (
             make_word("cura", "nm", "priest", rank=1790),
             make_word("cura", "nf", "cure, remedy", rank=9000),
         )
-        path = tmp_path / "rejections.json"
-
-        cache = triage.RejectionCache(path)
-        assert words not in cache
-        cache.reject(words)
-        cache.save()
-
-        assert words in triage.RejectionCache(path)
-
-    def test_rejected_groups_stop_being_offered(
-        self, tmp_path: pathlib.Path, comparer
-    ) -> None:
-        words = [
-            make_word("cura", "nm", "priest", rank=1790),
-            make_word("cura", "nf", "cure, remedy", rank=9000),
-        ]
-        cache = triage.RejectionCache(tmp_path / "rejections.json")
-
-        (candidate,) = triage.find_candidates(words, comparer)
-        cache.reject(candidate.words)
-
-        assert triage.find_candidates(words, comparer, rejections=cache) == ()
-
-    def test_rejection_ignores_ordering(self, tmp_path: pathlib.Path) -> None:
-        first = make_word("cura", "nm", "priest", rank=1790)
-        second = make_word("cura", "nf", "cure", rank=9000)
-        cache = triage.RejectionCache(tmp_path / "rejections.json")
-
-        cache.reject((first, second))
-        assert (second, first) in cache
-
-    def test_record_rejections_collects_from_a_triage_file(
-        self, tmp_path: pathlib.Path, comparer
-    ) -> None:
-        words = [
-            make_word("cura", "nm", "priest", rank=1790),
-            make_word("cura", "nf", "cure, remedy", rank=9000),
-        ]
-        candidates = [
-            c.__class__(
-                words=c.words,
-                reason=c.reason,
-                comparison=c.comparison,
+        new = triage.DecisionCache(tmp_path / "new.json")
+        new.remember(
+            triage.Candidate(
+                words=words,
+                reason=triage.Reason.GENDER,
+                comparison=definition_similarity.Comparison(0.0, frozenset()),
                 disposition=triage.Disposition.KEEP_SEPARATE,
             )
-            for c in triage.find_candidates(words, comparer)
-        ]
-        cache = triage.RejectionCache(tmp_path / "rejections.json")
-        triage.record_rejections(candidates, cache)
+        )
+        new.save()
+        payload = json.loads(new.cache_path.read_text())
 
-        assert len(cache) == 1
-        assert triage.find_candidates(words, comparer, rejections=cache) == ()
+        legacy = tmp_path / "legacy.json"
+        legacy.write_text(json.dumps([entry["words"] for entry in payload]))
+        loaded = triage.DecisionCache(legacy)
+
+        assert len(loaded) == 1
+        assert loaded.get(words).disposition is triage.Disposition.KEEP_SEPARATE
 
     def test_missing_cache_file_is_empty(self, tmp_path: pathlib.Path) -> None:
-        assert len(triage.RejectionCache(tmp_path / "nope.json")) == 0
+        assert len(triage.DecisionCache(tmp_path / "nope.json")) == 0
 
     def test_save_creates_missing_directories(self, tmp_path: pathlib.Path) -> None:
-        cache = triage.RejectionCache(tmp_path / "deep" / "nested" / "r.json")
-        cache.reject((make_word("cura", "nm", "priest", rank=1),))
+        cache = triage.DecisionCache(tmp_path / "deep" / "nested" / "d.json")
         cache.save()
         assert cache.cache_path.exists()
 
@@ -361,9 +468,7 @@ class TestFocus:
             make_word("trepa", "nm/f", "social climber", rank=8576),
             make_word("trepa", "nf", "social climber", rank=9615),
         ]
-        candidates = triage.find_candidates(
-            existing + added, comparer, focus=added
-        )
+        candidates = triage.find_candidates(existing + added, comparer, focus=added)
 
         assert len(candidates) == 1
         assert {w.word for w in candidates[0].words} == {"trepa"}

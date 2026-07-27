@@ -17,10 +17,10 @@ notes already in the deck are left out, since two notes that have disagreed
 quietly for a year are a real finding but not one this import caused. Pass
 --include-existing to go over the whole deck instead.
 
-Anything marked "keep-separate" goes into the rejection cache and stops being
-offered on later runs, so a deliberate sense split only has to be dismissed
-once. Nothing is written to Anki or to the deck by either pass; this only
-decides what the merge UI will later be asked about.
+Every answer goes into the decision cache, so nothing is asked twice: groups
+settled as separate stop being offered, and groups settled as merges come back
+already answered. Nothing is written to Anki or to the deck by either pass;
+this only decides what the merge UI will later be asked about.
 
 Passing --resolve answers the same questions in a UI instead of an editor, and
 records the decisions in one go. It needs the merge_ui extra. By default it
@@ -55,7 +55,7 @@ else:
     TRIAGE_UI_AVAILABLE = True
 
 DEFAULT_TRIAGE_FILE = pathlib.Path("output/merge_candidates.json")
-DEFAULT_REJECTION_CACHE = pathlib.Path(".cache/merges/rejections.json")
+DEFAULT_DECISION_CACHE = pathlib.Path(".cache/merges/decisions.json")
 DEFAULT_REVISIONS_FILE = pathlib.Path("output/triage_revisions.csv")
 
 
@@ -151,13 +151,13 @@ def write_revisions(
 
 
 def report_recorded(
-    candidates: Sequence[triage.Candidate], newly_rejected: int, remembered: int
+    candidates: Sequence[triage.Candidate], newly_answered: int, remembered: int
 ) -> None:
     partitioned = triage.partition(candidates)
     separated = partitioned[triage.Disposition.KEEP_SEPARATE]
 
-    print(f"\nRecorded {newly_rejected} newly separated groups")
-    print(f"  {remembered} separated groups remembered in total")
+    print(f"\nRecorded {newly_answered} newly answered groups")
+    print(f"  {remembered} answered groups remembered in total")
     print(f"  {len(triage.to_merge_sets(candidates))} groups would go to the merge UI")
     print(f"  {len(partitioned[triage.Disposition.REVIEW])} still undecided")
 
@@ -194,10 +194,10 @@ def main() -> None:
         help=f"Where decisions are written and read (default: {DEFAULT_TRIAGE_FILE})",
     )
     parser.add_argument(
-        "--rejection-cache",
+        "--decision-cache",
         type=pathlib.Path,
-        default=DEFAULT_REJECTION_CACHE,
-        help=f"Record of deliberate splits (default: {DEFAULT_REJECTION_CACHE})",
+        default=DEFAULT_DECISION_CACHE,
+        help=f"Record of answered groups (default: {DEFAULT_DECISION_CACHE})",
     )
     parser.add_argument(
         "--apply",
@@ -237,7 +237,7 @@ def main() -> None:
             "--resolve needs textual; install the merge_ui extra to use it."
         )
 
-    rejections = triage.RejectionCache(args.rejection_cache)
+    decisions = triage.DecisionCache(args.decision_cache)
 
     if args.apply:
         if not args.triage_file.exists():
@@ -249,8 +249,8 @@ def main() -> None:
         words = (*deck, *added)
         if not words:
             raise SystemExit("No words loaded; pass --inputs and/or --exported-deck.")
-        if len(rejections):
-            print(f"Ignoring {len(rejections)} previously separated groups")
+        if len(decisions):
+            print(f"Reusing {len(decisions)} groups already answered")
 
         # With nothing being added there is no import to be about, so a run can
         # only sensibly mean the whole deck.
@@ -262,7 +262,7 @@ def main() -> None:
             word.meaning for word in words
         )
         candidates = triage.find_candidates(
-            words, comparer, rejections=rejections, focus=focus
+            words, comparer, decisions=decisions, focus=focus
         )
         print(f"\n{len(candidates)} candidate groups")
 
@@ -272,10 +272,9 @@ def main() -> None:
     triage.write_triage_file(args.triage_file, candidates)
 
     if args.apply or args.resolve:
-        before = len(rejections)
-        triage.record_rejections(candidates, rejections)
-        rejections.save()
-        report_recorded(candidates, len(rejections) - before, len(rejections))
+        newly_answered = triage.record_decisions(candidates, decisions)
+        decisions.save()
+        report_recorded(candidates, newly_answered, len(decisions))
 
         revised = triage.collect_revisions(candidates)
         if revised:

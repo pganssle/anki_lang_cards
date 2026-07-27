@@ -176,18 +176,45 @@ class Candidate:
         )
 
 
-class RejectionCache:
-    """Remembers the groups that were looked at and deliberately left apart.
+@attrs.frozen
+class Decision:
+    """What was decided about a group, and any rewriting that went with it."""
 
-    This is the counterpart to `MergeCache`, which only records the merges that
-    were made. Without it, every loosened heuristic re-asks about the same
-    deliberate sense splits on every run, which is what makes loosening
-    expensive.
+    disposition: Disposition
+    revisions: tuple[types.Word, ...] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"disposition": self.disposition.value}
+        if self.revisions is not None:
+            out["revisions"] = _words_to_csv(self.revisions)
+        return out
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> Self:
+        revisions = data.get("revisions")
+        return cls(
+            disposition=Disposition(data["disposition"]),
+            revisions=None if revisions is None else tuple(_words_from_csv(revisions)),
+        )
+
+
+class DecisionCache:
+    """Remembers what was decided about a group, so it is only asked once.
+
+    `MergeCache` records the merges the merge UI performed, which is a
+    different thing: this records the answer to "should these be one note at
+    all", including the answer "no". Without it every run re-asks about
+    everything not yet acted on, and a heuristic that flags a few extra groups
+    costs a permanent tax rather than one skim.
+
+    Groups are keyed on the notes as they exist in the deck, so a group that
+    was rewritten is still recognized until the rewrite is imported — at which
+    point the group no longer arises.
     """
 
     def __init__(self, cache_path: pathlib.Path):
         self.cache_path: Final = cache_path
-        self._rejected: set[tuple[types.Word, ...]] = set()
+        self._decisions: dict[tuple[types.Word, ...], Decision] = {}
         self._load()
 
     def _load(self) -> None:
@@ -195,23 +222,56 @@ class RejectionCache:
             return
         with self.cache_path.open() as f:
             data = json.load(f)
-        self._rejected = {tuple(_words_from_csv(entry)) for entry in data}
+        for entry in data:
+            # Earlier versions stored only the groups to keep separate, as bare
+            # CSV strings.
+            if isinstance(entry, str):
+                self._decisions[tuple(_words_from_csv(entry))] = Decision(
+                    disposition=Disposition.KEEP_SEPARATE
+                )
+                continue
+            key = tuple(_words_from_csv(entry["words"]))
+            self._decisions[key] = Decision.from_dict(entry)
 
     def save(self) -> None:
         if not self.cache_path.parent.exists():
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-        self.cache_path.write_text(
-            json.dumps([_words_to_csv(words) for words in sorted(self._rejected)])
+        payload = [
+            {"words": _words_to_csv(words), **decision.to_dict()}
+            for words, decision in sorted(self._decisions.items())
+        ]
+        self.cache_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
+
+    def remember(self, candidate: Candidate) -> None:
+        self._decisions[candidate.key] = Decision(
+            disposition=candidate.disposition, revisions=candidate.revisions
         )
 
-    def reject(self, words: Collection[types.Word]) -> None:
-        self._rejected.add(tuple(sorted(words)))
+    def get(self, words: Collection[types.Word]) -> Decision | None:
+        return self._decisions.get(tuple(sorted(words)))
+
+    def apply(self, candidate: Candidate) -> Candidate | None:
+        """Restore what was decided, or drop the group if it was settled apart."""
+        decision = self.get(candidate.words)
+        if decision is None:
+            return candidate
+        if decision.disposition is Disposition.KEEP_SEPARATE:
+            return None
+        return attrs.evolve(
+            candidate,
+            disposition=decision.disposition,
+            revisions=(
+                candidate.revisions
+                if decision.revisions is None
+                else decision.revisions
+            ),
+        )
 
     def __contains__(self, words: Collection[types.Word]) -> bool:
-        return tuple(sorted(words)) in self._rejected
+        return self.get(words) is not None
 
     def __len__(self) -> int:
-        return len(self._rejected)
+        return len(self._decisions)
 
 
 def _loose_index(
@@ -233,7 +293,7 @@ def find_candidates(
     words: Iterable[types.Word],
     comparer: definition_similarity.DefinitionComparer,
     *,
-    rejections: RejectionCache | None = None,
+    decisions: DecisionCache | None = None,
     focus: Collection[types.Word] | None = None,
 ) -> Sequence[Candidate]:
     """Collect every group that might need merging, with a suggested outcome.
@@ -243,6 +303,9 @@ def find_candidates(
     different groups are flagged as well, because a part of speech that
     disagrees is as often the model being inconsistent as it is a real
     distinction — and the definitions say which.
+
+    `decisions` restores what was previously answered about a group and drops
+    the ones settled as separate, so nothing is asked twice.
 
     `focus` narrows the result to groups touching at least one of the given
     words. Passing the words being added keeps a run about the import at hand:
@@ -273,8 +336,12 @@ def find_candidates(
             for candidate in candidates
             if any(word in in_focus for word in candidate.words)
         ]
-    if rejections is not None:
-        candidates = [c for c in candidates if c.words not in rejections]
+    if decisions is not None:
+        candidates = [
+            restored
+            for candidate in candidates
+            if (restored := decisions.apply(candidate)) is not None
+        ]
     return tuple(sorted(candidates, key=_ordering))
 
 
@@ -342,13 +409,21 @@ def partition(
     return {disposition: tuple(group) for disposition, group in out.items()}
 
 
-def record_rejections(
-    candidates: Iterable[Candidate], rejections: RejectionCache
-) -> None:
-    """Remember every group marked as deliberately separate."""
+def record_decisions(candidates: Iterable[Candidate], decisions: DecisionCache) -> int:
+    """Remember every group that was answered, and return how many were new.
+
+    A group still marked for review is not an answer, so it is not remembered
+    unless it was rewritten — an edit is work worth keeping either way.
+    """
+    recorded = 0
     for candidate in candidates:
-        if candidate.disposition is Disposition.KEEP_SEPARATE:
-            rejections.reject(candidate.words)
+        answered = candidate.disposition is not Disposition.REVIEW
+        if not (answered or candidate.is_revised):
+            continue
+        if decisions.get(candidate.words) is None:
+            recorded += 1
+        decisions.remember(candidate)
+    return recorded
 
 
 def collect_revisions(candidates: Iterable[Candidate]) -> Sequence[types.Word]:
