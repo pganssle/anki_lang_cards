@@ -81,6 +81,31 @@ def test_incompatible_parts_of_speech_stay_apart(pos1: str, pos2: str) -> None:
     assert lookup.lookup(second) == (second,)
 
 
+@pytest.mark.parametrize(
+    ("word1", "word2"),
+    [
+        # Two spellings of one gendered pair are one card.
+        ("mirón/ona", "mirón/a"),
+        ("francés/esa", "francés/a"),
+        ("Perro/a", "perro/a"),
+    ],
+)
+def test_equivalent_headword_spellings_share_a_group(word1: str, word2: str) -> None:
+    first = make_word(word1, "nm/f")
+    second = make_word(word2, "nm/f")
+    lookup = conflict_resolver.WordLookup([first, second])
+
+    assert len(lookup) == 1
+    assert lookup.lookup(second) == (first, second)
+
+
+def test_headword_canonicalization_does_not_merge_unrelated_words() -> None:
+    lookup = conflict_resolver.WordLookup(
+        [make_word("actor/actriz", "nm/f"), make_word("actor/a", "nm/f")]
+    )
+    assert len(lookup) == 2
+
+
 def test_different_headwords_stay_apart() -> None:
     first = make_word("perro", "nm")
     second = make_word("gato", "nm")

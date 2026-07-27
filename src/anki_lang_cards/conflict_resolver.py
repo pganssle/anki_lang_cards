@@ -20,6 +20,7 @@ from typing import Any, Final, Self, TypeAlias
 import attrs
 
 from . import _types as types
+from . import headword
 from . import part_of_speech as pos
 
 _BucketKeyType: TypeAlias = tuple[str, pos.BasePoS]
@@ -57,7 +58,9 @@ class WordLookup:
     Since these can only be differentiated in context.
 
     Words are bucketed on the characteristics that admit no wildcards — the
-    headword and the base part of speech — and then split into compatibility
+    canonicalized headword (see `headword.lookup_key`, which collapses spellings
+    that the card template renders identically, such as "mirón/ona" and
+    "mirón/a") and the base part of speech — and then split into compatibility
     groups *within* a bucket using `PartOfSpeech.__eq__`. This is deliberately
     not a plain hash key: `PartOfSpeech` equality treats an unspecified
     characteristic as a wildcard, so "n" compares equal to both "nm" and "nf"
@@ -112,7 +115,7 @@ class WordLookup:
         )
 
     def _bucket_key(self, word: types.Word) -> _BucketKeyType:
-        return (word.word, word.part_of_speech.base_pos)
+        return (headword.lookup_key(word.word), word.part_of_speech.base_pos)
 
     def _find_group(self, word: types.Word) -> MutableSequence[types.Word] | None:
         """Find the compatibility group a word belongs to, if there is one."""
