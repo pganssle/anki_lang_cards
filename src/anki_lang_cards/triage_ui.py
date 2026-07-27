@@ -597,21 +597,51 @@ class SplitEditor(Screen):
         ),
     ]
 
+    # The grid must always be fully visible — it is what the reviewer is
+    # writing — so everything gets its natural height and only the sentence
+    # list scrolls, inside its own bounded panel.
     CSS = """
+    #card-grid {
+        height: auto;
+    }
+
     .card-col {
         width: 1fr;
+        height: auto;
     }
 
     Input {
         margin-bottom: 0;
     }
 
+    #allocation-panel {
+        height: auto;
+        max-height: 25;
+        border: round $panel;
+    }
+
+    .allocation-row {
+        height: auto;
+    }
+
     .allocation {
         width: 8;
     }
 
+    .sentence-number {
+        width: 5;
+        padding: 1 1 0 0;
+        text-align: right;
+        color: $text-muted;
+    }
+
     .sentence-text {
         width: 1fr;
+        padding: 1 0 0 0;
+    }
+
+    #split-buttons {
+        height: auto;
     }
 
     #count-input {
@@ -738,21 +768,30 @@ class SplitEditor(Screen):
         yield Horizontal(*columns, id="card-grid")
         if self.sentences:
             yield Static(
-                "Allocate each sentence to a card (1, 2, or 1,2 to share):",
+                f"Allocate each of the {len(self.sentences)} sentences to a "
+                "card (1, 2, or 1,2 to share); every one needs an answer:",
                 classes="heading",
             )
-            for position, sentence in enumerate(self.sentences):
-                yield Horizontal(
-                    Input(
-                        str(self._origin_card(sentence)),
-                        id=f"allocation-{position}",
-                        classes="allocation",
-                    ),
-                    Static(sentence.spanish, classes="sentence-text"),
-                )
+            yield VerticalScroll(
+                *(
+                    Horizontal(
+                        Label(f"{position + 1}.", classes="sentence-number"),
+                        Input(
+                            str(self._origin_card(sentence)),
+                            id=f"allocation-{position}",
+                            classes="allocation",
+                        ),
+                        Static(sentence.spanish, classes="sentence-text"),
+                        classes="allocation-row",
+                    )
+                    for position, sentence in enumerate(self.sentences)
+                ),
+                id="allocation-panel",
+            )
         yield Horizontal(
             Button("Save (ctrl+s)", id="save"),
             Button("Cancel (ctrl+x)", id="cancel"),
+            id="split-buttons",
         )
 
     def action_copy_right(self) -> None:
@@ -783,6 +822,7 @@ class SplitEditor(Screen):
                     "(1, 2, or 1,2).",
                     severity="warning",
                 )
+                self._focus_allocation(position)
                 return None
             numbers = frozenset(int(token) for token in tokens)
             if not all(1 <= number <= self.count for number in numbers):
@@ -790,9 +830,14 @@ class SplitEditor(Screen):
                     f"Sentence {position + 1}: card numbers run 1–{self.count}.",
                     severity="warning",
                 )
+                self._focus_allocation(position)
                 return None
             allocations.append(numbers)
         return allocations
+
+    def _focus_allocation(self, position: int) -> None:
+        """Put the cursor on the offending sentence; focusing scrolls to it."""
+        self.query_one(f"#allocation-{position}", Input).focus()
 
     def action_save(self) -> None:
         if self.count is None:

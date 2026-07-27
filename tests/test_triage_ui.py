@@ -1142,3 +1142,74 @@ class TestOnDecision:
             ("trepa", triage.Disposition.KEEP_SEPARATE),
         ]
         assert heard[1].replacements is None, "the merged note went with the merge"
+
+
+class TestSplitEditorLayout:
+    """A long sentence list must not crush the card grid off the screen."""
+
+    @staticmethod
+    def wordy_candidate(count: int) -> triage.Candidate:
+        def note(rank: int, meaning: str, tag: str) -> types.Word:
+            return types.Word(
+                rank=rank,
+                word="llave",
+                meaning=meaning,
+                part_of_speech="nf",
+                article=None,
+                sentences=tuple(
+                    types.Sentence(
+                        spanish=f"{tag}{i} una llave.", english=f"EN{i}", source=None
+                    )
+                    for i in range(count)
+                ),
+            )
+
+        return triage.Candidate(
+            words=(note(810, "key, faucet", "A"), note(9241, "wrestling hold", "B")),
+            reason=triage.Reason.COMPATIBLE,
+            comparison=definition_similarity.Comparison(0.1, frozenset()),
+            disposition=triage.Disposition.REVIEW,
+        )
+
+    def test_the_grid_stays_visible_above_many_sentences(self) -> None:
+        async def scenario() -> tuple[int, int, int, int]:
+            app = triage_ui.TriageApp([self.wordy_candidate(15)])
+            async with app.run_test(size=(140, 40)) as pilot:
+                await pilot.press("s")
+                await pilot.pause()
+                await pilot.press("enter")
+                await pilot.pause()
+                grid = app.screen.query_one("#card-grid")
+                panel = app.screen.query_one("#allocation-panel")
+                return (
+                    grid.region.height,
+                    panel.region.height,
+                    panel.virtual_size.height,
+                    len(app.screen.query(".allocation-row")),
+                )
+
+        grid_height, panel_height, panel_content, rows = run(scenario())
+        assert rows == 30
+        assert grid_height >= 7, "every card field stays on screen"
+        assert panel_height <= 25, "the sentence list is a bounded panel"
+        assert panel_content > panel_height, "and it scrolls rather than clips"
+
+    def test_a_bad_allocation_scrolls_to_the_sentence(self) -> None:
+        async def scenario() -> tuple[bool, str | None]:
+            app = triage_ui.TriageApp([self.wordy_candidate(15)])
+            async with app.run_test(size=(140, 40)) as pilot:
+                await pilot.press("s")
+                await pilot.pause()
+                await pilot.press("enter")
+                await pilot.pause()
+                bad = app.screen.query_one("#allocation-25", Input)
+                bad.value = ""
+                await pilot.press("ctrl+s")
+                await pilot.pause()
+                focused = app.screen.focused
+                visible = bad.region.height > 0
+                return visible, focused.id if focused else None
+
+        visible, focused_id = run(scenario())
+        assert focused_id == "allocation-25"
+        assert visible, "focusing scrolled the offending row into view"
