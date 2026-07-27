@@ -20,12 +20,13 @@ import attrs
 import textual
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal
+from textual.containers import Container, Horizontal, Vertical
 from textual.driver import Driver
 from textual.screen import Screen
 from textual.widget import Widget
-from textual.widgets import Button, Footer, Header, Static
+from textual.widgets import Button, Footer, Header, Input, Label, Static
 
+from . import _types as types
 from . import triage, word_merger
 
 _REASON_TEXT: Final[Mapping[triage.Reason, str]] = {
@@ -65,6 +66,97 @@ class CandidateView(Static):
         return "\n".join(lines)
 
 
+class CandidateEditor(Screen):
+    """Rewrites the notes in a group so they tell each other apart.
+
+    Choosing between two notes is not always the answer. "segundo" the
+    adjective and "segundo" the noun are two cards that happen to be written
+    identically; making them "segundo/a" and "el segundo" is a better outcome
+    than merging or than leaving the collision in place.
+
+    The rank is shown but not editable — it identifies the note being changed.
+    """
+
+    BINDINGS = [
+        Binding("ctrl+s", "save", "Save", show=True, priority=True),
+        Binding("ctrl+x", "cancel", "Cancel", show=True, priority=True),
+    ]
+
+    CSS = """
+    .word-col {
+        width: 1fr;
+    }
+
+    Input {
+        margin-bottom: 1;
+    }
+    """
+
+    def __init__(self, words: Sequence[types.Word]):
+        super().__init__()
+        self.words: Final = tuple(sorted(words))
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Static("Rewrite the notes, then ctrl+s:", classes="heading")
+            with Horizontal():
+                for index, word in enumerate(self.words):
+                    with Vertical(classes="word-col"):
+                        rank = word.rank if word.rank is not None else "no rank"
+                        yield Label(f"[bold]{rank}[/]")
+                        yield Input(word.word, id=f"word-{index}", placeholder="Word")
+                        yield Input(
+                            str(word.part_of_speech),
+                            id=f"pos-{index}",
+                            placeholder="Part of speech",
+                        )
+                        yield Input(
+                            word.article or "",
+                            id=f"article-{index}",
+                            placeholder="Article",
+                        )
+                        yield Input(
+                            word.meaning, id=f"meaning-{index}", placeholder="Meaning"
+                        )
+            yield Horizontal(
+                Button("Save (ctrl+s)", id="save"),
+                Button("Cancel (ctrl+x)", id="cancel"),
+            )
+            yield Footer()
+
+    def _value(self, field: str, index: int) -> str:
+        return self.query_one(f"#{field}-{index}", Input).value.strip()
+
+    def action_save(self) -> None:
+        revised: list[types.Word] = []
+        for index, word in enumerate(self.words):
+            try:
+                revised.append(
+                    attrs.evolve(
+                        word,
+                        word=self._value("word", index),
+                        part_of_speech=self._value("pos", index),
+                        article=self._value("article", index) or None,
+                        meaning=self._value("meaning", index),
+                    )
+                )
+            except (ValueError, TypeError) as error:
+                # Rejecting the edit has to keep the editor alive; an uncaught
+                # error here would take down the whole session.
+                self.app.notify(f"{word.word}: {error}", severity="error", timeout=8)
+                return
+        self.dismiss(tuple(revised))
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "save":
+            self.action_save()
+        else:
+            self.action_cancel()
+
+
 class TriageScreen(Screen):
     """Steps through candidates, one decision at a time."""
 
@@ -72,6 +164,7 @@ class TriageScreen(Screen):
         Binding("m", "merge", "Merge", show=True),
         Binding("k", "keep_separate", "Keep separate", show=True),
         Binding("u", "undecided", "Undecided", show=True),
+        Binding("e", "edit", "Edit", show=True),
         Binding("s", "skip", "Skip", show=True),
         Binding("b", "back", "Back", show=True),
         Binding("q", "quit", "Save and quit", show=True),
@@ -81,6 +174,7 @@ class TriageScreen(Screen):
         super().__init__()
         self._candidates: Final = tuple(candidates)
         self._decisions: MutableMapping[int, triage.Disposition] = {}
+        self._revisions: MutableMapping[int, tuple[types.Word, ...]] = {}
         self._index = 0
 
     @property
@@ -95,13 +189,17 @@ class TriageScreen(Screen):
         so quitting early is the same as leaving the rest of the file alone.
         """
         return tuple(
-            (
-                candidate
-                if (decision := self._decisions.get(index)) is None
-                else attrs.evolve(candidate, disposition=decision)
-            )
+            self._resolved(index, candidate)
             for index, candidate in enumerate(self._candidates)
         )
+
+    def _resolved(self, index: int, candidate: triage.Candidate) -> triage.Candidate:
+        changes: dict[str, object] = {}
+        if (decision := self._decisions.get(index)) is not None:
+            changes["disposition"] = decision
+        if (revision := self._revisions.get(index)) is not None:
+            changes["revisions"] = revision
+        return attrs.evolve(candidate, **changes) if changes else candidate
 
     def _decide(self, disposition: triage.Disposition) -> None:
         self._decisions[self._index] = disposition
@@ -123,6 +221,16 @@ class TriageScreen(Screen):
     async def action_undecided(self) -> None:
         self._decide(triage.Disposition.REVIEW)
 
+    @textual.work
+    async def action_edit(self) -> None:
+        revised = await self.app.push_screen_wait(
+            CandidateEditor(self.current.current_words)
+        )
+        if revised is None:
+            return
+        self._revisions[self._index] = tuple(revised)
+        self.refresh_content()
+
     async def action_skip(self) -> None:
         self._advance()
 
@@ -143,6 +251,8 @@ class TriageScreen(Screen):
                 await self.action_keep_separate()
             case "undecided":
                 await self.action_undecided()
+            case "edit":
+                self.action_edit()
             case "skip":
                 await self.action_skip()
             case "back":
@@ -153,15 +263,18 @@ class TriageScreen(Screen):
                 raise ValueError(f"Unknown action: {event.button.id}")
 
     def _generate_layout_contents(self) -> Iterable[Widget]:
-        candidate = self.current
-        words = sorted(candidate.words)
+        candidate = self._resolved(self._index, self.current)
+        words = sorted(candidate.current_words)
         reference = words[0]
         diffs = [word_merger.WordDiff.from_words(word, reference) for word in words]
 
         self.title = reference.word
         decided = self._decisions.get(self._index)
         position = f"{self._index + 1} of {len(self._candidates)}"
-        self.sub_title = f"{position}{f' — {decided.value}' if decided else ''}"
+        state = [decided.value] if decided else []
+        if candidate.is_revised:
+            state.append("edited")
+        self.sub_title = position + (f" — {', '.join(state)}" if state else "")
 
         yield Header()
         yield CandidateView(candidate, classes="reason")
@@ -176,6 +289,7 @@ class TriageScreen(Screen):
             Button("Merge (m)", id="merge"),
             Button("Keep separate (k)", id="keep_separate"),
             Button("Undecided (u)", id="undecided"),
+            Button("Edit (e)", id="edit"),
             Button("Skip (s)", id="skip"),
             Button("Back (b)", id="back"),
             Button("Save and quit (q)", id="quit"),

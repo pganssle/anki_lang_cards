@@ -22,6 +22,12 @@ records the decisions in one go. It needs the merge_ui extra. By default it
 asks only about the groups that have no suggestion; --include-proposed asks
 about the proposed merges as well.
 
+Sometimes the answer is neither merging nor separating but rewriting: "segundo"
+the adjective and "segundo" the noun collide only because both are written the
+same way, and "segundo/a" against "el segundo" is a better outcome than either.
+Pressing "e" in the UI edits the notes in a group. Rewritten notes are written
+to a CSV to be imported into Anki, since nothing here changes the deck itself.
+
     python scripts/triage_duplicates.py --resolve \\
         --exported-deck input/existing_deck_3.txt \\
         --inputs output/diff_from_existing.csv
@@ -29,6 +35,7 @@ about the proposed merges as well.
 
 import argparse
 import asyncio
+import csv
 import pathlib
 from collections.abc import Sequence
 
@@ -44,6 +51,7 @@ else:
 
 DEFAULT_TRIAGE_FILE = pathlib.Path("output/merge_candidates.json")
 DEFAULT_REJECTION_CACHE = pathlib.Path(".cache/merges/rejections.json")
+DEFAULT_REVISIONS_FILE = pathlib.Path("output/triage_revisions.csv")
 
 
 def load_words(
@@ -119,6 +127,22 @@ def report_pending(candidates: Sequence[triage.Candidate]) -> None:
                 print(f"         {line}")
 
 
+def write_revisions(
+    path: pathlib.Path, revised: Sequence[types.Word], deck_name: str | None
+) -> None:
+    """Write rewritten notes out in the format Anki imports.
+
+    Directives, not a header row: the two are alternatives, and a header row
+    following directives is imported as a note.
+    """
+    if not path.parent.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="") as handle:
+        handle.write("\n".join(types.Word.make_anki_directives(deck_name)) + "\n")
+        writer = csv.writer(handle)
+        writer.writerows(word.to_csv_line(require_rank=True) for word in revised)
+
+
 def report_recorded(
     candidates: Sequence[triage.Candidate], newly_rejected: int, remembered: int
 ) -> None:
@@ -179,6 +203,17 @@ def main() -> None:
         help="Answer the questions in a UI rather than an editor",
     )
     parser.add_argument(
+        "--revisions-file",
+        type=pathlib.Path,
+        default=DEFAULT_REVISIONS_FILE,
+        help=f"Where rewritten notes are written (default: {DEFAULT_REVISIONS_FILE})",
+    )
+    parser.add_argument(
+        "--deck-name",
+        default=None,
+        help="Deck named in the revisions CSV directives",
+    )
+    parser.add_argument(
         "--include-proposed",
         action="store_true",
         help="With --resolve, also ask about the groups already proposed for merging",
@@ -219,6 +254,16 @@ def main() -> None:
         triage.record_rejections(candidates, rejections)
         rejections.save()
         report_recorded(candidates, len(rejections) - before, len(rejections))
+
+        revised = triage.collect_revisions(candidates)
+        if revised:
+            write_revisions(args.revisions_file, revised, args.deck_name)
+            print(f"\nRewrote {len(revised)} notes -> {args.revisions_file}")
+            for word in revised:
+                print(
+                    f"  {word.rank} {word.word} ({word.part_of_speech}) {word.meaning}"
+                )
+            print("\nImport that CSV into Anki to apply the rewrites.")
     else:
         report_pending(candidates)
         print(f"\nWrote {args.triage_file}. Edit the 'disposition' fields and rerun")

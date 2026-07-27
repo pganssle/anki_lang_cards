@@ -110,24 +110,45 @@ class Candidate:
     """A group of words that might belong on one note."""
 
     words: tuple[types.Word, ...]
+    """The notes as they exist now. Never rewritten by editing."""
+
     reason: Reason
     comparison: definition_similarity.Comparison
     disposition: Disposition
+
+    revisions: tuple[types.Word, ...] | None = None
+    """Rewritten notes, when the answer was to tell the two apart instead.
+
+    Kept beside the originals rather than replacing them, because the two are
+    needed for different things: decisions and the rejection record are keyed on
+    the notes as they exist in the deck, while the revisions are what has to be
+    imported to change them.
+    """
 
     @property
     def key(self) -> tuple[types.Word, ...]:
         return tuple(sorted(self.words))
 
-    def summarize(self) -> Sequence[str]:
+    @property
+    def current_words(self) -> tuple[types.Word, ...]:
+        """The notes as the reviewer left them."""
+        return self.words if self.revisions is None else self.revisions
+
+    @property
+    def is_revised(self) -> bool:
+        return self.revisions is not None
+
+    def summarize(self, *, revised: bool = True) -> Sequence[str]:
         """Render the group the way it appears in the triage file."""
+        words = self.current_words if revised else self.words
         return tuple(
             f"{word.rank if word.rank is not None else '-'} "
             f"{word.word} ({word.part_of_speech}) {word.meaning}"
-            for word in sorted(self.words)
+            for word in sorted(words)
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "disposition": self.disposition.value,
             "reason": self.reason.value,
             "score": round(self.comparison.score, 3),
@@ -135,9 +156,14 @@ class Candidate:
             "summary": list(self.summarize()),
             "words": _words_to_csv(self.words),
         }
+        if self.revisions is not None:
+            out["was"] = list(self.summarize(revised=False))
+            out["revisions"] = _words_to_csv(self.revisions)
+        return out
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> Self:
+        revisions = data.get("revisions")
         return cls(
             words=tuple(_words_from_csv(data["words"])),
             reason=Reason(data["reason"]),
@@ -146,6 +172,7 @@ class Candidate:
                 shared_glosses=frozenset(data.get("shared_glosses", ())),
             ),
             disposition=Disposition(data["disposition"]),
+            revisions=None if revisions is None else tuple(_words_from_csv(revisions)),
         )
 
 
@@ -310,8 +337,29 @@ def record_rejections(
             rejections.reject(candidate.words)
 
 
+def collect_revisions(candidates: Iterable[Candidate]) -> Sequence[types.Word]:
+    """Gather every note that was rewritten, ready to be imported.
+
+    Only notes that actually changed are returned, so a group opened in the
+    editor and left alone contributes nothing.
+    """
+    revised: list[types.Word] = []
+    for candidate in candidates:
+        if candidate.revisions is None:
+            continue
+        originals = {word.rank: word for word in candidate.words}
+        for word in candidate.revisions:
+            if originals.get(word.rank) != word:
+                revised.append(word)
+    return tuple(revised)
+
+
 def to_merge_sets(candidates: Iterable[Candidate]) -> Sequence[Set[types.Word]]:
-    """Convert the groups still needing a decision into merge-UI input."""
+    """Convert the groups still needing a decision into merge-UI input.
+
+    The original notes are used, not the revised ones: the merge UI works
+    against what is in the deck, and revisions reach the deck by being imported.
+    """
     return tuple(
         frozenset(candidate.words)
         for candidate in candidates

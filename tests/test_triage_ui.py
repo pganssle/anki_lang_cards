@@ -15,6 +15,8 @@ from anki_lang_cards import definition_similarity, triage
 
 pytest.importorskip("textual", reason="the triage UI needs the merge_ui extra")
 
+from textual.widgets import Input  # noqa: E402
+
 from anki_lang_cards import triage_ui  # noqa: E402
 
 
@@ -206,3 +208,138 @@ def test_groups_of_more_than_two_are_handled() -> None:
     )
     resolved = press([candidate], "m")
     assert len(resolved[0].words) == 3
+
+
+async def _edit(
+    candidates: Sequence[triage.Candidate],
+    fields: dict[str, str],
+    *,
+    finish: str = "ctrl+s",
+    then: Sequence[str] = (),
+) -> Sequence[triage.Candidate]:
+    """Open the editor, set some fields, and finish."""
+    app = triage_ui.TriageApp(candidates)
+    async with app.run_test() as pilot:
+        await pilot.press("e")
+        await pilot.pause()
+        for widget_id, value in fields.items():
+            app.screen.query_one(f"#{widget_id}", Input).value = value
+        await pilot.press(finish)
+        await pilot.pause()
+        for key in then:
+            await pilot.press(key)
+        await pilot.pause()
+    return app.return_value
+
+
+def edit(
+    candidates: Sequence[triage.Candidate],
+    fields: dict[str, str],
+    *,
+    finish: str = "ctrl+s",
+    then: Sequence[str] = (),
+) -> Sequence[triage.Candidate]:
+    return run(_edit(candidates, fields, finish=finish, then=then))
+
+
+def segundo_candidate() -> triage.Candidate:
+    """The case that motivated editing: two cards written identically."""
+    return triage.Candidate(
+        words=(
+            make_word("segundo", "adj", "second", rank=223),
+            make_word("segundo", "nm", "second", rank=1693),
+        ),
+        reason=triage.Reason.BASE_PART_OF_SPEECH,
+        comparison=definition_similarity.Comparison(1.0, frozenset({"second"})),
+        disposition=triage.Disposition.REVIEW,
+    )
+
+
+class TestEditing:
+    def test_a_headword_can_be_rewritten(self) -> None:
+        (resolved,) = edit(
+            [segundo_candidate()], {"word-0": "segundo/a"}, then=["k"]
+        )
+
+        assert resolved.is_revised
+        revised = {w.rank: w for w in resolved.revisions}
+        assert revised[223].word == "segundo/a"
+        assert revised[1693].word == "segundo"
+
+    def test_an_article_can_be_added(self) -> None:
+        (resolved,) = edit(
+            [segundo_candidate()],
+            {"word-0": "segundo/a", "article-1": "el"},
+            then=["k"],
+        )
+
+        revised = {w.rank: w for w in resolved.revisions}
+        assert revised[1693].article == "el"
+        assert revised[223].article is None
+
+    def test_the_originals_are_left_alone(self) -> None:
+        """Decisions and the rejection record key on the notes in the deck."""
+        candidate = segundo_candidate()
+        (resolved,) = edit([candidate], {"word-0": "segundo/a"}, then=["k"])
+
+        assert resolved.words == candidate.words
+        assert resolved.current_words != candidate.words
+
+    def test_cancelling_discards_the_edit(self) -> None:
+        (resolved,) = edit(
+            [segundo_candidate()],
+            {"word-0": "segundo/a"},
+            finish="ctrl+x",
+            then=["k"],
+        )
+
+        assert not resolved.is_revised
+        assert resolved.revisions is None
+
+    def test_an_unparseable_part_of_speech_is_rejected(self) -> None:
+        """A bad edit must not take down the session."""
+        (resolved,) = edit(
+            [segundo_candidate()],
+            {"pos-0": "not-a-part-of-speech"},
+            then=["ctrl+x", "k"],
+        )
+
+        assert not resolved.is_revised
+        assert resolved.disposition is triage.Disposition.KEEP_SEPARATE
+
+    def test_editing_does_not_decide(self) -> None:
+        """Rewriting is a separate act from choosing what happens to the group."""
+        (resolved,) = edit([segundo_candidate()], {"word-0": "segundo/a"}, then=["q"])
+
+        assert resolved.is_revised
+        assert resolved.disposition is triage.Disposition.REVIEW
+
+    def test_editing_stays_on_the_same_group(self) -> None:
+        candidates = [segundo_candidate(), make_candidate("cura")]
+        resolved = edit(candidates, {"word-0": "segundo/a"}, then=["k", "m"])
+
+        assert resolved[0].disposition is triage.Disposition.KEEP_SEPARATE
+        assert resolved[1].disposition is triage.Disposition.MERGE
+
+    def test_an_untouched_editor_records_no_revision(self) -> None:
+        """Opening and saving without changing anything is not an edit."""
+        (resolved,) = edit([segundo_candidate()], {}, then=["k"])
+
+        assert triage.collect_revisions([resolved]) == ()
+
+    def test_revisions_survive_the_triage_file(self, tmp_path) -> None:
+        (resolved,) = edit([segundo_candidate()], {"word-0": "segundo/a"}, then=["k"])
+        path = tmp_path / "triage.json"
+        triage.write_triage_file(path, [resolved])
+
+        (restored,) = triage.read_triage_file(path)
+        assert restored.is_revised
+        assert {w.word for w in restored.revisions} == {"segundo/a", "segundo"}
+        assert {w.word for w in restored.words} == {"segundo"}
+
+    def test_collect_revisions_returns_only_what_changed(self) -> None:
+        (resolved,) = edit([segundo_candidate()], {"word-0": "segundo/a"}, then=["k"])
+
+        (changed,) = triage.collect_revisions([resolved])
+        assert changed.rank == 223
+        assert changed.word == "segundo/a"
