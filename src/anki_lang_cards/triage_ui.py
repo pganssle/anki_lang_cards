@@ -105,6 +105,12 @@ class SentencesView(Static):
     is no scrolling and nothing is hidden behind a smaller view of itself: "v"
     turns the page, so every sentence is reachable without the reader having to
     notice that the pane was cut off at the bottom.
+
+    The offset is shared across the panes on screen so that they stay roughly in
+    step, but a pane that runs out of sentences stops rather than going blank:
+    it settles on its last full page and stays there while the others catch up.
+    A note with one sentence and a note with ten are a normal pairing, and the
+    short one going empty on the second press is no use to anyone.
     """
 
     # Not "offset": `Widget.offset` is a reactive holding the widget's position,
@@ -123,7 +129,7 @@ class SentencesView(Static):
         self.per_page = per_page
         """Sentences to show, or None to fit as many as the pane holds."""
 
-    def fitting(self, width: int, height: int) -> int:
+    def capacity(self, width: int, height: int) -> int:
         """How many whole sentences fit in a pane of this size.
 
         Measured from the wrapped lines rather than assumed, since a sentence
@@ -132,11 +138,11 @@ class SentencesView(Static):
         short for even that should clip a sentence, not show nothing and leave
         "v" with nothing to advance by.
         """
-        sentences = self.word.sentences[self.start :]
+        sentences = self.word.sentences
         if not sentences:
             return 0
         if self.per_page is not None:
-            return min(max(self.per_page, 1), len(sentences))
+            return max(self.per_page, 1)
         available = max(height - 1, 1)  # one line for the counter
         used = 0
         for count, sentence in enumerate(sentences):
@@ -144,6 +150,15 @@ class SentencesView(Static):
             if used > available:
                 return max(count, 1)
         return len(sentences)
+
+    def page_start(self, capacity: int) -> int:
+        """Where this pane's page actually begins, once it has run out.
+
+        Past the end it holds at the last full page rather than sliding into
+        empty space, so the shared offset can keep moving for the panes that
+        still have sentences left.
+        """
+        return max(0, min(self.start, len(self.word.sentences) - capacity))
 
     def render(self) -> str:
         sentences = self.word.sentences
@@ -155,16 +170,16 @@ class SentencesView(Static):
             # Before the first layout pass the pane has no size to measure.
             count = _FALLBACK_PER_PAGE
         else:
-            count = self.fitting(width, height)
+            count = self.capacity(width, height)
 
-        shown = sentences[self.start : self.start + count]
+        start = self.page_start(count)
+        shown = sentences[start : start + count]
         lines = [
             line for sentence in shown for line in _sentence_block(sentence, width)
         ]
 
-        first = self.start + 1
-        last = self.start + len(shown)
         if len(sentences) > len(shown):
+            first, last = start + 1, start + len(shown)
             lines.append(f"[dim]{first}–{last} of {len(sentences)} — v for more[/]")
         else:
             lines.append(f"[dim]{len(sentences)} sentences[/]")
@@ -369,24 +384,31 @@ class TriageScreen(Screen):
         return self._offset
 
     def _page_size(self) -> int:
-        """How many sentences the narrowest pane on screen can show.
+        """How many sentences the smallest pane on screen can show.
 
         The panes advance together so that the notes stay side by side and
         comparable, which means the page is as big as the smallest of them.
         """
+        if self._per_page is not None:
+            return max(self._per_page, 1)
         views = tuple(self.query(SentencesView))
         if not views:
             return _FALLBACK_PER_PAGE
-        if self._per_page is not None:
-            return max(self._per_page, 1)
-        return max(min(view.fitting(*view.size) for view in views), 1)
+        return max(min(view.capacity(*view.size) for view in views), 1)
 
     async def action_more_sentences(self) -> None:
-        total = max(
+        """Move every pane on a page, and start over once they are all at the end.
+
+        The last stop is the last full page of the longest note rather than a
+        page running off its end, so the final press shows a full pane instead
+        of a single trailing sentence.
+        """
+        page = self._page_size()
+        longest = max(
             (len(word.sentences) for word in self.current.current_words), default=0
         )
-        advanced = self._offset + self._page_size()
-        self._offset = 0 if advanced >= total else advanced
+        final = max(0, longest - page)
+        self._offset = 0 if self._offset >= final else min(self._offset + page, final)
         self.refresh_content()
 
     @textual.work

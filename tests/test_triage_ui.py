@@ -504,22 +504,44 @@ class TestSentenceCarousel:
         ("height", "expected"),
         [(5, 1), (9, 2), (17, 4), (100, 9)],
     )
-    def test_fitting_counts_whole_sentences(self, height: int, expected: int) -> None:
+    def test_capacity_counts_whole_sentences(self, height: int, expected: int) -> None:
         view = triage_ui.SentencesView(self.wordy(9))
-        assert view.fitting(60, height) == expected
+        assert view.capacity(60, height) == expected
 
     def test_at_least_one_sentence_is_always_reported(self) -> None:
         """A pane with no room should clip, not leave "v" nothing to move by."""
         view = triage_ui.SentencesView(self.wordy(9))
-        assert view.fitting(20, 1) == 1
+        assert view.capacity(20, 1) == 1
 
     def test_a_note_with_no_sentences_fits_nothing(self) -> None:
-        assert triage_ui.SentencesView(self.wordy(0)).fitting(60, 20) == 0
+        assert triage_ui.SentencesView(self.wordy(0)).capacity(60, 20) == 0
 
-    def test_fitting_accounts_for_wrapping(self) -> None:
+    def test_capacity_accounts_for_wrapping(self) -> None:
         """A book sentence in a narrow column runs to more lines than a short one."""
         view = triage_ui.SentencesView(self.wordy(9))
-        assert view.fitting(20, 20) < view.fitting(200, 20)
+        assert view.capacity(20, 20) < view.capacity(200, 20)
+
+    def test_capacity_does_not_depend_on_the_page(self) -> None:
+        """The pane holds as much on its last page as on its first."""
+        first = triage_ui.SentencesView(self.wordy(9), start=0)
+        last = triage_ui.SentencesView(self.wordy(9), start=8)
+        assert first.capacity(60, 17) == last.capacity(60, 17)
+
+    @pytest.mark.parametrize(
+        ("sentences", "start", "capacity", "expected"),
+        [
+            (10, 0, 3, 0),
+            (10, 3, 3, 3),
+            (10, 9, 3, 7),  # past the end: hold at the last full page
+            (1, 6, 3, 0),  # a one-sentence note never moves
+            (2, 6, 3, 0),  # fewer sentences than a page: still from the top
+        ],
+    )
+    def test_a_pane_holds_at_its_last_full_page(
+        self, sentences: int, start: int, capacity: int, expected: int
+    ) -> None:
+        view = triage_ui.SentencesView(self.wordy(sentences), start=start)
+        assert view.page_start(capacity) == expected
 
     def test_pressing_v_turns_the_page(self) -> None:
         async def scenario() -> list[list[str]]:
@@ -543,7 +565,9 @@ class TestSentenceCarousel:
         pages = run(scenario())
         assert pages[0] == ["0", "1"]
         assert pages[1] == ["2", "3"]
-        assert pages[4] == ["8"]
+        # The last stop is a full page, not a page hanging off the end.
+        assert pages[3] == ["6", "7"]
+        assert pages[4] == ["7", "8"]
         assert pages[5] == ["0", "1"], "the carousel wraps"
 
     def test_the_page_resets_when_moving_to_another_group(self) -> None:
@@ -641,3 +665,65 @@ class TestSides:
             disposition=triage.Disposition.MERGE,
         )
         assert answered[0].key != inner.key
+
+
+class TestUnevenSentenceCounts:
+    """A short note must not go blank while a long one pages."""
+
+    @staticmethod
+    def note(count: int, tag: str) -> types.Word:
+        return types.Word(
+            rank=1,
+            word="w",
+            meaning="m",
+            part_of_speech="nm",
+            article=None,
+            sentences=tuple(
+                types.Sentence(spanish=f"{tag}{i} frase.", english="", source=None)
+                for i in range(count)
+            ),
+        )
+
+    def pages(self, presses: int, per_page: int = 3) -> list[tuple[list, list]]:
+        candidate = triage.Candidate(
+            words=(self.note(10, "L"), self.note(1, "S")),
+            reason=triage.Reason.COMPATIBLE,
+            comparison=definition_similarity.Comparison(1.0, frozenset()),
+            disposition=triage.Disposition.REVIEW,
+        )
+
+        async def scenario():
+            app = triage_ui.TriageApp([candidate], per_page=per_page)
+            seen = []
+            async with app.run_test(size=(160, 50)) as pilot:
+                await pilot.pause()
+                for _ in range(presses):
+                    views = list(app.screen.query(triage_ui.SentencesView))
+                    seen.append(
+                        (
+                            re.findall(r"\bL(\d+)\b", views[0].render()),
+                            re.findall(r"\bS(\d+)\b", views[1].render()),
+                        )
+                    )
+                    await pilot.press("v")
+                    await pilot.pause()
+            return seen
+
+        return run(scenario())
+
+    def test_the_short_note_never_goes_blank(self) -> None:
+        for _, short in self.pages(5):
+            assert short == ["0"]
+
+    def test_the_long_note_pages_through_all_of_them(self) -> None:
+        seen = {index for long, _ in self.pages(5) for index in long}
+        assert seen == {str(i) for i in range(10)}
+
+    def test_the_last_page_is_full(self) -> None:
+        """Rather than a single trailing sentence with empty space beside it."""
+        long_pages = [long for long, _ in self.pages(5)]
+        assert long_pages[3] == ["7", "8", "9"]
+
+    def test_it_wraps_once_the_longest_is_at_its_end(self) -> None:
+        long_pages = [long for long, _ in self.pages(5)]
+        assert long_pages[4] == ["0", "1", "2"]
