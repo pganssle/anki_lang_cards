@@ -13,9 +13,8 @@ from collections.abc import (
     MutableMapping,
     MutableSequence,
     Sequence,
-    Set,
 )
-from typing import Any, Final, Self, TypeAlias
+from typing import Final, Self, TypeAlias
 
 import attrs
 
@@ -24,6 +23,13 @@ from . import headword
 from . import part_of_speech as pos
 
 _BucketKeyType: TypeAlias = tuple[str, pos.BasePoS]
+
+
+def _write_to_csv(lines: Iterable[Sequence[object]]) -> str:
+    """Render rows as CSV text, for the cache serialization below."""
+    buffer = io.StringIO()
+    csv.writer(buffer).writerows(lines)
+    return buffer.getvalue().strip()
 
 
 class WordLookup:
@@ -301,156 +307,3 @@ def merge_word_set(words: Collection[types.Word]) -> types.Word:
         out.update(next_word)
 
     return out
-
-
-def find_existing_words(
-    new_words: Iterable[types.Word],
-    existing_words: WordLookup,
-) -> Iterable[tuple[types.Word, Sequence[types.Word]]]:
-    """Finds words that already exist in the word lookup object.
-
-    Yields:
-        A tuple containing the original word and the group of existing words.
-    """
-    for word in new_words:
-        if found := existing_words.lookup(word):
-            yield (word, found)
-
-
-def find_conflicting_word_sets(
-    new_words: Iterable[types.Word], existing_words: WordLookup
-) -> Iterable[Set[types.Word]]:
-    """Find sets of words with the same term and part of speech that are unequal.
-
-    This mostly comes down to the same words with slightly different definitions,
-    words with different ranks, and words with the same base part of speech but
-    different characteristics (e.g. "vtr" vs "v").
-
-    Arguments:
-        new_words: New words that may be incompatible with the contents of the
-            existing words.
-
-        existing_words: An indexed lookup object containing sets of words grouped
-            by the same characteristics that are used to consider two words
-            "the same" for purposes of finding conflicts.
-
-    Yields:
-        Immutable sets containing the groups of incompatible word objects
-
-    """
-    for word, matching_words in find_existing_words(new_words, existing_words):
-        if any(mw != word for mw in matching_words):
-            # For `Word` objects, neither `__eq__` nor `__hash__` include things like
-            # rank and sentence, but we want to retain that information, so when
-            # we find non-conflicting words within the matching words, we need
-            # to merge them together before adding them to the final word set.
-            #
-            # TODO: This may already be sort of handled by later merging logic,
-            # but it is currently causing a display issue where merge conflicts
-            # get resolved without the full information available.
-            #
-            # TODO: Look into whether this can be fixed by adjusting how hashing
-            # and equality work instead
-            words_out = {word: word}
-            for mw in matching_words:
-                if mw in words_out:
-                    existing = copy.copy(words_out.pop(mw))
-                    existing.update(mw)
-                    words_out[existing] = existing
-                else:
-                    words_out[mw] = mw
-            yield frozenset(words_out)
-
-
-def find_merged_outputs(
-    conflict_sets: Iterable[Set[types.Word]],
-    output_words: WordLookup,
-    merge_cache: MergeCache,
-) -> Iterable[MergeOperation | Set[types.Word]]:
-    """Find conflicts that have already been resolved and output.
-
-    This is for the situation where earlier runs of the program have involved
-    resolving a conflict in word defintiions and the value has been sent to
-    the output. This would normally invalidate the merge operation cache,
-    because now the merged output is an additional conflicting word to merge
-    with the other words, so we want to check if the output in `output_words`
-    already exists in the merge cache.
-
-    Arguments:
-        conflict_sets: An output from `find_conflicting_word_sets` which has
-            been run on the inputs to be resolved *excluding* `output_words`.
-        output_words: A WordLookup calculated from the output of an earlier
-            run.
-        merge_cache: The cached results of previous merges.
-
-    Yields:
-        Yields the merged words from the word cache.
-    """
-    for word_set in conflict_sets:
-        if (
-            merge_operation := merge_cache.get_merge(word_set)
-        ) is not None and merge_operation.result in output_words:
-            ow_set = output_words.lookup(merge_operation.result)
-            if len(ow_set) == 1 and next(iter(ow_set)) == merge_operation.result:
-                yield merge_operation
-                continue
-        yield word_set
-
-
-def filter_merged_outputs(
-    conflict_sets: Iterable[Set[types.Word]],
-    output_words: WordLookup,
-    merge_cache: MergeCache,
-) -> Iterable[Set[types.Word]]:
-    """Wrapper around `find_merged_outputs` that removes already merged outputs."""
-    for set_or_merge_op in find_merged_outputs(
-        conflict_sets, output_words, merge_cache
-    ):
-        if not isinstance(set_or_merge_op, MergeOperation):
-            yield set_or_merge_op
-
-
-def print_conflicts(
-    to_merge: Iterable[Set[types.Word]],
-    max_words: int | None = None,
-    *,
-    print_func=print,
-) -> None:
-    """Print out the set of conflicting words in a way that is somewhat readable."""
-    if max_words is None:
-        limit = itertools.repeat(None)
-    else:
-        limit = itertools.repeat(None, max_words)
-
-    def render_word(word: types.Word) -> str:
-        if word.part_of_speech.base_pos == pos.BasePoS.NOUN and word.article:
-            output = [f"{word.article} {word.word}"]
-        else:
-            output = [f"{word.word}"]
-
-        output.append(f"({word.part_of_speech})")
-        output.append(f"{word.meaning} ({len(word.sentences)}s)")
-        return " ".join(output)
-
-    for word_set, _ in zip(to_merge, limit):
-        if len(word_set) == 1:
-            continue
-        if len(word_set) == 2:
-            w1, w2 = word_set
-            print_func(f"  {render_word(w1)} !=")
-            print_func(f"    {render_word(w2)}")
-        else:
-            wi = iter(word_set)
-            w = next(wi)
-
-            print_func(f"  {render_word(w)} !=")
-            for w in wi:
-                print_func(f"    {render_word(w)}")
-
-
-def _write_to_csv(lines: Sequence[Sequence[Any]]) -> str:
-    f = io.StringIO()
-    writer = csv.writer(f)
-    writer.writerows(lines)
-    f.seek(0)
-    return f.read()

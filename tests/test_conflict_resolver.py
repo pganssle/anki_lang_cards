@@ -187,39 +187,25 @@ def test_lookup_of_absent_word_is_empty() -> None:
     assert lookup.lookup(make_word("gato", "nm")) == ()
 
 
-def test_find_conflicting_word_sets_ignores_identical_words() -> None:
-    existing = make_word("perro", "nm", meaning="dog", rank=1)
-    new = make_word("perro", "nm", meaning="dog", rank=1)
-
-    conflicts = list(
-        conflict_resolver.find_conflicting_word_sets(
-            [new], conflict_resolver.WordLookup([existing])
-        )
+def test_wildcard_parts_of_speech_share_a_group() -> None:
+    """The bug the bucket-and-compare rewrite fixed: "nm" beside "n" never
+    landed in one group, so the pair never surfaced as a possible duplicate."""
+    lookup = conflict_resolver.WordLookup(
+        [
+            make_word("trepa", "nm", meaning="social climber", rank=8576),
+            make_word("trepa", "n", meaning="climber", rank=9615),
+        ]
     )
-    assert conflicts == []
+    (group,) = tuple(lookup)
+    assert {w.meaning for w in group} == {"social climber", "climber"}
 
 
-def test_find_conflicting_word_sets_reports_wildcard_matches() -> None:
-    """The bug this replaced: "nm" vs "n" never reached the conflict list."""
-    existing = make_word("trepa", "nm", meaning="social climber", rank=8576)
-    new = make_word("trepa", "n", meaning="climber", rank=9615)
-
-    conflicts = list(
-        conflict_resolver.find_conflicting_word_sets(
-            [new], conflict_resolver.WordLookup([existing])
-        )
+def test_gender_splits_stay_in_separate_groups() -> None:
+    """ "el cura" and "la cura" are two cards; grouping them would merge them."""
+    lookup = conflict_resolver.WordLookup(
+        [
+            make_word("cura", "nm", meaning="priest", rank=1790),
+            make_word("cura", "nf", meaning="cure", rank=9000),
+        ]
     )
-    assert len(conflicts) == 1
-    assert {w.meaning for w in conflicts[0]} == {"social climber", "climber"}
-
-
-def test_find_conflicting_word_sets_leaves_gender_splits_alone() -> None:
-    existing = make_word("cura", "nm", meaning="priest", rank=1790)
-    new = make_word("cura", "nf", meaning="cure", rank=9000)
-
-    conflicts = list(
-        conflict_resolver.find_conflicting_word_sets(
-            [new], conflict_resolver.WordLookup([existing])
-        )
-    )
-    assert conflicts == []
+    assert len(tuple(lookup)) == 2

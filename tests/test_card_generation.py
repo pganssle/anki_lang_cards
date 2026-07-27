@@ -20,10 +20,11 @@ import sys
 from collections.abc import Mapping, Sequence
 from typing import Final, NamedTuple
 
+import attrs
 import pytest
 
 from anki_lang_cards import _types as types
-from anki_lang_cards import anki_import
+from anki_lang_cards import anki_import, definition_similarity
 
 try:
     import llm_fake_cards  # noqa: F401
@@ -654,3 +655,136 @@ def test_configured_dialect_reaches_the_prompt(
     assert cached_prompts
     for prompt in cached_prompts:
         assert "Martian Spanish" in prompt
+
+
+#####
+# Deduplication in the main pipeline
+def _run_main_raw(
+    workdir: pathlib.Path,
+    inputs: pathlib.Path,
+    dictionaries: DictionaryPaths,
+    extra_args: Sequence[str] = (),
+) -> subprocess.CompletedProcess:
+    """Like _run_main, but reusable in one workdir and tolerant of failure."""
+    config_path = _write_config(workdir, dictionaries)
+    output_dir = workdir / "output"
+    output_dir.mkdir(exist_ok=True)
+    return subprocess.run(
+        (
+            sys.executable,
+            "-m",
+            "anki_lang_cards",
+            "--inputs",
+            str(inputs),
+            "--output",
+            str(output_dir / "output.csv"),
+            "--model-service",
+            "anthropic",
+            "--model-name",
+            "fake-cards",
+            "--config",
+            str(config_path),
+            "--exported-deck",
+            str(CARDS_DIR / "exported_deck.txt"),
+            "--diff-output",
+            str(output_dir / "diff.csv"),
+            *extra_args,
+        ),
+        capture_output=True,
+        text=True,
+        cwd=workdir,
+    )
+
+
+def test_main_run_twice_emits_nothing_new(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """A rerun is a no-op: the output CSV read back is the resume state."""
+    workdir = tmp_path_factory.mktemp("rerun")
+    first = _run_main_raw(workdir, CARDS_DIR / "words.csv", dictionary_paths)
+    assert first.returncode == 0, first.stderr
+    output_csv = workdir / "output" / "output.csv"
+    before = output_csv.read_bytes()
+
+    second = _run_main_raw(workdir, CARDS_DIR / "words.csv", dictionary_paths)
+
+    assert second.returncode == 0, second.stderr
+    assert output_csv.read_bytes() == before
+    assert "Found 0 new or updated words." in second.stdout
+
+
+def _conflicting_inputs(workdir: pathlib.Path) -> pathlib.Path:
+    """An input that collides with the deck's "existente" without matching it."""
+    path = workdir / "conflicting.csv"
+    path.write_text(
+        "rank,word,part_of_speech,meaning,spanish_sentence,english_sentence,"
+        "frequency,image,article,sentence_source,note,example_sentences,"
+        "model_used,tags\n"
+        ",existente,nm,extant word,,,,,el,,,,,\n"
+    )
+    return path
+
+
+def test_main_exits_3_on_an_unanswered_duplicate(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """Headless, an unanswered group stops the run before the LLM is used."""
+    workdir = tmp_path_factory.mktemp("undecided")
+    inputs = _conflicting_inputs(workdir)
+
+    result = _run_main_raw(workdir, inputs, dictionary_paths, ("--no-ui",))
+
+    assert result.returncode == 3, result.stderr
+    assert "Generating sentences" not in result.stdout
+    assert not (workdir / "output" / "output.csv").exists()
+    pending = json.loads((workdir / "output" / "merge_candidates.json").read_text())
+    assert len(pending) == 1
+    assert "existente" in pending[0]["words"]
+
+
+def test_main_replays_a_recorded_answer_headlessly(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """A decision recorded anywhere (UI, file, another script) settles the
+    pipeline's question too: the caches are shared."""
+    from anki_lang_cards import triage
+
+    workdir = tmp_path_factory.mktemp("recorded")
+    inputs = _conflicting_inputs(workdir)
+
+    deck_copy = types.Word(
+        rank=1400,
+        word="existente",
+        meaning="existing word",
+        part_of_speech="nm",
+        article=None,
+        sentences=(),
+    )
+    incoming = types.Word(
+        rank=None,
+        word="existente",
+        meaning="extant word",
+        part_of_speech="nm",
+        article="el",
+        sentences=(),
+    )
+    decisions = triage.DecisionCache(workdir / ".cache" / "merges" / "decisions.json")
+    decisions.remember(
+        triage.Candidate(
+            words=(deck_copy, incoming),
+            reason=triage.Reason.COMPATIBLE,
+            comparison=definition_similarity.Comparison(1.0, frozenset()),
+            disposition=triage.Disposition.MERGE,
+            replacements=(
+                attrs.evolve(deck_copy, meaning="existing word, extant word"),
+            ),
+        )
+    )
+    decisions.save()
+
+    result = _run_main_raw(workdir, inputs, dictionary_paths, ("--no-ui",))
+
+    assert result.returncode == 0, result.stderr
+    words = _words_by_headword(workdir / "output" / "output.csv")
+    assert words["existente"].meaning == "existing word, extant word"
+    assert words["existente"].rank == 1400

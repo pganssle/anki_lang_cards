@@ -4,23 +4,39 @@ import csv
 import itertools
 import operator
 import pathlib
+import sys
 from collections.abc import Callable, Sequence
 from typing import Any, Final
 
 import attrs
 
 from . import _types as types
-from . import anki_import, caches, config, conflict_resolver, prompts, query
+from . import (
+    anki_import,
+    apply_merges,
+    caches,
+    config,
+    conflict_resolver,
+    dedup_flow,
+    prompts,
+    query,
+    triage,
+)
 
 try:
-    from . import word_merger
+    import textual  # noqa: F401
 except ImportError:
-    _word_merger_import_successful = False
+    _textual_import_successful = False
 else:
-    _word_merger_import_successful = True
+    _textual_import_successful = True
 
-WORD_MERGER_AVAILABLE: Final[bool] = _word_merger_import_successful
-del _word_merger_import_successful
+UI_AVAILABLE: Final[bool] = _textual_import_successful
+del _textual_import_successful
+
+EXIT_DECISIONS_NEEDED: Final[int] = 3
+"""The run stopped before the LLM because duplicates need answers; the
+pending file says which. Distinct from 1 so a harness can tell "answer and
+re-run" from "look at a traceback"."""
 
 
 def _unique(s: Sequence[str], key: Callable[[str], Any] | None = None) -> Sequence[str]:
@@ -75,6 +91,104 @@ def _make_api_obj(
         raise ValueError(f"Unknown model service: {service}")
 
     return model_api
+
+
+@attrs.frozen
+class Classification:
+    """Where each word the run touched goes next."""
+
+    to_llm: tuple[types.Word, ...]
+    """Under the sentence target; sent for generation."""
+
+    include_directly: tuple[types.Word, ...]
+    """Changed and already full of sentences; written straight to the output."""
+
+    skipped: tuple[types.Word, ...]
+    """Already emitted by an earlier run with nothing new to add."""
+
+
+def _decided_ranks(outcome: apply_merges.Outcome) -> frozenset[int]:
+    """Ranks changed by an actual answer, as opposed to mechanical dedup.
+
+    A deck note merged with an equal input copy is bookkeeping, not an update
+    — the note reads the same — so automatic merges do not count. Decided
+    merges, rewrites and splits all changed what a card says.
+    """
+    ranks: set[int] = {w.rank for w in outcome.revised if w.rank is not None}
+    for merge in outcome.merges:
+        if merge.decided:
+            ranks |= {
+                w.rank for w in (merge.result, *merge.sources) if w.rank is not None
+            }
+    for split in outcome.splits:
+        ranks |= {w.rank for w in (*split.cards, *split.sources) if w.rank is not None}
+    return frozenset(ranks)
+
+
+def _classify_for_generation(
+    selected: Sequence[types.Word],
+    *,
+    inputs_wl: conflict_resolver.WordLookup,
+    deck_wl: conflict_resolver.WordLookup,
+    output_wl: conflict_resolver.WordLookup,
+    decided_ranks: frozenset[int],
+    max_sentences: int,
+) -> Classification:
+    """Sort the deduplicated words into what happens to each next.
+
+    The reasoning is the old classification's, applied after merging instead
+    of interleaved with it: a word already emitted to the output CSV is only
+    interesting again when it gained sentences (and then it keeps its new
+    sentences first, with the output's extras appended); a word under the
+    sentence target goes to the LLM whether or not anything else changed; a
+    word at the target is written directly only when something about it
+    actually changed — an answered decision, sentences the deck lacks, being
+    new, or the input carrying sentences of its own.
+    """
+    to_llm: list[types.Word] = []
+    include: list[types.Word] = []
+    skipped: list[types.Word] = []
+
+    for word in selected:
+        prior = output_wl.lookup(word)
+        if prior:
+            prior_merged = conflict_resolver.merge_word_set(tuple(prior))
+            if not set(word.sentences) - set(prior_merged.sentences):
+                skipped.append(word)
+                continue
+            sentences = list(word.sentences)
+            seen = set(sentences)
+            for sentence in itertools.chain.from_iterable(w.sentences for w in prior):
+                if sentence not in seen:
+                    sentences.append(sentence)
+                    seen.add(sentence)
+            word = attrs.evolve(word, sentences=tuple(sentences))
+            updated = True
+        else:
+            in_deck = deck_wl.lookup(word)
+            updated = (
+                (word.rank is not None and word.rank in decided_ranks)
+                or not in_deck
+                or bool(
+                    set(word.sentences)
+                    - set(conflict_resolver.merge_word_set(tuple(in_deck)).sentences)
+                )
+            )
+        if any(input_word.sentences for input_word in inputs_wl.lookup(word)):
+            updated = True
+
+        if len(word.sentences) < max_sentences:
+            to_llm.append(word)
+        elif updated:
+            include.append(word)
+        else:
+            skipped.append(word)
+
+    return Classification(
+        to_llm=tuple(to_llm),
+        include_directly=tuple(include),
+        skipped=tuple(skipped),
+    )
 
 
 async def main():
@@ -149,20 +263,42 @@ async def main():
     )
 
     parser.add_argument(
-        "--conflict-cache-behavior",
-        type=str,
-        default="SKIP",
-        help="When resolving conflicts, how to handle cache hits. Options:\n"
-        "  SKIP: Use cached value without review.\n"
-        "  REVIEW: Load cached values into the UI for review.\n"
-        "  IGNORE: Ignore cached values.",
-    )
-
-    parser.add_argument(
         "--conflict-cache-path",
         type=pathlib.Path,
         default=pathlib.Path(".cache/merges/merged.json"),
-        help="Location of caches for resolving word conflicts.",
+        help="Legacy merge-wording cache, consulted for merges decided "
+        "before decisions carried their wording.",
+    )
+
+    parser.add_argument(
+        "--decision-cache",
+        type=pathlib.Path,
+        default=pathlib.Path(".cache/merges/decisions.json"),
+        help="Record of duplicate-group answers; shared with the merge "
+        "scripts so a decision is only ever made once.",
+    )
+
+    parser.add_argument(
+        "--pending-file",
+        type=pathlib.Path,
+        default=pathlib.Path("output/merge_candidates.json"),
+        help="Where unanswered duplicate groups are written when no UI can "
+        "ask about them (exit code 3).",
+    )
+
+    parser.add_argument(
+        "--superseded-output",
+        type=pathlib.Path,
+        default=pathlib.Path("output/superseded_notes.csv"),
+        help="Where to list existing notes a merge replaced, which importing "
+        "cannot delete; written only when there are any.",
+    )
+
+    parser.add_argument(
+        "--no-ui",
+        action="store_true",
+        help="Never open the duplicate-resolution screen; write unanswered "
+        "groups to the pending file and exit 3 instead.",
     )
 
     parser.add_argument("--deck-name", type=str, default="Spanish::Vocab by Frequency")
@@ -185,19 +321,6 @@ async def main():
 
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be a positive integer")
-
-    if WORD_MERGER_AVAILABLE:
-        match args.conflict_cache_behavior:
-            case "SKIP":
-                conflict_cache_behavior = word_merger.CacheHitBehavior.SKIP
-            case "REVIEW":
-                conflict_cache_behavior = word_merger.CacheHitBehavior.REVIEW
-            case "IGNORE":
-                conflict_cache_behavior = word_merger.CacheHitBehavior.IGNORE
-            case _:
-                raise ValueError(
-                    f"Unknown conflict cache behavior: {args.conflict_cache_behavior}"
-                )
 
     deck_name = args.deck_name
 
@@ -242,8 +365,6 @@ async def main():
             else:
                 start_rank_at = args.start_rank_at
 
-    has_sentences: set[types.Word] = {word for word in words if len(word.sentences)}
-
     config_file = pathlib.Path(args.config)
     if not config_file.exists():
         print(f"Config file {config.abs()} does not exist.")
@@ -251,15 +372,8 @@ async def main():
     else:
         conf_obj = config.Config.from_file(config_file)
 
-    # This seems like it can be dramatically simplified, but we need to make it
-    # so that after we have placed a resolved conflict into the output, we can
-    # detect that the output is the cache we've already resolved. HOWEVER, we
-    # also want to be able to handle the situation where there is a conflict
-    # between an updated word in the current output and a NEW word that was not
-    # included in the merge resolution.
-
     # Words from the input CSV
-    new_words_wl = conflict_resolver.WordLookup(words)
+    inputs_wl = conflict_resolver.WordLookup(words)
 
     # Words from Anki Connect or the exported deck
     current_deck_wl = conflict_resolver.WordLookup(current_deck)
@@ -268,184 +382,65 @@ async def main():
     # may or may not have been imported to the deck already.
     output_wl = conflict_resolver.WordLookup(output_words)
 
-    new_and_existing = conflict_resolver.WordLookup(
-        itertools.chain(*new_words_wl, current_deck)
-    )
-
-    # This gets a single exemplar `Word` object for each word in the new words
-    # imported from the CSV (a given word may appear more than once, and
-    # it would show up in the `new_words_wl` as a set of words).
-    unique_new_words = [next(iter(s)) for s in new_words_wl]
-
-    # Reads a cache from disk mapping sets of words to a single merged word
+    decisions = triage.DecisionCache(args.decision_cache)
     merge_cache = conflict_resolver.MergeCache(args.conflict_cache_path)
 
-    # This finds all words which should map to the same card, but cannot
-    # because they are not exactly equal (usually the definition is slightly
-    # different). These may need manual merging; it is a lazy iterable.
-    conflict_sets = conflict_resolver.find_conflicting_word_sets(
-        unique_new_words, new_and_existing
+    result = await dedup_flow.resolve_duplicates(
+        words,
+        current_deck,
+        decisions=decisions,
+        merge_cache=merge_cache,
+        interactive=UI_AVAILABLE and not args.no_ui,
     )
+    outcome = result.outcome
 
-    # There are two ways that a word in the conflict set may already have been
-    # resolved: 1. it could be in the merge_cache or 2. it could already be
-    # in the output CSV. In both of these cases, we don't need to show it to
-    # the user for manual merge resolution, so we filter these out.
-    to_merge = list(
-        conflict_resolver.filter_merged_outputs(conflict_sets, output_wl, merge_cache)
-    )
+    if result.rank_only_decisions:
+        print(
+            f"WARNING: {len(result.rank_only_decisions)} recorded decisions "
+            "match this run's notes by rank only — the notes' text has "
+            "changed since they were answered. Look before trusting these:"
+        )
+        for group in result.rank_only_decisions:
+            for w in sorted(group):
+                print(f"  {w.rank} {w.word} ({w.part_of_speech}) {w.meaning}")
 
-    if to_merge:
-        # `textual` is an optional depdendency; if it isn't installed, you cannot
-        # use the TUI to do merge resolution.
-        if WORD_MERGER_AVAILABLE:
-            merge_results = await word_merger.merge_words(
-                to_merge,
-                cache=merge_cache,
-                cache_behavior=conflict_cache_behavior,
-            )
-            if merge_results is None:
-                # The merge UI died or was dismissed without returning
-                # results. Merges accepted before that point were saved to
-                # the merge cache, so a re-run picks up where this left off.
-                raise RuntimeError(
-                    "The merge UI exited without returning results; "
-                    "re-run to continue from the merges cached so far."
-                )
-
-            conflicting_sets = dict(zip(to_merge, merge_results, strict=True))
-        else:
-            conflict_resolver.print_conflicts(to_merge)
-
-            import sys
-
-            print(
-                f"Found {len(to_merge)} unresolved conflicts, cannot proceed.",
-                file=sys.stderr,
-            )
+    if result.interrupted:
+        # Nothing reaches the LLM until every duplicate this import raises
+        # has an answer; a silent skip here used to hide unresolved groups.
+        print(f"{len(result.pending)} duplicate groups still need an answer:")
+        for candidate in result.pending:
+            for line in candidate.summarize():
+                print(f"  {line}")
+        if UI_AVAILABLE and not args.no_ui:
+            print("Answers made so far were saved; re-run to continue.")
             sys.exit(1)
-    else:
-        conflicting_sets = {}
+        dedup_flow.write_pending_file(args.pending_file, result.pending)
+        print(
+            f'Edit {args.pending_file} (set "disposition"; a merge with no '
+            '"replacements" accepts the proposal) and re-run.'
+        )
+        sys.exit(EXIT_DECISIONS_NEEDED)
 
-    # TODO: Handle the case where the word itself is changed during the merging
-    # process and this results in a new conflict between the (updated) merged
-    # word and the word that you've added.
-    # TODO: Add a test of some sort for this.
+    # What this run is about: everything an answer or a merge touched, plus
+    # the inputs themselves. Untouched deck notes stay out of the output, and
+    # rank-less words can only have come from the inputs or a split.
+    wanted = outcome.touched_ranks() | {w.rank for w in words if w.rank is not None}
+    split_cards = {id(card) for split in outcome.splits for card in split.cards}
+    selected = [
+        w
+        for w in outcome.words
+        if w.rank is None or w.rank in wanted or id(w) in split_cards
+    ]
 
-    diff_words = []
-    updated: set[types.Word] = set()
-    # This is the logic for which things get sent to the LLM and which don't.
-    # At this point we have a list of unique words, we have them deduplicated,
-    # and we also have resolved all conflicts or have chosen not to resolve
-    # some conflicts. This leaves us with a list of unique words from the input
-    # set, and we need to sort them into several buckets:
-    #
-    # 1. Things that are already in the output set because they were generated
-    #   from an earlier run of this program that didn't (e.g. one with fewer
-    #   conflicts resolved).
-    # 2. Words that are in the output set but have unique new sentences that
-    #    need to be merged into the Anki deck.
-    # 3. Words are in the existing deck and have a full complement of example
-    #    sentences, but need updating because the input set has new example
-    #    sentences (e.g. as a result of annotation extraction).
-    # 4. Words that are in the existing deck and don't have unique new
-    #    sentences.
-    # 5. Words that needed manual conflict resolution.
-    # 6. Words that need conflict resolution but it hasn't been done.
-    # 7. Words that only exist in the inputs.
-    #
-    # Group 1 shouldn't be sent to the LLM or added to the output. Group 2 should
-    # also not be sent to the LLM (unless the earlier run generated fewer sentences
-    # than the current maximum), but should be added to the output (and possibly
-    # removed from the existing output file?). Group 3 should not be sent to the
-    # LLM but should definitely be in the output set. Group 4 should be sent to
-    # the LLM if they don't have enough sentences, but otherwise not.
-    #
-    # Group 5 (which may overlap with other groups) will always need to be
-    # added to the output (and possibly earlier versions of it should be
-    # removed as well). Group 6 should be excluded entirely, since it needs to
-    # be handled after conflicts have been resolved.
-    for word in unique_new_words:
-        # Groups 1 and 2: Already in the output
-        word_set = frozenset(new_and_existing.lookup(word))
-        ew = output_wl.lookup(word)
-
-        if ew:
-            if word_set in conflicting_sets:
-                resolved = conflicting_sets[word_set]
-
-                existing_resolved = conflict_resolver.merge_word_set(ew)
-                if set(resolved.sentences) - set(existing_resolved.sentences):
-                    # Group 2 - New sentences
-                    merged_word = resolved
-                    updated.add(merged_word)
-                else:
-                    # Group 1 - No new sentences
-                    continue
-            else:
-                # Group 1 - Only in output
-                continue
-
-        if (resolved := conflicting_sets.get(word_set)) is not None:
-            if ew:
-                existing_resolved = conflict_resolver.merge_word_set(ew)
-                if set(resolved.sentences) - set(existing_resolved.sentences):
-                    # Group 2 - New sentences, so we need to update it
-                    # Since the values in `ew` haven't already been harmonized
-                    # with those in `resolved`, we are going to just update
-                    # the sentences part.
-                    new_sentences = list(resolved.sentences)
-                    sentence_set = set(new_sentences)
-                    for sentence in itertools.chain.from_iterable(
-                        w.sentences for w in ew
-                    ):
-                        if sentence not in sentence_set:
-                            new_sentences.append(sentence)
-                            sentence_set.add(sentence)
-
-                    merged_word = attrs.evolve(resolved, sentences=new_sentences)
-                    updated.add(merged_word)
-                else:
-                    # Group 1: No new sentences and already in output
-                    continue
-            else:
-                # Group 5: We have a resolution, so we know it has been updated.
-                merged_word = conflicting_sets[word_set]
-                updated.add(merged_word)
-        elif word_set in conflicting_sets:
-            # Group 6
-            w = next(iter(word_set))
-            print(f"Skipping {w.word}: {w.meaning} as unresolved conflict.")
-            continue
-        elif ew:
-            # Group 1 - Only exists in output
-            continue
-        else:
-            # No conflicts with the existing deck or among new words, but
-            # we can be in groups 3, 4 or 7 here. Merge over the full lookup
-            # group rather than `word_set`: the frozenset collapses Word
-            # objects that compare equal, which would throw away the deck
-            # copy's rank and sentences and produce a duplicate card.
-            merged_word = conflict_resolver.merge_word_set(
-                tuple(new_and_existing.lookup(word))
-            )
-            if word not in current_deck_wl or (
-                set(word.sentences)
-                - set(
-                    conflict_resolver.merge_word_set(
-                        current_deck_wl.lookup(word)
-                    ).sentences
-                )
-            ):
-                # If it is not in the current deck, that is group 7
-                # If the merged word has sentences not in the existing deck, that is group 3.
-                updated.add(merged_word)
-
-        if len(merged_word.sentences) < args.max_sentences:
-            diff_words.append(merged_word)
-
-        if word in has_sentences:
-            updated.add(merged_word)
+    classified = _classify_for_generation(
+        selected,
+        inputs_wl=inputs_wl,
+        deck_wl=current_deck_wl,
+        output_wl=output_wl,
+        decided_ranks=_decided_ranks(outcome),
+        max_sentences=args.max_sentences,
+    )
+    diff_words = list(classified.to_llm)
 
     rank = start_rank_at or 5001
 
@@ -462,8 +457,15 @@ async def main():
         % {"dialect": conf_obj.sentences.dialect},
     )
 
-    diff_word_set = set(diff_words)
-    include_without_new_sentences = updated - diff_word_set
+    # Directly-included rows are written with require_rank; a rank-less one —
+    # two annotation words merging while already at the sentence target, a
+    # split's extra card — gets a fresh rank here instead of crashing there.
+    include_without_new_sentences: list[types.Word] = []
+    for word in classified.include_directly:
+        if word.rank is None:
+            word = attrs.evolve(word, rank=rank)
+            rank += 1
+        include_without_new_sentences.append(word)
     diff_words_lookup = conflict_resolver.WordLookup(diff_words)
     diff_out: list[types.Word] = []
     if diff_words:
@@ -524,7 +526,35 @@ async def main():
                 f.write("\n".join(types.Word.make_anki_directives(deck_name)) + "\n")
             writer = csv.writer(f)
             for word in diff_out:
-                writer.writerow(word.to_csv_line(word))
+                writer.writerow(word.to_csv_line(require_rank=True))
+
+    superseded = apply_merges.superseded_notes(outcome, current_deck)
+    if superseded:
+        print(
+            "\nNotes Anki will still hold that nothing will update — "
+            "delete these in Anki:"
+        )
+        for word in superseded:
+            print(f"  {word.rank} {word.word} ({word.part_of_speech}) {word.meaning}")
+        if not args.superseded_output.parent.exists():
+            args.superseded_output.parent.mkdir(parents=True, exist_ok=True)
+        with args.superseded_output.open("w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(("rank", "word", "part_of_speech", "meaning"))
+            writer.writerows(
+                (word.rank, word.word, str(word.part_of_speech), word.meaning)
+                for word in superseded
+            )
+        print(f"  (also written to {args.superseded_output})")
+
+    discarded = apply_merges.discarded_imports(outcome, words, current_deck)
+    if discarded:
+        print(
+            f"\nWARNING: {len(discarded)} notes came out exactly as the deck "
+            "already has them, so the imported version went nowhere:"
+        )
+        for word in discarded:
+            print(f"  {word.rank} {word.word} ({word.part_of_speech}) {word.meaning}")
 
 
 if __name__ == "__main__":
