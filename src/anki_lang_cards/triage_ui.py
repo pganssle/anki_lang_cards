@@ -20,7 +20,7 @@ import attrs
 import textual
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.driver import Driver
 from textual.screen import Screen
 from textual.widget import Widget
@@ -30,7 +30,10 @@ from . import _types as types
 from . import triage, word_merger
 
 _REASON_TEXT: Final[Mapping[triage.Reason, str]] = {
-    triage.Reason.COMPATIBLE: "Same headword, compatible parts of speech.",
+    triage.Reason.COMPATIBLE: (
+        "Same headword and compatible parts of speech, so these belong on one "
+        "card. What differs is the content — usually the definition."
+    ),
     triage.Reason.CHARACTERISTICS: (
         "Same headword and base part of speech, disagreeing on the details. "
         "Usually one word labelled two ways."
@@ -46,6 +49,75 @@ _REASON_TEXT: Final[Mapping[triage.Reason, str]] = {
 }
 
 
+DEFAULT_SENTENCE_LIMIT: Final[int] = 2
+"""Sentences shown per note before "v" asks for the rest."""
+
+
+def describe_source(citation: types.Citation | None) -> str:
+    """Name where a sentence came from, briefly.
+
+    Which it came from matters when judging usage: a sentence lifted from a
+    book is evidence about how the word is used, and one the model wrote is
+    evidence about how the model thinks it is used.
+    """
+    if citation is None:
+        return "unattributed"
+    if isinstance(citation, types.BookCitation):
+        pages = citation.pages or ()
+        location = f" p{pages[0]}" if pages else ""
+        return f"{citation.title}{location}"
+    if isinstance(citation, types.ModelCitation):
+        return f"model: {citation.model}"
+    return citation.source_type
+
+
+def _shared_rank(words: Sequence[types.Word]) -> int | None:
+    """The rank every note in a group has, when they all have the same one.
+
+    A group sharing a rank is one note read from two places — the deck and the
+    import — rather than two notes that might be duplicates. The answer is
+    almost always to merge, and saying so avoids the question of why an
+    apparently identical pair was flagged at all.
+    """
+    ranks = {word.rank for word in words}
+    if len(ranks) == 1 and (rank := next(iter(ranks))) is not None:
+        return rank
+    return None
+
+
+class SentencesView(Static):
+    """Shows how a note actually uses its word."""
+
+    def __init__(
+        self,
+        word: types.Word,
+        limit: int | None = DEFAULT_SENTENCE_LIMIT,
+        *args,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        self.word = word
+        self.limit = limit
+
+    def render(self) -> str:
+        sentences = self.word.sentences
+        if not sentences:
+            return "[dim]No example sentences.[/]"
+
+        shown = sentences if self.limit is None else sentences[: self.limit]
+        lines: list[str] = []
+        for sentence in shown:
+            lines.append(f"[bold]{sentence.spanish}[/]")
+            if sentence.english:
+                lines.append(f"  {sentence.english}")
+            lines.append(f"  [dim]{describe_source(sentence.source)}[/]")
+            lines.append("")
+
+        if (remaining := len(sentences) - len(shown)) > 0:
+            lines.append(f"[dim]{remaining} more — press v[/]")
+        return "\n".join(lines).rstrip()
+
+
 class CandidateView(Static):
     """Explains why one group was flagged."""
 
@@ -55,10 +127,13 @@ class CandidateView(Static):
 
     def render(self) -> str:
         candidate = self.candidate
-        lines = [
-            f"[bold]{_REASON_TEXT[candidate.reason]}[/]",
-            f"Definitions agree: {candidate.comparison.score:.2f}",
-        ]
+        lines = [f"[bold]{_REASON_TEXT[candidate.reason]}[/]"]
+        if (rank := _shared_rank(candidate.current_words)) is not None:
+            lines.append(
+                f"These are one note (rank {rank}) whose fields disagree, not "
+                "two notes to choose between."
+            )
+        lines.append(f"Definitions agree: {candidate.comparison.score:.2f}")
         if candidate.comparison.shared_glosses:
             shared = ", ".join(sorted(candidate.comparison.shared_glosses))
             lines.append(f"Identical senses: {shared}")
@@ -164,6 +239,7 @@ class TriageScreen(Screen):
         Binding("m", "merge", "Merge", show=True),
         Binding("k", "keep_separate", "Keep separate", show=True),
         Binding("u", "undecided", "Undecided", show=True),
+        Binding("v", "toggle_sentences", "More/fewer sentences", show=True),
         Binding("e", "edit", "Edit", show=True),
         Binding("s", "skip", "Skip", show=True),
         Binding("b", "back", "Back", show=True),
@@ -176,6 +252,7 @@ class TriageScreen(Screen):
         self._decisions: MutableMapping[int, triage.Disposition] = {}
         self._revisions: MutableMapping[int, tuple[types.Word, ...]] = {}
         self._index = 0
+        self._sentence_limit: int | None = DEFAULT_SENTENCE_LIMIT
 
     @property
     def current(self) -> triage.Candidate:
@@ -221,6 +298,12 @@ class TriageScreen(Screen):
     async def action_undecided(self) -> None:
         self._decide(triage.Disposition.REVIEW)
 
+    async def action_toggle_sentences(self) -> None:
+        self._sentence_limit = (
+            None if self._sentence_limit is not None else DEFAULT_SENTENCE_LIMIT
+        )
+        self.refresh_content()
+
     @textual.work
     async def action_edit(self) -> None:
         revised = await self.app.push_screen_wait(
@@ -251,6 +334,8 @@ class TriageScreen(Screen):
                 await self.action_keep_separate()
             case "undecided":
                 await self.action_undecided()
+            case "toggle_sentences":
+                await self.action_toggle_sentences()
             case "edit":
                 self.action_edit()
             case "skip":
@@ -279,16 +364,24 @@ class TriageScreen(Screen):
         yield Header()
         yield CandidateView(candidate, classes="reason")
         yield Static("\nGrouped notes:", classes="heading")
-        yield Horizontal(
-            *(
-                word_merger.WordView(word, diff, classes="word-col")
-                for word, diff in zip(words, diffs, strict=True)
-            )
+        yield VerticalScroll(
+            Horizontal(
+                *(
+                    Vertical(
+                        word_merger.WordView(word, diff),
+                        SentencesView(word, self._sentence_limit, classes="sentences"),
+                        classes="word-col",
+                    )
+                    for word, diff in zip(words, diffs, strict=True)
+                )
+            ),
+            classes="group",
         )
         yield Horizontal(
             Button("Merge (m)", id="merge"),
             Button("Keep separate (k)", id="keep_separate"),
             Button("Undecided (u)", id="undecided"),
+            Button("Sentences (v)", id="toggle_sentences"),
             Button("Edit (e)", id="edit"),
             Button("Skip (s)", id="skip"),
             Button("Back (b)", id="back"),
@@ -330,6 +423,14 @@ class TriageApp(App):
 
     .word-col {
         width: 1fr;
+    }
+
+    .sentences {
+        padding: 0 2 1 2;
+    }
+
+    .group {
+        height: 1fr;
     }
 
     Button {

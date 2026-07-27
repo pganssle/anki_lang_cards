@@ -24,7 +24,9 @@ def run[T](coroutine: Awaitable[T]) -> T:
     return asyncio.run(coroutine)  # type: ignore[arg-type]
 
 
-def make_word(word: str, part_of_speech: str, meaning: str, rank: int) -> types.Word:
+def make_word(
+    word: str, part_of_speech: str, meaning: str, rank: int | None
+) -> types.Word:
     return types.Word(
         rank=rank,
         word=word,
@@ -257,9 +259,7 @@ def segundo_candidate() -> triage.Candidate:
 
 class TestEditing:
     def test_a_headword_can_be_rewritten(self) -> None:
-        (resolved,) = edit(
-            [segundo_candidate()], {"word-0": "segundo/a"}, then=["k"]
-        )
+        (resolved,) = edit([segundo_candidate()], {"word-0": "segundo/a"}, then=["k"])
 
         assert resolved.is_revised
         revised = {w.rank: w for w in resolved.revisions}
@@ -343,3 +343,129 @@ class TestEditing:
         (changed,) = triage.collect_revisions([resolved])
         assert changed.rank == 223
         assert changed.word == "segundo/a"
+
+
+def sentence(spanish: str, english: str = "", source=None) -> types.Sentence:
+    return types.Sentence(spanish=spanish, english=english, source=source)
+
+
+def word_with_sentences(*sentences: types.Sentence) -> types.Word:
+    return types.Word(
+        rank=1,
+        word="nodriza",
+        meaning="mother ship",
+        part_of_speech="nf",
+        article=None,
+        sentences=sentences,
+    )
+
+
+class TestSentences:
+    def test_sentences_are_shown(self) -> None:
+        word = word_with_sentences(
+            sentence("El turbojet regresa a la nave nodriza.", "It returns.")
+        )
+        rendered = triage_ui.SentencesView(word).render()
+
+        assert "El turbojet regresa a la nave nodriza." in rendered
+        assert "It returns." in rendered
+
+    def test_a_note_with_no_sentences_says_so(self) -> None:
+        rendered = triage_ui.SentencesView(word_with_sentences()).render()
+        assert "No example sentences" in rendered
+
+    def test_only_the_first_few_are_shown_by_default(self) -> None:
+        word = word_with_sentences(*(sentence(f"Frase {i}.") for i in range(5)))
+        rendered = triage_ui.SentencesView(word).render()
+
+        assert "Frase 0." in rendered
+        assert "Frase 4." not in rendered
+        assert "3 more" in rendered
+
+    def test_no_limit_shows_everything(self) -> None:
+        word = word_with_sentences(*(sentence(f"Frase {i}.") for i in range(5)))
+        rendered = triage_ui.SentencesView(word, limit=None).render()
+
+        assert "Frase 4." in rendered
+        assert "more" not in rendered
+
+    @pytest.mark.parametrize(
+        ("citation", "expected"),
+        [
+            (
+                types.BookCitation(
+                    title="La vieja familia", authors=("X",), pages=(156,)
+                ),
+                "La vieja familia p156",
+            ),
+            (
+                types.BookCitation(title="Dune", authors=("Herbert",)),
+                "Dune",
+            ),
+            (
+                types.ModelCitation(model="claude-sonnet-4-5"),
+                "model: claude-sonnet-4-5",
+            ),
+            (None, "unattributed"),
+        ],
+    )
+    def test_sources_are_named(self, citation, expected: str) -> None:
+        """Whether a sentence came from a book or the model changes what it is
+        evidence of."""
+        assert triage_ui.describe_source(citation) == expected
+
+    def test_toggling_does_not_disturb_decisions(self) -> None:
+        resolved = press([make_candidate(), make_candidate("cura")], "v", "m", "v", "k")
+
+        assert [c.disposition for c in resolved] == [
+            triage.Disposition.MERGE,
+            triage.Disposition.KEEP_SEPARATE,
+        ]
+
+    def test_toggling_survives_moving_between_groups(self) -> None:
+        """Re-rendering used to crash on a duplicate container id."""
+        candidates = [make_candidate("a"), make_candidate("b"), make_candidate("c")]
+        resolved = press(candidates, "v", "m", "m", "v", "b", "k", "q")
+
+        assert resolved[1].disposition is triage.Disposition.KEEP_SEPARATE
+
+
+class TestSharedRank:
+    def test_one_note_read_twice_is_called_out(self) -> None:
+        """The "prenda" case: same rank, same word, differing definitions."""
+        candidate = triage.Candidate(
+            words=(
+                make_word("prenda", "nf", "piece of clothing", rank=3467),
+                make_word("prenda", "nf", "piece of glothing, garment", rank=3467),
+            ),
+            reason=triage.Reason.COMPATIBLE,
+            comparison=definition_similarity.Comparison(0.35, frozenset()),
+            disposition=triage.Disposition.REVIEW,
+        )
+        rendered = triage_ui.CandidateView(candidate).render()
+
+        assert "one note (rank 3467)" in rendered
+
+    def test_two_notes_are_not_called_out(self) -> None:
+        candidate = triage.Candidate(
+            words=(
+                make_word("trepa", "nm/f", "social climber", rank=8576),
+                make_word("trepa", "nf", "social climber", rank=9615),
+            ),
+            reason=triage.Reason.CHARACTERISTICS,
+            comparison=definition_similarity.Comparison(1.0, frozenset()),
+            disposition=triage.Disposition.MERGE,
+        )
+        assert "one note" not in triage_ui.CandidateView(candidate).render()
+
+    def test_notes_without_ranks_are_not_called_out(self) -> None:
+        candidate = triage.Candidate(
+            words=(
+                make_word("trepa", "nm/f", "social climber", rank=None),
+                make_word("trepa", "nf", "climber", rank=None),
+            ),
+            reason=triage.Reason.CHARACTERISTICS,
+            comparison=definition_similarity.Comparison(1.0, frozenset()),
+            disposition=triage.Disposition.MERGE,
+        )
+        assert "one note" not in triage_ui.CandidateView(candidate).render()
