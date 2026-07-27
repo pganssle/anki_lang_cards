@@ -22,7 +22,7 @@ import attrs
 from . import _types as types
 from . import part_of_speech as pos
 
-_WordKeyType: TypeAlias = tuple[str, pos.BasePoS]
+_BucketKeyType: TypeAlias = tuple[str, pos.BasePoS]
 
 
 class WordLookup:
@@ -56,11 +56,29 @@ class WordLookup:
 
     Since these can only be differentiated in context.
 
+    Words are bucketed on the characteristics that admit no wildcards — the
+    headword and the base part of speech — and then split into compatibility
+    groups *within* a bucket using `PartOfSpeech.__eq__`. This is deliberately
+    not a plain hash key: `PartOfSpeech` equality treats an unspecified
+    characteristic as a wildcard, so "n" compares equal to both "nm" and "nf"
+    while "nm" and "nf" compare unequal. A hash-based key cannot express that
+    relation, and using one causes "n" and "nm" to land in different groups
+    despite comparing equal.
+
+    Because equality is not transitive, group membership requires compatibility
+    with *every* existing member rather than just the first one, and the
+    grouping therefore depends on insertion order. Given "nm", "n", "nf" in that
+    order the result is [["nm", "n"], ["nf"]]; given "n", "nm", "nf" it is
+    [["n", "nm"], ["nf"]]. Either way the incompatible words stay apart, which
+    is the property that matters here.
+
     Iterating over this data structure gives an iterable of groups of words.
     """
 
     def __init__(self, words: Iterable[types.Word]):
-        self._words: MutableMapping[_WordKeyType, MutableSequence[types.Word]] = {}
+        self._buckets: MutableMapping[
+            _BucketKeyType, MutableSequence[MutableSequence[types.Word]]
+        ] = {}
         if words:
             for word in words:
                 self.add(word)
@@ -71,30 +89,37 @@ class WordLookup:
 
     def lookup(self, word: types.Word) -> Sequence[types.Word]:
         """Look up a word in the data structure."""
-        return self._words.get(self._key(word), ())
+        group = self._find_group(word)
+        return () if group is None else tuple(group)
 
     def add(self, word: types.Word) -> None:
         """Add a word to the data structure."""
-        k = self._key(word)
-        if k not in self._words:
-            self._words[k] = [word]
+        group = self._find_group(word)
+        if group is None:
+            self._buckets.setdefault(self._bucket_key(word), []).append([word])
         else:
-            self._words[k].append(word)
+            group.append(word)
 
     def __len__(self) -> int:
-        return len(self._words)
+        return sum(len(groups) for groups in self._buckets.values())
 
     def __contains__(self, value: types.Word) -> bool:
-        return self._key(value) in self._words
+        return self._find_group(value) is not None
 
     def __iter__(self) -> Iterator[Sequence[types.Word]]:
-        return iter(self._words.values())
+        return iter(
+            group for groups in self._buckets.values() for group in tuple(groups)
+        )
 
-    def _key(self, word: types.Word) -> _WordKeyType:
-        if isinstance(word.part_of_speech, pos.Noun):
-            return (word.word, word.part_of_speech.base_pos, word.part_of_speech.gender)
-        else:
-            return (word.word, word.part_of_speech.base_pos)
+    def _bucket_key(self, word: types.Word) -> _BucketKeyType:
+        return (word.word, word.part_of_speech.base_pos)
+
+    def _find_group(self, word: types.Word) -> MutableSequence[types.Word] | None:
+        """Find the compatibility group a word belongs to, if there is one."""
+        for group in self._buckets.get(self._bucket_key(word), ()):
+            if all(member.part_of_speech == word.part_of_speech for member in group):
+                return group
+        return None
 
 
 @attrs.frozen
