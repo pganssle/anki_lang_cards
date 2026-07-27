@@ -187,7 +187,7 @@ class TestDecisionMatching:
             decisions,
             [first],
             triage.Disposition.MERGE,
-            replacements=[make_word("nodriza", "nf", "wet nurse; mother ship", 8825)],
+            replacements=[make_word("nodriza", "nf", "wet nurse, mother ship", 8825)],
         )
 
         outcome = apply_merges.apply_decisions([first, second], decisions, comparer)
@@ -724,15 +724,15 @@ class TestStoredWording:
         self, comparer, decisions
     ) -> None:
         first = make_word("colonia", "nf", "settlement, colony", 4181)
-        second = make_word("colonia", "nf", "colony; cologne", 9500)
+        second = make_word("colonia", "nf", "colony, cologne", 9500)
         decide(decisions, [first, second], triage.Disposition.MERGE)
-        settled = make_word("colonia", "nf", "colony; cologne; settlement", 4181)
+        settled = make_word("colonia", "nf", "colony, cologne, settlement", 4181)
 
         outcome = apply_merges.apply_decisions(
             [first, second], decisions, comparer, resolver=lambda groups: [settled]
         )
 
-        assert outcome.words[0].meaning == "colony; cologne; settlement"
+        assert outcome.words[0].meaning == "colony, cologne, settlement"
 
 
 class TestSplits:

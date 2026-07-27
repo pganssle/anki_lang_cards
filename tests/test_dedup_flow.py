@@ -143,7 +143,7 @@ class TestHeadless:
         decisions.remember(
             attrs.evolve(
                 candidate,
-                replacements=(make_word("colonia", "nf", "settlement; cologne", 4181),),
+                replacements=(make_word("colonia", "nf", "colonial settlement, cologne", 4181),),
             )
         )
         second = resolve(
@@ -151,7 +151,7 @@ class TestHeadless:
         )
         assert not second.interrupted
         (merged,) = second.outcome.words
-        assert merged.meaning == "settlement; cologne"
+        assert merged.meaning == "colonial settlement, cologne"
 
     def test_legacy_wording_comes_from_the_merge_cache(
         self, decisions, tmp_path
@@ -171,7 +171,7 @@ class TestHeadless:
         merge_cache.add_merge(
             conflict_resolver.MergeOperation(
                 original_words=tuple(sorted(group)),
-                result=make_word("colonia", "nf", "settlement; cologne", 4181),
+                result=make_word("colonia", "nf", "colonial settlement, cologne", 4181),
             )
         )
 
@@ -185,7 +185,7 @@ class TestHeadless:
 
         assert not result.interrupted
         (merged,) = result.outcome.words
-        assert merged.meaning == "settlement; cologne"
+        assert merged.meaning == "colonial settlement, cologne"
 
 
 class TestAuto:
@@ -631,7 +631,7 @@ class TestCachedWordingMigration:
         merge_cache.add_merge(
             conflict_resolver.MergeOperation(
                 original_words=tuple(sorted((*deck, *added))),
-                result=make_word("colonia", "nf", "settlement; cologne", 4181),
+                result=make_word("colonia", "nf", "colonial settlement, cologne", 4181),
             )
         )
 
@@ -645,7 +645,7 @@ class TestCachedWordingMigration:
 
         assert not result.interrupted
         (merged,) = result.outcome.words
-        assert merged.meaning == "settlement; cologne"
+        assert merged.meaning == "colonial settlement, cologne"
         # Promoted permanently: a rerun without the merge cache still knows.
         second = resolve(
             inputs=added, existing=deck, decisions=decisions, interactive=False
