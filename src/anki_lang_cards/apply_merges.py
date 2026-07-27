@@ -14,7 +14,7 @@ reported rather than merged, so a real question goes back through triage instead
 of being answered here by default.
 """
 
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from typing import Final
 
 import attrs
@@ -24,6 +24,16 @@ from . import conflict_resolver, definition_similarity, triage
 
 DEFAULT_MAX_ROUNDS: Final[int] = 10
 """Enough for any real chain; a cap only so a cycle cannot spin forever."""
+
+Resolver = Callable[[Sequence[Sequence[types.Word]]], Sequence[types.Word | None]]
+"""Decides what a merged note says, given the groups to combine.
+
+Deciding that two notes are one card does not decide what the card reads. The
+definitions still have to be reconciled, and that is a judgement — combining
+them mechanically turns "piece of clothing" and "piece of glothing, garment"
+into all three at once. `word_merger.merge_words` is the resolver in normal use;
+returning None for a group leaves it unmerged.
+"""
 
 
 @attrs.frozen
@@ -54,7 +64,10 @@ class Outcome:
     unresolved: tuple[triage.Candidate, ...]
     """Collisions that appeared along the way and were not covered by a decision."""
 
-    rounds: int
+    declined: tuple[triage.Candidate, ...] = ()
+    """Groups the resolver was asked about and left alone."""
+
+    rounds: int = 0
 
     def touched_ranks(self) -> frozenset[int]:
         """Ranks whose note content changed, following merges through.
@@ -171,6 +184,7 @@ def apply_decisions(
     decisions: triage.DecisionCache,
     comparer: definition_similarity.DefinitionComparer,
     *,
+    resolver: Resolver | None = None,
     max_rounds: int = DEFAULT_MAX_ROUNDS,
 ) -> Outcome:
     """Rewrite and combine notes according to what triage decided.
@@ -179,10 +193,16 @@ def apply_decisions(
     answered "merge" and the groups whose members are now identical, then looks
     again, because a merge can bring a note into contact with one it did not
     previously touch.
+
+    Groups whose notes are identical are combined outright: there is only one
+    thing they can say. Every other group goes to `resolver` to have its wording
+    settled, and without one they are combined mechanically, which is only
+    appropriate when nobody is going to read the result.
     """
     by_rank = _decisions_by_rank(decisions)
     current, revised = _apply_revisions(tuple(words), decisions)
     merges: list[Merge] = []
+    declined: list[triage.Candidate] = []
     unresolved: tuple[triage.Candidate, ...] = ()
     rounds = 0
 
@@ -192,6 +212,10 @@ def apply_decisions(
         consumed: set[int] = set()
         round_merges: list[Merge] = []
         leftover: list[triage.Candidate] = []
+
+        pending: list[
+            tuple[triage.Candidate, Sequence[types.Word], tuple[str, ...]]
+        ] = []
 
         for candidate in candidates:
             # A note can only be merged once per round. Groups overlap — the
@@ -205,21 +229,47 @@ def apply_decisions(
             decided = decision is not None and (
                 decision.disposition is triage.Disposition.MERGE
             )
-            if not decided and not _identical(candidate.words):
+            identical = _identical(candidate.words)
+            if not decided and not identical:
                 if decision is None:
                     leftover.append(candidate)
                 continue
 
             aligned, dropped = _align_headwords(candidate.words)
-            round_merges.append(
-                Merge(
-                    result=conflict_resolver.auto_merge_words(aligned),
-                    sources=tuple(candidate.words),
-                    decided=decided,
-                    dropped_headwords=dropped,
-                )
-            )
             consumed.update(id(word) for word in candidate.words)
+            if identical:
+                round_merges.append(
+                    Merge(
+                        result=conflict_resolver.auto_merge_words(aligned),
+                        sources=tuple(candidate.words),
+                        decided=False,
+                        dropped_headwords=dropped,
+                    )
+                )
+            else:
+                pending.append((candidate, aligned, dropped))
+
+        if pending:
+            groups = [aligned for _, aligned, _ in pending]
+            if resolver is None:
+                results: Sequence[types.Word | None] = [
+                    conflict_resolver.auto_merge_words(group) for group in groups
+                ]
+            else:
+                results = resolver(groups)
+            for (candidate, _, dropped), result in zip(pending, results, strict=True):
+                if result is None:
+                    declined.append(candidate)
+                    consumed.difference_update(id(w) for w in candidate.words)
+                    continue
+                round_merges.append(
+                    Merge(
+                        result=result,
+                        sources=tuple(candidate.words),
+                        decided=True,
+                        dropped_headwords=dropped,
+                    )
+                )
 
         if not round_merges:
             unresolved = tuple(leftover)
@@ -234,6 +284,7 @@ def apply_decisions(
         merges=tuple(merges),
         revised=tuple(revised),
         unresolved=unresolved,
+        declined=tuple(declined),
         rounds=rounds,
     )
 
@@ -314,6 +365,8 @@ def summarize(outcome: Outcome) -> Sequence[str]:
         lines.append(
             f"  {len(renamed)} kept one of two spellings; the other was dropped"
         )
+    if outcome.declined:
+        lines.append(f"{len(outcome.declined)} groups were left unmerged")
     if outcome.unresolved:
         lines.append(
             f"{len(outcome.unresolved)} new collisions need another triage pass"

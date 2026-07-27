@@ -8,7 +8,12 @@ import attrs
 import pytest
 
 from anki_lang_cards import _types as types
-from anki_lang_cards import apply_merges, definition_similarity, triage
+from anki_lang_cards import (
+    apply_merges,
+    conflict_resolver,
+    definition_similarity,
+    triage,
+)
 
 CORPUS: Final[Sequence[str]] = (
     "social climber",
@@ -395,3 +400,112 @@ class TestRegressions:
 
         (merge,) = apply_merges.apply_decisions(group, decisions, comparer).merges
         assert merge.result.meaning.startswith("to ")
+
+
+class TestResolver:
+    """Deciding two notes are one card does not decide what the card reads."""
+
+    def test_a_disagreeing_group_is_handed_to_the_resolver(
+        self, comparer, decisions
+    ) -> None:
+        group = [
+            make_word("prenda", "nf", "piece of clothing", 3467),
+            make_word("prenda", "nf", "piece of glothing, garment", 3467),
+        ]
+        decide(decisions, group, triage.Disposition.MERGE)
+        seen: list[Sequence[types.Word]] = []
+
+        def resolver(groups):
+            seen.extend(groups)
+            return [make_word("prenda", "nf", "piece of clothing, garment", 3467)]
+
+        outcome = apply_merges.apply_decisions(
+            group, decisions, comparer, resolver=resolver
+        )
+
+        assert len(seen) == 1
+        assert outcome.words[0].meaning == "piece of clothing, garment"
+        assert "glothing" not in outcome.words[0].meaning
+
+    def test_identical_notes_never_reach_the_resolver(
+        self, comparer, decisions
+    ) -> None:
+        """There is only one thing they can say, so there is nothing to ask."""
+        group = [
+            make_word("grelos", "nm pl", "turnip greens", 8225),
+            make_word("grelos", "nm pl", "turnip greens", 8554),
+        ]
+
+        def resolver(groups):
+            raise AssertionError("should not have been asked")
+
+        outcome = apply_merges.apply_decisions(
+            group, decisions, comparer, resolver=resolver
+        )
+        assert len(outcome.words) == 1
+
+    def test_declining_leaves_the_group_alone(self, comparer, decisions) -> None:
+        group = [
+            make_word("trepa", "nm/f", "social climber", 1),
+            make_word("trepa", "nm/f", "climber", 2),
+        ]
+        decide(decisions, group, triage.Disposition.MERGE)
+
+        outcome = apply_merges.apply_decisions(
+            group, decisions, comparer, resolver=lambda groups: [None] * len(groups)
+        )
+
+        assert outcome.merges == ()
+        assert len(outcome.words) == 2
+        assert len(outcome.declined) == 1
+
+    def test_the_resolver_sees_headwords_already_settled(
+        self, comparer, decisions
+    ) -> None:
+        """Otherwise the merge UI raises building its preview."""
+        group = [
+            make_word("dar paso", "v phr", "to give way to", 8012),
+            make_word("dar paso (a)", "v phr", "to lead into", 9592),
+        ]
+        decide(decisions, group, triage.Disposition.MERGE)
+        seen: list[Sequence[types.Word]] = []
+
+        def resolver(groups):
+            seen.extend(groups)
+            return [conflict_resolver.auto_merge_words(groups[0])]
+
+        apply_merges.apply_decisions(group, decisions, comparer, resolver=resolver)
+        assert {word.word for word in seen[0]} == {"dar paso"}
+
+    def test_without_a_resolver_definitions_are_combined(
+        self, comparer, decisions
+    ) -> None:
+        """The unattended path, which is why it is not the default."""
+        group = [
+            make_word("trepa", "nm/f", "social climber", 1),
+            make_word("trepa", "nm/f", "climber", 2),
+        ]
+        decide(decisions, group, triage.Disposition.MERGE)
+
+        outcome = apply_merges.apply_decisions(group, decisions, comparer)
+        assert "social climber" in outcome.words[0].meaning
+        assert "climber" in outcome.words[0].meaning
+
+    def test_a_later_round_asks_again(self, comparer, decisions) -> None:
+        """A merge can create a group that also needs its wording settled."""
+        a = make_word("trepa", "nm/f", "social climber", 1)
+        b = make_word("trepa", "nm/f", "climber", 2)
+        c = make_word("trepa", "nm/f", "upstart", 3)
+        decide(decisions, [a, b], triage.Disposition.MERGE)
+        decide(decisions, [a, b, c], triage.Disposition.MERGE)
+        rounds: list[int] = []
+
+        def resolver(groups):
+            rounds.append(len(groups))
+            return [conflict_resolver.auto_merge_words(g) for g in groups]
+
+        outcome = apply_merges.apply_decisions(
+            [a, b, c], decisions, comparer, resolver=resolver
+        )
+        assert len(outcome.words) == 1
+        assert len(rounds) >= 1

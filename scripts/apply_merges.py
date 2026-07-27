@@ -8,6 +8,13 @@ Rewrites the notes that were edited, combines the groups answered "merge", and
 writes the result to output/merged_import.csv. The input CSV is left alone: this
 produces a new file to look at before anything reaches Anki.
 
+Deciding that two notes are one card does not decide what the card reads, so
+groups whose definitions disagree go to the merge UI. Groups whose notes are
+already identical do not — there is only one thing they can say. Previously
+resolved merges come from the merge cache and are not asked about again.
+Passing --auto combines everything mechanically instead, which is only sensible
+if nobody is going to read the result.
+
 Merging repeats until nothing more changes, because one decision can create work
 for the next. Two notes rewritten to say the same thing are combined without
 being asked about again; anything else that newly collides is reported so it can
@@ -19,15 +26,50 @@ Anki, and scripts/find_duplicates.py is the tool for it.
 """
 
 import argparse
+import asyncio
 import csv
 import pathlib
 from collections.abc import Sequence
 
 from anki_lang_cards import _types as types
-from anki_lang_cards import anki_import, apply_merges, definition_similarity, triage
+from anki_lang_cards import (
+    anki_import,
+    apply_merges,
+    conflict_resolver,
+    definition_similarity,
+    triage,
+)
+
+try:
+    from anki_lang_cards import word_merger
+except ImportError:  # pragma: no cover - depends on the merge_ui extra
+    MERGE_UI_AVAILABLE = False
+else:
+    MERGE_UI_AVAILABLE = True
 
 DEFAULT_DECISION_CACHE = pathlib.Path(".cache/merges/decisions.json")
+DEFAULT_MERGE_CACHE = pathlib.Path(".cache/merges/duplicates.json")
 DEFAULT_OUTPUT = pathlib.Path("output/merged_import.csv")
+
+
+def make_resolver(merge_cache: conflict_resolver.MergeCache) -> apply_merges.Resolver:
+    """Settle each group's wording in the merge UI, reusing anything cached."""
+
+    def resolve(
+        groups: Sequence[Sequence[types.Word]],
+    ) -> Sequence[types.Word | None]:
+        print(f"\n  {len(groups)} groups need their wording settled...")
+        resolved = asyncio.run(
+            word_merger.merge_words(
+                [frozenset(group) for group in groups],
+                cache=merge_cache,
+                cache_behavior=word_merger.CacheHitBehavior.SKIP,
+            )
+        )
+        merge_cache.save_cache()
+        return resolved
+
+    return resolve
 
 
 def write_csv(
@@ -53,6 +95,12 @@ def main() -> None:
     )
     parser.add_argument("--output", type=pathlib.Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--deck-name", default=None)
+    parser.add_argument("--merge-cache", type=pathlib.Path, default=DEFAULT_MERGE_CACHE)
+    parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Combine definitions mechanically instead of opening the merge UI",
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -76,8 +124,20 @@ def main() -> None:
     decisions = triage.DecisionCache(args.decision_cache)
     print(f"Read {len(decisions)} decisions from {args.decision_cache}")
 
+    if not args.auto and not MERGE_UI_AVAILABLE:
+        raise SystemExit(
+            "The merge UI needs textual; install the merge_ui extra, or pass "
+            "--auto to combine definitions without being asked."
+        )
+
+    resolver = None
+    if not args.auto:
+        resolver = make_resolver(conflict_resolver.MergeCache(args.merge_cache))
+
     comparer = definition_similarity.DefinitionComparer(w.meaning for w in words)
-    outcome = apply_merges.apply_decisions(words, decisions, comparer)
+    outcome = apply_merges.apply_decisions(
+        words, decisions, comparer, resolver=resolver
+    )
 
     print()
     for line in apply_merges.summarize(outcome):
@@ -103,6 +163,12 @@ def main() -> None:
         print("\nNotes Anki will still hold that nothing will update — delete these:")
         for word in orphans:
             print(f"  {word.rank} {word.word} ({word.part_of_speech}) {word.meaning}")
+
+    if outcome.declined:
+        print("\nLeft unmerged in the merge UI:")
+        for candidate in outcome.declined:
+            for line in candidate.summarize():
+                print(f"  {line}")
 
     mine = apply_merges.new_collisions(outcome, added)
     if mine:
