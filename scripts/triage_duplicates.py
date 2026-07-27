@@ -16,14 +16,31 @@ Anything marked "keep-separate" goes into the rejection cache and stops being
 offered on later runs, so a deliberate sense split only has to be dismissed
 once. Nothing is written to Anki or to the deck by either pass; this only
 decides what the merge UI will later be asked about.
+
+Passing --resolve answers the same questions in a UI instead of an editor, and
+records the decisions in one go. It needs the merge_ui extra. By default it
+asks only about the groups that have no suggestion; --include-proposed asks
+about the proposed merges as well.
+
+    python scripts/triage_duplicates.py --resolve \\
+        --exported-deck input/existing_deck_3.txt \\
+        --inputs output/diff_from_existing.csv
 """
 
 import argparse
+import asyncio
 import pathlib
 from collections.abc import Sequence
 
 from anki_lang_cards import _types as types
 from anki_lang_cards import anki_import, definition_similarity, triage
+
+try:
+    from anki_lang_cards import triage_ui
+except ImportError:  # pragma: no cover - depends on the merge_ui extra
+    TRIAGE_UI_AVAILABLE = False
+else:
+    TRIAGE_UI_AVAILABLE = True
 
 DEFAULT_TRIAGE_FILE = pathlib.Path("output/merge_candidates.json")
 DEFAULT_REJECTION_CACHE = pathlib.Path(".cache/merges/rejections.json")
@@ -67,40 +84,51 @@ def report(candidates: Sequence[triage.Candidate]) -> None:
                 print(f"         {line}")
 
 
-def generate(args: argparse.Namespace) -> None:
-    words = load_words(args.inputs, args.exported_deck)
-    if not words:
-        raise SystemExit("No words loaded; pass --inputs and/or --exported-deck.")
+def resolve_in_ui(
+    candidates: Sequence[triage.Candidate], *, include_proposed: bool
+) -> Sequence[triage.Candidate]:
+    """Ask about candidates in the UI, leaving the ones not shown alone."""
+    shown = [
+        index
+        for index, candidate in enumerate(candidates)
+        if include_proposed or candidate.disposition is triage.Disposition.REVIEW
+    ]
+    if not shown:
+        print("Nothing needs a decision.")
+        return candidates
 
-    comparer = definition_similarity.DefinitionComparer(word.meaning for word in words)
-    rejections = triage.RejectionCache(args.rejection_cache)
-    if len(rejections):
-        print(f"Ignoring {len(rejections)} previously separated groups")
-
-    candidates = triage.find_candidates(words, comparer, rejections=rejections)
-    triage.write_triage_file(args.triage_file, candidates)
-    report(candidates)
-    print(f"\nWrote {args.triage_file}. Edit the 'disposition' fields, then rerun")
-    print("with --apply to record the decisions.")
+    resolved = asyncio.run(
+        triage_ui.resolve_candidates([candidates[index] for index in shown])
+    )
+    out = list(candidates)
+    for index, candidate in zip(shown, resolved, strict=True):
+        out[index] = candidate
+    return tuple(out)
 
 
-def apply(args: argparse.Namespace) -> None:
-    if not args.triage_file.exists():
-        raise SystemExit(f"{args.triage_file} does not exist; run without --apply.")
+def report_pending(candidates: Sequence[triage.Candidate]) -> None:
+    partitioned = triage.partition(candidates)
+    review = partitioned[triage.Disposition.REVIEW]
+    print(f"  {len(partitioned[triage.Disposition.MERGE]):>4} proposed for merging")
+    print(f"  {len(review):>4} needing a decision")
+    if review:
+        print("\nNeeding a decision, strongest agreement first:\n")
+        for candidate in review:
+            print(f"  {candidate.comparison.score:.2f} [{candidate.reason.value}]")
+            for line in candidate.summarize():
+                print(f"         {line}")
 
-    candidates = triage.read_triage_file(args.triage_file)
-    rejections = triage.RejectionCache(args.rejection_cache)
-    before = len(rejections)
-    triage.record_rejections(candidates, rejections)
-    rejections.save()
 
+def report_recorded(
+    candidates: Sequence[triage.Candidate], newly_rejected: int, remembered: int
+) -> None:
     partitioned = triage.partition(candidates)
     separated = partitioned[triage.Disposition.KEEP_SEPARATE]
-    to_merge = triage.to_merge_sets(candidates)
 
-    print(f"Recorded {len(rejections) - before} newly separated groups")
-    print(f"  {len(rejections)} separated groups remembered in total")
-    print(f"  {len(to_merge)} groups would go to the merge UI")
+    print(f"\nRecorded {newly_rejected} newly separated groups")
+    print(f"  {remembered} separated groups remembered in total")
+    print(f"  {len(triage.to_merge_sets(candidates))} groups would go to the merge UI")
+    print(f"  {len(partitioned[triage.Disposition.REVIEW])} still undecided")
 
     if separated:
         print("\nMarked as deliberately separate:\n")
@@ -143,14 +171,58 @@ def main() -> None:
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="Read back the edited triage file and record its decisions",
+        help="Read back the existing triage file instead of regenerating it",
+    )
+    parser.add_argument(
+        "--resolve",
+        action="store_true",
+        help="Answer the questions in a UI rather than an editor",
+    )
+    parser.add_argument(
+        "--include-proposed",
+        action="store_true",
+        help="With --resolve, also ask about the groups already proposed for merging",
     )
     args = parser.parse_args()
 
+    if args.resolve and not TRIAGE_UI_AVAILABLE:
+        raise SystemExit(
+            "--resolve needs textual; install the merge_ui extra to use it."
+        )
+
+    rejections = triage.RejectionCache(args.rejection_cache)
+
     if args.apply:
-        apply(args)
+        if not args.triage_file.exists():
+            raise SystemExit(f"{args.triage_file} does not exist; run without --apply.")
+        candidates = triage.read_triage_file(args.triage_file)
+        print(f"Read {len(candidates)} candidate groups from {args.triage_file}")
     else:
-        generate(args)
+        words = load_words(args.inputs, args.exported_deck)
+        if not words:
+            raise SystemExit("No words loaded; pass --inputs and/or --exported-deck.")
+        if len(rejections):
+            print(f"Ignoring {len(rejections)} previously separated groups")
+        comparer = definition_similarity.DefinitionComparer(
+            word.meaning for word in words
+        )
+        candidates = triage.find_candidates(words, comparer, rejections=rejections)
+        print(f"\n{len(candidates)} candidate groups")
+
+    if args.resolve:
+        candidates = resolve_in_ui(candidates, include_proposed=args.include_proposed)
+
+    triage.write_triage_file(args.triage_file, candidates)
+
+    if args.apply or args.resolve:
+        before = len(rejections)
+        triage.record_rejections(candidates, rejections)
+        rejections.save()
+        report_recorded(candidates, len(rejections) - before, len(rejections))
+    else:
+        report_pending(candidates)
+        print(f"\nWrote {args.triage_file}. Edit the 'disposition' fields and rerun")
+        print("with --apply, or rerun with --resolve to answer them in a UI.")
 
 
 if __name__ == "__main__":
