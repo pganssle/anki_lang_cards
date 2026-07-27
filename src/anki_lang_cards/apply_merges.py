@@ -1,8 +1,9 @@
 """Carrying out the decisions made during triage.
 
 Triage answers "should these be one note". This does it: rewrites the notes that
-were edited, combines the groups that were answered "merge", and reports what
-the result implies for the deck.
+were edited, combines the groups that were answered "merge", divides the ones
+answered "split" into their new cards, and reports what the result implies for
+the deck.
 
 Merging is iterative rather than a single sweep, because a decision can create
 work for the next one. Rewriting "metomentodo" from an adjective and a noun into
@@ -55,6 +56,25 @@ class Merge:
 
 
 @attrs.frozen
+class Split:
+    """One group divided into several new cards."""
+
+    cards: tuple[types.Word, ...]
+    sources: tuple[types.Word, ...]
+
+    @property
+    def superseded(self) -> tuple[types.Word, ...]:
+        """The notes the split replaces, other than those whose ranks survive.
+
+        A split usually keeps its lowest rank on the first card, but the editor
+        can reassign it — and a split that keeps no existing rank leaves every
+        source behind as a note to delete.
+        """
+        kept = {card.rank for card in self.cards if card.rank is not None}
+        return tuple(word for word in self.sources if word.rank not in kept)
+
+
+@attrs.frozen
 class Outcome:
     """The result of carrying out a set of decisions."""
 
@@ -66,6 +86,9 @@ class Outcome:
 
     declined: tuple[triage.Candidate, ...] = ()
     """Groups the resolver was asked about and left alone."""
+
+    splits: tuple[Split, ...] = ()
+    """Groups divided into new cards."""
 
     rounds: int = 0
 
@@ -82,6 +105,10 @@ class Outcome:
                 w.rank for w in (merge.result, *merge.sources) if w.rank is not None
             }
             touched |= ranks
+        for split in self.splits:
+            touched |= {
+                w.rank for w in (*split.cards, *split.sources) if w.rank is not None
+            }
         return frozenset(touched)
 
 
@@ -167,6 +194,37 @@ def _apply_revisions(
     return out, applied
 
 
+def _stored_merge_result(
+    decision: triage.Decision | None,
+    group: Sequence[types.Word],
+    aligned: Sequence[types.Word],
+) -> types.Word | None:
+    """The merged note a decision recorded, brought up to date, or None.
+
+    A merge decision that carries a single note carries its wording — the
+    person settled what the card says when they answered. What it must not
+    carry is the sentences: those were whatever the notes held when the answer
+    was recorded, and sentences keep arriving afterwards. The wording fields
+    come from the stored note; the sentences (and a rank, if the stored note
+    lost one) come from combining the group as it stands now.
+
+    A decision holding as many notes as the group is the older shape — an edit
+    recorded alongside the answer — whose notes were already applied as
+    rewrites, leaving the wording to the resolver as before.
+    """
+    if decision is None or decision.replacements is None:
+        return None
+    if len(decision.replacements) != 1 or len(group) < 2:
+        return None
+    (stored,) = decision.replacements
+    mechanical = conflict_resolver.auto_merge_words(aligned)
+    return attrs.evolve(
+        stored,
+        sentences=mechanical.sentences,
+        rank=stored.rank if stored.rank is not None else mechanical.rank,
+    )
+
+
 def _align_headwords(
     group: Sequence[types.Word],
 ) -> tuple[Sequence[types.Word], tuple[str, ...]]:
@@ -220,6 +278,7 @@ def apply_decisions(
     by_rank = _decisions_by_rank(decisions)
     current, revised = _apply_revisions(tuple(words), decisions)
     merges: list[Merge] = []
+    splits: list[Split] = []
     declined: list[triage.Candidate] = []
     unresolved: tuple[triage.Candidate, ...] = ()
     rounds = 0
@@ -229,6 +288,7 @@ def apply_decisions(
         candidates = triage.find_candidates(current, comparer)
         consumed: set[int] = set()
         round_merges: list[Merge] = []
+        round_splits: list[Split] = []
         leftover: list[triage.Candidate] = []
 
         pending: list[
@@ -244,6 +304,21 @@ def apply_decisions(
 
             ranks = frozenset(w.rank for w in candidate.words if w.rank is not None)
             decision = by_rank.get(ranks) or decisions.get(candidate.words)
+
+            if (
+                decision is not None
+                and decision.disposition is triage.Disposition.SPLIT
+                and decision.replacements
+            ):
+                consumed.update(id(word) for word in candidate.words)
+                round_splits.append(
+                    Split(
+                        cards=decision.replacements,
+                        sources=tuple(candidate.words),
+                    )
+                )
+                continue
+
             decided = decision is not None and (
                 decision.disposition is triage.Disposition.MERGE
             )
@@ -255,7 +330,21 @@ def apply_decisions(
 
             aligned, dropped = _align_headwords(candidate.words)
             consumed.update(id(word) for word in candidate.words)
-            if identical:
+            stored = _stored_merge_result(decision, candidate.words, aligned)
+            if stored is not None:
+                round_merges.append(
+                    Merge(
+                        result=stored,
+                        sources=tuple(candidate.words),
+                        decided=True,
+                        dropped_headwords=tuple(
+                            dict.fromkeys(
+                                w.word for w in candidate.words if w.word != stored.word
+                            )
+                        ),
+                    )
+                )
+            elif identical:
                 round_merges.append(
                     Merge(
                         result=conflict_resolver.auto_merge_words(aligned),
@@ -289,13 +378,15 @@ def apply_decisions(
                     )
                 )
 
-        if not round_merges:
+        if not round_merges and not round_splits:
             unresolved = tuple(leftover)
             break
 
         current = [word for word in current if id(word) not in consumed]
         current.extend(merge.result for merge in round_merges)
+        current.extend(card for split in round_splits for card in split.cards)
         merges.extend(round_merges)
+        splits.extend(round_splits)
 
     return Outcome(
         words=tuple(current),
@@ -303,6 +394,7 @@ def apply_decisions(
         revised=tuple(revised),
         unresolved=unresolved,
         declined=tuple(declined),
+        splits=tuple(splits),
         rounds=rounds,
     )
 
@@ -321,8 +413,8 @@ def superseded_notes(
     # imported copy of the same note both appear — but it is one note to delete.
     by_rank = {
         word.rank: word
-        for merge in outcome.merges
-        for word in merge.superseded
+        for change in (*outcome.merges, *outcome.splits)
+        for word in change.superseded
         if word.rank in deck_ranks
     }
     return tuple(by_rank[rank] for rank in sorted(by_rank))
@@ -339,10 +431,17 @@ def words_to_import(
     wanted = outcome.touched_ranks() | {
         word.rank for word in inputs if word.rank is not None
     }
+    # A split's extra cards start out rank-less, which no rank filter can
+    # select; they are to import by definition.
+    cards = {id(card) for split in outcome.splits for card in split.cards}
     return tuple(
         sorted(
-            (word for word in outcome.words if word.rank in wanted),
-            key=lambda word: word.rank if word.rank is not None else 0,
+            (
+                word
+                for word in outcome.words
+                if word.rank in wanted or id(word) in cards
+            ),
+            key=lambda word: word.rank if word.rank is not None else float("inf"),
         )
     )
 
@@ -410,6 +509,9 @@ def summarize(outcome: Outcome) -> Sequence[str]:
         f"{len(outcome.revised)} notes rewritten",
         f"{len(outcome.merges)} groups merged over {outcome.rounds} rounds",
     ]
+    if outcome.splits:
+        cards = sum(len(split.cards) for split in outcome.splits)
+        lines.insert(2, f"{len(outcome.splits)} groups split into {cards} cards")
     automatic = [merge for merge in outcome.merges if not merge.decided]
     if automatic:
         lines.append(

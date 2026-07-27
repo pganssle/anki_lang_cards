@@ -650,3 +650,192 @@ class TestRevisionPairing:
             replacements=tuple(sorted([from_deck, from_import])),
         )
         assert triage.collect_revisions([candidate]) == ()
+
+
+class TestStoredWording:
+    """A merge decision that carries its combined note supplies the wording."""
+
+    def test_the_stored_note_is_used_without_a_resolver(
+        self, comparer, decisions
+    ) -> None:
+        first = make_word("prenda", "nf", "piece of clothing", 3467)
+        second = make_word("prenda", "nf", "piece of glothing, garment", 9200)
+        decide(
+            decisions,
+            [first, second],
+            triage.Disposition.MERGE,
+            replacements=[
+                make_word("prenda", "nf", "piece of clothing, garment", 3467)
+            ],
+        )
+
+        def resolver(groups):
+            raise AssertionError("stored wording should never reach the resolver")
+
+        outcome = apply_merges.apply_decisions(
+            [first, second], decisions, comparer, resolver=resolver
+        )
+
+        assert len(outcome.words) == 1
+        assert outcome.words[0].meaning == "piece of clothing, garment"
+        assert outcome.words[0].rank == 3467
+        assert outcome.merges[0].decided is True
+
+    def test_sentences_come_from_the_notes_not_the_decision(
+        self, comparer, decisions
+    ) -> None:
+        """The stored note froze its sentences when the answer was recorded;
+        sentences that arrived afterwards must still make it into the merge."""
+        early = types.Sentence(spanish="Frase vieja.", english="Old.", source=None)
+        late = types.Sentence(spanish="Frase nueva.", english="New.", source=None)
+        first = make_word("prenda", "nf", "piece of clothing", 3467, [early])
+        second = make_word("prenda", "nf", "garment", 9200, [late])
+        decide(
+            decisions,
+            [attrs.evolve(first, sentences=()), attrs.evolve(second, sentences=())],
+            triage.Disposition.MERGE,
+            replacements=[
+                make_word("prenda", "nf", "piece of clothing, garment", 3467, [early])
+            ],
+        )
+
+        outcome = apply_merges.apply_decisions([first, second], decisions, comparer)
+
+        spanish = {s.spanish for s in outcome.words[0].sentences}
+        assert spanish == {"Frase vieja.", "Frase nueva."}
+
+    def test_a_stored_spelling_reports_the_dropped_one(
+        self, comparer, decisions
+    ) -> None:
+        plain = make_word("seguir el rollo", "vtr", "to play along", 8576)
+        marked = make_word("seguir el rollo (a alguien)", "vtr", "to play along", 9615)
+        decide(
+            decisions,
+            [plain, marked],
+            triage.Disposition.MERGE,
+            replacements=[make_word("seguir el rollo", "vtr", "to play along", 8576)],
+        )
+
+        outcome = apply_merges.apply_decisions([plain, marked], decisions, comparer)
+
+        assert outcome.merges[0].dropped_headwords == ("seguir el rollo (a alguien)",)
+
+    def test_a_legacy_merge_without_wording_still_uses_the_resolver(
+        self, comparer, decisions
+    ) -> None:
+        first = make_word("colonia", "nf", "settlement, colony", 4181)
+        second = make_word("colonia", "nf", "colony; cologne", 9500)
+        decide(decisions, [first, second], triage.Disposition.MERGE)
+        settled = make_word("colonia", "nf", "colony; cologne; settlement", 4181)
+
+        outcome = apply_merges.apply_decisions(
+            [first, second], decisions, comparer, resolver=lambda groups: [settled]
+        )
+
+        assert outcome.words[0].meaning == "colony; cologne; settlement"
+
+
+class TestSplits:
+    def split_decision(self, decisions) -> tuple[types.Word, types.Word]:
+        keyed = make_word("llave", "nf", "key, faucet", 810)
+        hold = make_word("llave", "nf", "wrestling hold", 9241)
+        decide(
+            decisions,
+            [keyed, hold],
+            triage.Disposition.SPLIT,
+            replacements=[
+                make_word("llave", "nf", "key", 810),
+                make_word("llave (lucha)", "nf", "wrestling hold", 9241),
+                types.Word(
+                    rank=None,
+                    word="llave (grifo)",
+                    meaning="tap, faucet",
+                    part_of_speech="nf",
+                    article=None,
+                    sentences=(),
+                ),
+            ],
+        )
+        return keyed, hold
+
+    def test_a_split_replaces_the_group_with_its_cards(
+        self, comparer, decisions
+    ) -> None:
+        keyed, hold = self.split_decision(decisions)
+
+        outcome = apply_merges.apply_decisions([keyed, hold], decisions, comparer)
+
+        assert {w.word for w in outcome.words} == {
+            "llave",
+            "llave (lucha)",
+            "llave (grifo)",
+        }
+        assert len(outcome.splits) == 1
+        assert outcome.merges == ()
+
+    def test_split_ranks_are_tracked_and_imported(self, comparer, decisions) -> None:
+        keyed, hold = self.split_decision(decisions)
+
+        outcome = apply_merges.apply_decisions([keyed, hold], decisions, comparer)
+
+        assert {810, 9241} <= outcome.touched_ranks()
+        to_import = apply_merges.words_to_import(outcome, [])
+        assert {w.word for w in to_import} == {
+            "llave",
+            "llave (lucha)",
+            "llave (grifo)",
+        }
+        # The rank-less card sorts last, ready to be assigned a fresh rank.
+        assert to_import[-1].rank is None
+
+    def test_an_abandoned_rank_lands_on_the_deletion_list(
+        self, comparer, decisions
+    ) -> None:
+        """A split that keeps no card at a source's rank leaves that note behind."""
+        keyed = make_word("llave", "nf", "key, faucet", 810)
+        hold = make_word("llave", "nf", "wrestling hold", 9241)
+        decide(
+            decisions,
+            [keyed, hold],
+            triage.Disposition.SPLIT,
+            replacements=[
+                make_word("llave", "nf", "key", 810),
+                make_word("llave (lucha)", "nf", "wrestling hold", 812),
+            ],
+        )
+
+        outcome = apply_merges.apply_decisions([keyed, hold], decisions, comparer)
+        superseded = apply_merges.superseded_notes(outcome, [keyed, hold])
+
+        assert [w.rank for w in superseded] == [9241]
+
+    def test_split_cards_that_still_collide_are_reported(
+        self, comparer, decisions
+    ) -> None:
+        keyed = make_word("llave", "nf", "key, faucet", 810)
+        hold = make_word("llave", "nf", "wrestling hold", 9241)
+        decide(
+            decisions,
+            [keyed, hold],
+            triage.Disposition.SPLIT,
+            replacements=[
+                make_word("llave", "nf", "key", 810),
+                make_word("llave", "nf", "wrestling hold", None),
+            ],
+        )
+
+        outcome = apply_merges.apply_decisions([keyed, hold], decisions, comparer)
+
+        assert len(outcome.unresolved) == 1
+        assert {w.meaning for w in outcome.unresolved[0].words} == {
+            "key",
+            "wrestling hold",
+        }
+
+    def test_summarize_mentions_splits(self, comparer, decisions) -> None:
+        keyed, hold = self.split_decision(decisions)
+        outcome = apply_merges.apply_decisions([keyed, hold], decisions, comparer)
+
+        assert any(
+            "split into 3 cards" in line for line in apply_merges.summarize(outcome)
+        )
