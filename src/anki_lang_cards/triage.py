@@ -293,6 +293,14 @@ class DecisionCache:
             ),
         )
 
+    def values(self) -> Sequence[Decision]:
+        """Every decision recorded, for callers that need to act on them."""
+        return tuple(self._decisions.values())
+
+    def entries(self) -> Sequence[tuple[tuple[types.Word, ...], Decision]]:
+        """Every decision with the group it was about."""
+        return tuple(self._decisions.items())
+
     def __contains__(self, words: Collection[types.Word]) -> bool:
         return self.get(words) is not None
 

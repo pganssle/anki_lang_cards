@@ -199,6 +199,94 @@ class MergeCache:
         return tuple(sorted(words))
 
 
+def _reconcile_parts_of_speech(
+    first: pos.PartOfSpeech, second: pos.PartOfSpeech
+) -> pos.PartOfSpeech:
+    """Find a part of speech that covers both, keeping as much as it can.
+
+    Dropping straight to the bare base loses the gender, which is on the front
+    of the card: merging "nm/f" with "nf" gave a plain "n" and the article went
+    with it. A gender that claims both forms already covers a specific one, so
+    keep it.
+    """
+    if isinstance(first, pos.Noun) and isinstance(second, pos.Noun):
+        subsuming = {pos.Gender.FORM_DEPENDENT, pos.Gender.COMMON, pos.Gender.AMBIGUOUS}
+        for keep, other in ((first, second), (second, first)):
+            if keep.gender in subsuming and other.gender != pos.Gender.UNSPECIFIED:
+                return keep
+    return pos.base_part_of_speech(first.base_pos)
+
+
+def auto_merge_words(words: Collection[types.Word]) -> types.Word:
+    """Automatically merge a sequence of words according to the specified rules."""
+    # Split and clean meanings
+    meanings: list[list[str]] = []
+    is_verb = any(w.part_of_speech.base_pos == pos.BasePoS.VERB for w in words)
+    # Only restore the infinitive marker if it was there to begin with. A group
+    # can hold a verb phrase beside a preposition — "de no ser por" was labelled
+    # both — and prefixing an unrelated gloss produces "to if it weren't for".
+    had_infinitive = False
+    for word in words:
+        word_meanings = [m.strip() for m in word.meaning.split(",")]
+        if is_verb:
+            had_infinitive = had_infinitive or any(
+                m.startswith("to ") for m in word_meanings
+            )
+            word_meanings = [m[3:] if m.startswith("to ") else m for m in word_meanings]
+        meanings.append(word_meanings)
+
+    # Calculate unique meanings maintaining order
+    seen: set[str] = set()
+    merged_meanings: list[str] = []
+
+    # First, handle words with ranks in order
+    ranked_words = [(w, m) for w, m in zip(words, meanings) if w.rank is not None]
+    ranked_words.sort(key=lambda x: x[0].rank or float("inf"))
+
+    for _, word_meanings in ranked_words:
+        for meaning in word_meanings:
+            if meaning not in seen:
+                seen.add(meaning)
+                merged_meanings.append(meaning)
+
+    # Then handle unranked words in alternating fashion
+    unranked_meanings = [m for w, m in zip(words, meanings) if w.rank is None]
+
+    if unranked_meanings:
+        max_len = max(len(m) for m in unranked_meanings)
+        for i in range(max_len):
+            for word_meanings in unranked_meanings:
+                if i < len(word_meanings) and word_meanings[i] not in seen:
+                    seen.add(word_meanings[i])
+                    merged_meanings.append(word_meanings[i])
+
+    # Add "to" back if it's a verb that was glossed as one
+    if is_verb and had_infinitive and merged_meanings:
+        merged_meanings[0] = "to " + merged_meanings[0]
+
+    # TODO: Move this to its own function, possibly on Word
+    # Create merged word
+    ranks = [w.rank for w in words if w.rank is not None]
+    new_meaning = ", ".join(merged_meanings)
+    new_rank = min(ranks) if ranks else None
+    base_word = attrs.evolve(
+        next(iter(words)), rank=min(ranks) if ranks else None, meaning=new_meaning
+    )
+    merged_words = (
+        attrs.evolve(word, rank=new_rank, meaning=new_meaning) for word in words
+    )
+    base_word = next(merged_words)
+    for word in merged_words:
+        if base_word.part_of_speech != word.part_of_speech:
+            reconciled = _reconcile_parts_of_speech(
+                base_word.part_of_speech, word.part_of_speech
+            )
+            base_word.part_of_speech = reconciled
+            word.part_of_speech = reconciled
+        base_word.update(word)
+    return base_word
+
+
 def merge_word_set(words: Collection[types.Word]) -> types.Word:
     """Create one word from a non-conflicting set of words."""
     if len(words) == 0:

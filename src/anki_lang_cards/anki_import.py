@@ -191,8 +191,7 @@ def _json_repair_candidates(json_str: str) -> Iterator[str]:
     """
     yield json_str
     unescaped = (
-        json_str.replace("&quot;", '"')
-        .replace("&nbsp;", " ")
+        json_str.replace("&quot;", '"').replace("&nbsp;", " ")
         # &amp; must come last so it unwraps double escaping one layer at
         # a time.
         .replace("&amp;", "&")
@@ -431,8 +430,7 @@ class AnkiConnectClient:
             return asyncio.create_task(self.fetch_notes(batch))
 
         batches: dict[asyncio.Task[Sequence[NoteData]], tuple[NoteId, ...]] = {
-            _spawn(batch): batch
-            for batch in itertools.batched(note_list, batch_size)
+            _spawn(batch): batch for batch in itertools.batched(note_list, batch_size)
         }
         pending = set(batches)
 

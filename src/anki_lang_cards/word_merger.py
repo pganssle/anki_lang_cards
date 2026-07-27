@@ -1,5 +1,5 @@
 import enum
-from collections.abc import Collection, Iterable, Sequence, Set
+from collections.abc import Iterable, Sequence, Set
 from typing import Self
 
 import attrs
@@ -14,7 +14,6 @@ from textual.widgets import Button, Footer, Header, Input, Label, Static
 
 from . import _types as types
 from . import conflict_resolver
-from . import part_of_speech as pos
 
 
 class CacheHitBehavior(enum.Enum):
@@ -448,65 +447,9 @@ class MergeScreen(Screen):
         self.refresh(layout=True)
 
 
-def auto_merge_words(words: Collection[types.Word]) -> types.Word:
-    """Automatically merge a sequence of words according to the specified rules."""
-    # Split and clean meanings
-    meanings: list[list[str]] = []
-    for word in words:
-        word_meanings = [m.strip() for m in word.meaning.split(",")]
-        if any(w.part_of_speech.base_pos == pos.BasePoS.VERB for w in words):
-            word_meanings = [m[3:] if m.startswith("to ") else m for m in word_meanings]
-        meanings.append(word_meanings)
-
-    # Calculate unique meanings maintaining order
-    seen: set[str] = set()
-    merged_meanings: list[str] = []
-
-    # First, handle words with ranks in order
-    ranked_words = [(w, m) for w, m in zip(words, meanings) if w.rank is not None]
-    ranked_words.sort(key=lambda x: x[0].rank or float("inf"))
-
-    for _, word_meanings in ranked_words:
-        for meaning in word_meanings:
-            if meaning not in seen:
-                seen.add(meaning)
-                merged_meanings.append(meaning)
-
-    # Then handle unranked words in alternating fashion
-    unranked_meanings = [m for w, m in zip(words, meanings) if w.rank is None]
-
-    if unranked_meanings:
-        max_len = max(len(m) for m in unranked_meanings)
-        for i in range(max_len):
-            for word_meanings in unranked_meanings:
-                if i < len(word_meanings) and word_meanings[i] not in seen:
-                    seen.add(word_meanings[i])
-                    merged_meanings.append(word_meanings[i])
-
-    # Add "to" back if it's a verb
-    if any(w.part_of_speech.base_pos == pos.BasePoS.VERB for w in words):
-        merged_meanings[0] = "to " + merged_meanings[0]
-
-    # TODO: Move this to its own function, possibly on Word
-    # Create merged word
-    ranks = [w.rank for w in words if w.rank is not None]
-    new_meaning = ", ".join(merged_meanings)
-    new_rank = min(ranks) if ranks else None
-    base_word = attrs.evolve(
-        next(iter(words)), rank=min(ranks) if ranks else None, meaning=new_meaning
-    )
-    merged_words = (
-        attrs.evolve(word, rank=new_rank, meaning=new_meaning) for word in words
-    )
-    base_word = next(merged_words)
-    for word in merged_words:
-        if base_word.part_of_speech != word.part_of_speech:
-            base_word.part_of_speech = pos.base_part_of_speech(
-                base_word.part_of_speech.base_pos
-            )
-            word.part_of_speech = pos.base_part_of_speech(word.part_of_speech.base_pos)
-        base_word.update(word)
-    return base_word
+# `auto_merge_words` lives in `conflict_resolver` so that merging does not
+# require textual; re-exported here for the callers that already import it.
+auto_merge_words = conflict_resolver.auto_merge_words
 
 
 class WordMergerApp(App):
