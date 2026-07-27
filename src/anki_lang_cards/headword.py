@@ -10,7 +10,9 @@ It is deliberately conservative: it only rewrites notation whose meaning is
 fixed by the card template, never anything that depends on what a word means.
 """
 
+import enum
 import functools
+import re
 import unicodedata
 from collections.abc import Mapping, Sequence
 from typing import Final
@@ -29,6 +31,45 @@ _VOWELS: Final[frozenset[str]] = frozenset(_ACCENT_MAP) | frozenset(
 
 _PLURAL_ENDINGS: Final[Sequence[str]] = ("os/as", "as/os")
 _SINGULAR_ENDINGS: Final[Sequence[str]] = ("o/a", "a/o")
+
+_PARENTHETICAL: Final = re.compile(r"\s*\(([^()]*)\)")
+
+# A parenthetical made of nothing but these describes how a word is
+# constructed, not what it means.
+_GRAMMATICAL_WORDS: Final[frozenset[str]] = frozenset(
+    {
+        # Prepositions that a verb can govern.
+        "a",
+        "ante",
+        "bajo",
+        "con",
+        "contra",
+        "de",
+        "desde",
+        "en",
+        "entre",
+        "hacia",
+        "hasta",
+        "para",
+        "por",
+        "según",
+        "sin",
+        "sobre",
+        "tras",
+        # The complementizer, as in "quedar en (que)".
+        "que",
+        # Placeholders standing in for whatever the complement happens to be.
+        "algo",
+        "alguien",
+        "alguno",
+        "alguna",
+        "uno",
+        "una",
+        "mismo",
+        "misma",
+        "sí",
+    }
+)
 
 
 def normalize(word: str, /) -> str:
@@ -143,11 +184,70 @@ def canonical_form(word: str, /) -> str:
     return word
 
 
+class MarkerKind(enum.Enum):
+    """What a parenthetical in a headword is doing.
+
+    SENSE markers pick out one meaning of a word that has several, so they are
+    the whole reason two notes exist separately: "llave (lucha)" is a card
+    about wrestling holds and "llave" is a card about keys, and merging them
+    would defeat the point.
+
+    VALENCY markers record the preposition a word governs. "percatarse (de)"
+    and "percatarse" are one word written two ways, so they belong on one card.
+    """
+
+    SENSE = "sense"
+    VALENCY = "valency"
+
+
+def _classify(contents: str, /) -> MarkerKind:
+    tokens = [token for token in re.split(r"[\s,]+", contents.casefold()) if token]
+    if all(token in _GRAMMATICAL_WORDS for token in tokens):
+        return MarkerKind.VALENCY
+    return MarkerKind.SENSE
+
+
+def parenthetical_markers(word: str, /) -> Sequence[tuple[str, MarkerKind]]:
+    """Return each parenthetical in a headword along with what it is doing.
+
+    percatarse (de)   -> (("de", VALENCY),)
+    llave (lucha)     -> (("lucha", SENSE),)
+    perro             -> ()
+    """
+    return tuple(
+        (match.group(1).strip(), _classify(match.group(1)))
+        for match in _PARENTHETICAL.finditer(normalize(word))
+    )
+
+
+def strip_valency_markers(word: str, /) -> str:
+    """Remove the parentheticals that only record a governed preposition.
+
+    Sense markers are left in place, because dropping one would merge two cards
+    that exist precisely because they mean different things.
+    """
+
+    def replace(match: re.Match[str]) -> str:
+        if _classify(match.group(1)) is MarkerKind.VALENCY:
+            return ""
+        return match.group(0)
+
+    return re.sub(r"\s+", " ", _PARENTHETICAL.sub(replace, normalize(word))).strip()
+
+
 def lookup_key(word: str, /) -> str:
     """Return the form of a headword used to decide whether two notes collide.
+
+    Unlike `canonical_form` this is allowed to discard information, because
+    nothing is displayed from it. Valency markers are dropped so that
+    "percatarse (de)" and "percatarse" are considered for merging; sense
+    markers are kept so that "llave (lucha)" and "llave" are not.
+
+    Collapsing two headwords here only means they get compared, not that they
+    get merged — they still reach the conflict finder as a set for review.
 
     Case and surrounding whitespace are already ignored by `Word.__eq__`, so
     they are ignored here too; bucketing more strictly than words compare would
     hide collisions from the conflict finder.
     """
-    return canonical_form(word).casefold()
+    return canonical_form(strip_valency_markers(word)).casefold()

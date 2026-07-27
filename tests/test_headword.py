@@ -124,3 +124,121 @@ def test_canonicalization_preserves_the_expansion(word: str) -> None:
     assert headword.gendered_forms(headword.canonical_form(word)) == (
         headword.gendered_forms(word)
     )
+
+
+@pytest.mark.parametrize(
+    "word",
+    [
+        "percatarse (de)",
+        "avenirse (a)",
+        "dar paso (a)",
+        "mofarse (de)",
+        "quedarse (con algo)",
+        "agarrarse (a algo)",
+        "hacer caso omiso (de)",
+        "hacerle la rosca (a alguien)",
+        "ponérselo fácil (a alguien)",
+        "quedar en (que)",
+        "poder más (que)",
+        "dársele algo (a alguien)",
+        # An empty parenthetical cannot be picking out a sense.
+        "percatarse ()",
+    ],
+)
+def test_valency_markers_are_recognized(word: str) -> None:
+    kinds = [kind for _, kind in headword.parenthetical_markers(word)]
+    assert kinds == [headword.MarkerKind.VALENCY]
+
+
+@pytest.mark.parametrize(
+    "word",
+    [
+        "llave (lucha)",
+        "mono (ropa)",
+        "casco (de buque)",
+        "cuerno (ropa)",
+        "luna (de un coche)",
+        "toma (de corriente)",
+        "puente (periodo del tiempo)",
+        "gastar (ropa, zapatos)",
+        "arrastrar (las palabras)",
+        "allanamiento (de morada)",
+        "mariquita (dicho de un hombre)",
+        "sortear (obstáculo)",
+        # A content word makes this a sense marker even though it is a slot;
+        # erring toward "never merge" is the safe direction.
+        "llevarle (años) a alguien",
+    ],
+)
+def test_sense_markers_are_recognized(word: str) -> None:
+    kinds = [kind for _, kind in headword.parenthetical_markers(word)]
+    assert kinds == [headword.MarkerKind.SENSE]
+
+
+def test_headword_without_parentheses_has_no_markers() -> None:
+    assert headword.parenthetical_markers("percatarse") == ()
+
+
+@pytest.mark.parametrize(
+    ("word", "expected"),
+    [
+        ("percatarse (de)", "percatarse"),
+        ("dar paso (a)", "dar paso"),
+        ("hacer caso omiso (de)", "hacer caso omiso"),
+        ("tocarle (a alguien) con", "tocarle con"),
+        # Sense markers survive untouched.
+        ("llave (lucha)", "llave (lucha)"),
+        ("gastar (ropa, zapatos)", "gastar (ropa, zapatos)"),
+        # Nothing to strip.
+        ("percatarse", "percatarse"),
+    ],
+)
+def test_strip_valency_markers(word: str, expected: str) -> None:
+    assert headword.strip_valency_markers(word) == expected
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        ("percatarse (de)", "percatarse"),
+        ("avenirse (a)", "avenirse"),
+        ("dar paso (a)", "dar paso"),
+        ("sortear (obstáculo)", "sortear (obstáculo)"),
+    ],
+)
+def test_valency_variants_share_a_lookup_key(first: str, second: str) -> None:
+    assert headword.lookup_key(first) == headword.lookup_key(second)
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        # The whole point of a sense marker is that it keeps cards apart.
+        ("llave (lucha)", "llave"),
+        ("mono (ropa)", "mono"),
+        ("casco (de buque)", "casco"),
+        ("luna (de un coche)", "luna"),
+        ("sortear (obstáculo)", "sortear"),
+        ("mariquita (dicho de un hombre)", "mariquita"),
+    ],
+)
+def test_sense_variants_keep_distinct_lookup_keys(first: str, second: str) -> None:
+    assert headword.lookup_key(first) != headword.lookup_key(second)
+
+
+@hypothesis.given(st.text(min_size=1, max_size=30))
+def test_stripping_valency_markers_is_idempotent(word: str) -> None:
+    once = headword.strip_valency_markers(word)
+    assert headword.strip_valency_markers(once) == once
+
+
+@hypothesis.given(st.text(min_size=1, max_size=30))
+def test_stripping_never_removes_a_sense_marker(word: str) -> None:
+    stripped = headword.strip_valency_markers(word)
+    sense_markers = [
+        contents
+        for contents, kind in headword.parenthetical_markers(word)
+        if kind is headword.MarkerKind.SENSE
+    ]
+    for contents in sense_markers:
+        assert f"({contents})" in stripped
