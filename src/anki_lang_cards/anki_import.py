@@ -13,6 +13,7 @@ from typing import Any, Final, NewType, TypeAlias, TypedDict
 import aiohttp
 
 from . import _types as types
+from . import headword
 
 NoteId = NewType("NoteId", int)
 DeckId = NewType("DeckId", int)
@@ -20,6 +21,28 @@ CardId = NewType("CardId", int)
 JsonStr = NewType("JsonStr", str)
 URL: Final[str] = "http://localhost:8765"
 AC_VERSION: Final[int] = 6
+
+
+def _related_query(word: types.Word) -> str:
+    """One word's search terms, exact plus the prefixes variants share.
+
+    The marker-stripped prefix finds deck spellings that add a valency marker
+    in either direction; the slash-notation stem prefix finds the other
+    shorthand for the same gendered pair. The stem prefix is only used when
+    slash notation is present — prefixing on an arbitrary short headword would
+    drag in half the deck.
+    """
+    terms = [f'"Word:{word.word}"']
+    if word.rank:
+        terms.append(f'"Rank:{word.rank}"')
+    stripped = headword.strip_valency_markers(word.word).strip()
+    if stripped:
+        terms.append(f'"Word:{stripped}*"')
+    if "/" in stripped:
+        stem = stripped.partition("/")[0].strip()
+        if stem:
+            terms.append(f'"Word:{stem}*"')
+    return "(" + " or ".join(dict.fromkeys(terms)) + ")"
 
 
 class Field[T: str](TypedDict):
@@ -518,6 +541,36 @@ class AnkiConnectClient:
 
         return output
 
+    async def retrieve_related_words(
+        self,
+        deck_name: str,
+        words: Sequence[types.Word],
+    ) -> Mapping[NoteId, types.Word]:
+        """Fetch notes matching these words or any variant spelling of them.
+
+        `retrieve_matching_words` asks for exact spellings, and duplicate
+        detection matches looser than that: "seguir el rollo" and "seguir el
+        rollo (a alguien)" are one lookup key, as are "mirón/a" and
+        "mirón/ona". A deck note under a variant spelling has to be fetched
+        before it can be flagged, so each word is also searched as a prefix of
+        its marker-stripped form — which finds spellings that add a marker —
+        and, for slash notation, of its stem, which finds the other way of
+        writing the same pair. The extra notes a prefix drags in are harmless:
+        they share no lookup key with anything, so nothing pairs with them.
+        """
+        query = " or ".join(_related_query(word) for word in words)
+        if not query:
+            return {}
+        ids = await self.get_note_ids(deck_name, query=query)
+
+        output = {}
+        async for note_data in self.get_anki_notes(ids):
+            output[note_data["noteId"]] = self.word_from_anki_connect_response(
+                note_data
+            )
+
+        return output
+
     def word_from_anki_connect_response(self, resp: NoteData) -> types.Word:
         """Creates a `Word` object from an AnkiConnect response representing a Note."""
         fields: NoteFields = resp.get("fields", {})
@@ -648,15 +701,18 @@ def load_sentences(
         else:
             sentence_source = None
 
-    sentences = (
-        types.Sentence(
-            spanish=spanish_sentence,
-            english=english_sentence,
-            source=sentence_source,
-        ),
-        *map(types.Sentence.from_dict, example_sentences),
-    )
-    return sentences
+    # A note with no first sentence must not grow a Sentence full of Nones —
+    # comparing or merging one of those crashes far from here.
+    first: tuple[types.Sentence, ...] = ()
+    if spanish_sentence is not None:
+        first = (
+            types.Sentence(
+                spanish=spanish_sentence,
+                english=english_sentence,
+                source=sentence_source,
+            ),
+        )
+    return (*first, *map(types.Sentence.from_dict, example_sentences))
 
 
 def _load_anki_word(row: Sequence[str]) -> types.Word:

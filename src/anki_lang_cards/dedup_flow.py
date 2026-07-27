@@ -64,10 +64,19 @@ def _needs_answer(candidate: triage.Candidate, decisions: triage.DecisionCache) 
     Identical notes have nothing to decide, and a recorded non-review answer
     settles the group. A recorded review — an edit saved before the group was
     decided — keeps the question open.
+
+    Matching mirrors what carrying the answer out will do: by the exact notes
+    first, then by their ranks. A decision recorded when the deck was loaded
+    holds three notes — both copies of one plus the other — and a later run
+    seeing only two must still recognize it as answered, exactly as
+    `apply_decisions` will when it merges the group.
     """
     if apply_merges._identical(candidate.words):
         return False
     decision = decisions.get(candidate.words)
+    if decision is None:
+        ranks = frozenset(w.rank for w in candidate.words if w.rank is not None)
+        decision = apply_merges._decisions_by_rank(decisions).get(ranks)
     return decision is None or decision.disposition is triage.Disposition.REVIEW
 
 
