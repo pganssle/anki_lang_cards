@@ -27,6 +27,9 @@ records the decisions in one go. It needs the merge_ui extra. By default it
 asks only about the groups that have no suggestion; --include-proposed asks
 about the proposed merges as well.
 
+Each note shows as many of its example sentences as the pane has room for, and
+"v" turns the page.
+
 Sometimes the answer is neither merging nor separating but rewriting: "segundo"
 the adjective and "segundo" the noun collide only because both are written the
 same way, and "segundo/a" against "el segundo" is a better outcome than either.
@@ -103,7 +106,7 @@ def resolve_in_ui(
     candidates: Sequence[triage.Candidate],
     *,
     include_proposed: bool,
-    sentence_limit: int | None,
+    per_page: int | None,
 ) -> Sequence[triage.Candidate]:
     """Ask about candidates in the UI, leaving the ones not shown alone."""
     shown = [
@@ -117,7 +120,7 @@ def resolve_in_ui(
 
     resolved = asyncio.run(
         triage_ui.resolve_candidates(
-            [candidates[index] for index in shown], sentence_limit=sentence_limit
+            [candidates[index] for index in shown], per_page=per_page
         )
     )
     out = list(candidates)
@@ -228,10 +231,10 @@ def main() -> None:
     parser.add_argument(
         "--sentences",
         type=int,
-        default=2,
+        default=0,
         help=(
-            "Sentences shown per note before pressing v (default: 2). "
-            "Use a negative number to start with all of them."
+            "Sentences shown per note at a time. The default fills whatever "
+            "room the pane has; press v to turn the page either way."
         ),
     )
     parser.add_argument(
@@ -284,7 +287,7 @@ def main() -> None:
         candidates = resolve_in_ui(
             candidates,
             include_proposed=args.include_proposed,
-            sentence_limit=None if args.sentences < 0 else args.sentences,
+            per_page=args.sentences or None,
         )
 
     triage.write_triage_file(args.triage_file, candidates)

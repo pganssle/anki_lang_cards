@@ -21,7 +21,7 @@ from anki_lang_cards import _types as types
 from anki_lang_cards import triage
 
 SCRIPT: Final = (
-    pathlib.Path(__file__).parent.parent / "scripts" / "triage_duplicates.py"
+    pathlib.Path(__file__).parent.parent.parent / "scripts" / "triage_duplicates.py"
 )
 
 
@@ -106,9 +106,9 @@ class TestResolveWiring:
     def recorded(self, script, monkeypatch) -> dict[str, Any]:
         seen: dict[str, Any] = {}
 
-        async def fake_resolve(candidates, sentence_limit=None, **kwargs):
+        async def fake_resolve(candidates, per_page=None, **kwargs):
             seen["candidates"] = tuple(candidates)
-            seen["sentence_limit"] = sentence_limit
+            seen["per_page"] = per_page
             return tuple(candidates)
 
         monkeypatch.setattr(script.triage_ui, "resolve_candidates", fake_resolve)
@@ -118,28 +118,20 @@ class TestResolveWiring:
         run_script(script, tmp_path, "--inputs", str(inputs), "--resolve")
         assert len(recorded["candidates"]) == 1
 
-    def test_the_sentence_limit_is_passed_through(
+    def test_a_fixed_page_size_is_passed_through(
         self, script, tmp_path, inputs, recorded
     ) -> None:
         """The bug this file exists for: --sentences was declared and dropped."""
         run_script(
             script, tmp_path, "--inputs", str(inputs), "--resolve", "--sentences", "7"
         )
-        assert recorded["sentence_limit"] == 7
+        assert recorded["per_page"] == 7
 
-    def test_the_default_sentence_limit_is_passed_through(
+    def test_the_page_size_defaults_to_whatever_fits(
         self, script, tmp_path, inputs, recorded
     ) -> None:
         run_script(script, tmp_path, "--inputs", str(inputs), "--resolve")
-        assert recorded["sentence_limit"] == 2
-
-    def test_a_negative_sentence_limit_means_all_of_them(
-        self, script, tmp_path, inputs, recorded
-    ) -> None:
-        run_script(
-            script, tmp_path, "--inputs", str(inputs), "--resolve", "--sentences", "-1"
-        )
-        assert recorded["sentence_limit"] is None
+        assert recorded["per_page"] is None
 
     def test_only_undecided_groups_are_offered_by_default(
         self, script, tmp_path, recorded
@@ -183,7 +175,7 @@ class TestPersistence:
     def test_answers_are_remembered_between_runs(
         self, script, tmp_path, inputs, monkeypatch, capsys
     ) -> None:
-        async def answer_merge(candidates, sentence_limit=None, **kwargs):
+        async def answer_merge(candidates, per_page=None, **kwargs):
             return tuple(
                 attrs.evolve(c, disposition=triage.Disposition.MERGE)
                 for c in candidates
@@ -192,7 +184,7 @@ class TestPersistence:
         monkeypatch.setattr(script.triage_ui, "resolve_candidates", answer_merge)
         run_script(script, tmp_path, "--inputs", str(inputs), "--resolve")
 
-        async def fail_if_asked(candidates, sentence_limit=None, **kwargs):
+        async def fail_if_asked(candidates, per_page=None, **kwargs):
             raise AssertionError(
                 f"asked again about {[c.summarize() for c in candidates]}"
             )
@@ -206,7 +198,7 @@ class TestPersistence:
     def test_revisions_are_written_for_import(
         self, script, tmp_path, inputs, monkeypatch
     ) -> None:
-        async def rewrite(candidates, sentence_limit=None, **kwargs):
+        async def rewrite(candidates, per_page=None, **kwargs):
             out = []
             for candidate in candidates:
                 revised = tuple(
@@ -237,7 +229,7 @@ class TestPersistence:
     def test_nothing_is_written_when_nothing_was_rewritten(
         self, script, tmp_path, inputs, monkeypatch
     ) -> None:
-        async def answer_merge(candidates, sentence_limit=None, **kwargs):
+        async def answer_merge(candidates, per_page=None, **kwargs):
             return tuple(
                 attrs.evolve(c, disposition=triage.Disposition.MERGE)
                 for c in candidates

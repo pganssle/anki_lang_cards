@@ -116,6 +116,17 @@ class Candidate:
     comparison: definition_similarity.Comparison
     disposition: Disposition
 
+    sides: tuple[tuple[types.Word, ...], ...] = ()
+    """The groups being asked about, when the question is between two of them.
+
+    A cross-part-of-speech candidate asks whether one group joins another, not
+    whether every note in it is the same card. "deber" raises both questions at
+    once — the two noun notes against each other, and the noun against the verb
+    — and they are separate entries here. Keeping the sides lets the UI say so,
+    rather than showing three notes flat and implying one verdict covers all of
+    them. Empty means the whole group is one side.
+    """
+
     revisions: tuple[types.Word, ...] | None = None
     """Rewritten notes, when the answer was to tell the two apart instead.
 
@@ -128,6 +139,18 @@ class Candidate:
     @property
     def key(self) -> tuple[types.Word, ...]:
         return tuple(sorted(self.words))
+
+    @property
+    def current_sides(self) -> tuple[tuple[types.Word, ...], ...]:
+        """The sides, with any rewriting applied, or the whole group as one."""
+        if not self.sides:
+            return (self.current_words,)
+        if self.revisions is None:
+            return self.sides
+        revised = {word.rank: word for word in self.revisions}
+        return tuple(
+            tuple(revised.get(word.rank, word) for word in side) for side in self.sides
+        )
 
     @property
     def current_words(self) -> tuple[types.Word, ...]:
@@ -156,6 +179,8 @@ class Candidate:
             "summary": list(self.summarize()),
             "words": _words_to_csv(self.words),
         }
+        if self.sides:
+            out["sides"] = [_words_to_csv(side) for side in self.sides]
         if self.revisions is not None:
             out["was"] = list(self.summarize(revised=False))
             out["revisions"] = _words_to_csv(self.revisions)
@@ -172,6 +197,7 @@ class Candidate:
                 shared_glosses=frozenset(data.get("shared_glosses", ())),
             ),
             disposition=Disposition(data["disposition"]),
+            sides=tuple(tuple(_words_from_csv(side)) for side in data.get("sides", ())),
             revisions=None if revisions is None else tuple(_words_from_csv(revisions)),
         )
 
@@ -327,6 +353,7 @@ def find_candidates(
                     tuple(itertools.chain(first, second)),
                     _classify(first, second),
                     comparer,
+                    sides=(tuple(first), tuple(second)),
                 )
             )
 
@@ -349,6 +376,7 @@ def _make_candidate(
     words: Sequence[types.Word],
     reason: Reason,
     comparer: definition_similarity.DefinitionComparer,
+    sides: tuple[tuple[types.Word, ...], ...] = (),
 ) -> Candidate:
     comparison = comparer.compare_all([word.meaning for word in words])
     proposable = reason in _PROPOSABLE and comparison.is_strong
@@ -358,6 +386,7 @@ def _make_candidate(
         reason=reason,
         comparison=comparison,
         disposition=disposition,
+        sides=sides,
     )
 
 

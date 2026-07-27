@@ -13,6 +13,8 @@ Importing this module requires `textual`, the same optional dependency as
 `word_merger`.
 """
 
+import functools
+import textwrap
 from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from typing import Final
 
@@ -20,7 +22,7 @@ import attrs
 import textual
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.containers import Container, Horizontal, Vertical
 from textual.driver import Driver
 from textual.screen import Screen
 from textual.widget import Widget
@@ -49,24 +51,8 @@ _REASON_TEXT: Final[Mapping[triage.Reason, str]] = {
 }
 
 
-DEFAULT_SENTENCE_LIMIT: Final[int] = 2
-"""Sentences shown per note before "v" is pressed."""
-
-_LADDER_STEPS: Final[Sequence[int]] = (5, 10, 25)
-
-
-def sentence_ladder(
-    initial: int | None = DEFAULT_SENTENCE_LIMIT,
-) -> Sequence[int | None]:
-    """The rungs "v" steps through, from the configured start up to all of them.
-
-    Judging usage sometimes needs one sentence and sometimes needs the lot, and
-    a straight toggle between two and everything overshoots on a note with
-    twenty. Stepping up means the reader stops where they have seen enough.
-    """
-    if initial is None:
-        return (None,)
-    return (initial, *(step for step in _LADDER_STEPS if step > initial), None)
+_FALLBACK_PER_PAGE: Final[int] = 2
+"""Sentences assumed to fit before a layout pass has said how tall the pane is."""
 
 
 def describe_source(citation: types.Citation | None) -> str:
@@ -101,37 +87,88 @@ def _shared_rank(words: Sequence[types.Word]) -> int | None:
     return None
 
 
-class SentencesView(Static):
-    """Shows how a note actually uses its word."""
+def _sentence_block(sentence: types.Sentence, width: int) -> Sequence[str]:
+    """One sentence as the lines it will actually occupy at a given width."""
+    wrap = functools.partial(textwrap.wrap, width=max(width, 20))
+    lines = [f"[bold]{line}[/]" for line in wrap(sentence.spanish) or [""]]
+    if sentence.english:
+        lines.extend(f"  {line}" for line in wrap(sentence.english, initial_indent=""))
+    lines.append(f"  [dim]{describe_source(sentence.source)}[/]")
+    lines.append("")
+    return lines
 
+
+class SentencesView(Static):
+    """Shows how a note actually uses its word.
+
+    As many sentences as the pane has room for, starting from an offset. There
+    is no scrolling and nothing is hidden behind a smaller view of itself: "v"
+    turns the page, so every sentence is reachable without the reader having to
+    notice that the pane was cut off at the bottom.
+    """
+
+    # Not "offset": `Widget.offset` is a reactive holding the widget's position,
+    # and assigning an int to it fails at construction.
     def __init__(
         self,
         word: types.Word,
-        limit: int | None = DEFAULT_SENTENCE_LIMIT,
+        start: int = 0,
+        per_page: int | None = None,
         *args,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
         self.word = word
-        self.limit = limit
+        self.start = start
+        self.per_page = per_page
+        """Sentences to show, or None to fit as many as the pane holds."""
+
+    def fitting(self, width: int, height: int) -> int:
+        """How many whole sentences fit in a pane of this size.
+
+        Measured from the wrapped lines rather than assumed, since a sentence
+        from a book runs to several lines in a narrow column and one the model
+        wrote often fits on one. At least one is always reported: a pane too
+        short for even that should clip a sentence, not show nothing and leave
+        "v" with nothing to advance by.
+        """
+        sentences = self.word.sentences[self.start :]
+        if not sentences:
+            return 0
+        if self.per_page is not None:
+            return min(max(self.per_page, 1), len(sentences))
+        available = max(height - 1, 1)  # one line for the counter
+        used = 0
+        for count, sentence in enumerate(sentences):
+            used += len(_sentence_block(sentence, width))
+            if used > available:
+                return max(count, 1)
+        return len(sentences)
 
     def render(self) -> str:
         sentences = self.word.sentences
         if not sentences:
             return "[dim]No example sentences.[/]"
 
-        shown = sentences if self.limit is None else sentences[: self.limit]
-        lines: list[str] = []
-        for sentence in shown:
-            lines.append(f"[bold]{sentence.spanish}[/]")
-            if sentence.english:
-                lines.append(f"  {sentence.english}")
-            lines.append(f"  [dim]{describe_source(sentence.source)}[/]")
-            lines.append("")
+        width, height = self.size.width, self.size.height
+        if height <= 0 and self.per_page is None:
+            # Before the first layout pass the pane has no size to measure.
+            count = _FALLBACK_PER_PAGE
+        else:
+            count = self.fitting(width, height)
 
-        if (remaining := len(sentences) - len(shown)) > 0:
-            lines.append(f"[dim]{remaining} more — press v[/]")
-        return "\n".join(lines).rstrip()
+        shown = sentences[self.start : self.start + count]
+        lines = [
+            line for sentence in shown for line in _sentence_block(sentence, width)
+        ]
+
+        first = self.start + 1
+        last = self.start + len(shown)
+        if len(sentences) > len(shown):
+            lines.append(f"[dim]{first}–{last} of {len(sentences)} — v for more[/]")
+        else:
+            lines.append(f"[dim]{len(sentences)} sentences[/]")
+        return "\n".join(lines)
 
 
 class CandidateView(Static):
@@ -148,6 +185,12 @@ class CandidateView(Static):
             lines.append(
                 f"These are one note (rank {rank}) whose fields disagree, not "
                 "two notes to choose between."
+            )
+        if len(candidate.current_sides) > 1:
+            lines.append(
+                "The question is only whether the two sides belong together. "
+                "Any disagreement within a side is a separate entry in this "
+                "list, and answering here does not settle it."
             )
         lines.append(f"Definitions agree: {candidate.comparison.score:.2f}")
         if candidate.comparison.shared_glosses:
@@ -265,17 +308,16 @@ class TriageScreen(Screen):
     def __init__(
         self,
         candidates: Sequence[triage.Candidate],
-        sentence_limits: Sequence[int | None] = (),
+        per_page: int | None = None,
     ):
         super().__init__()
         self._candidates: Final = tuple(candidates)
-        self._sentence_limits: Final = tuple(sentence_limits) or tuple(
-            sentence_ladder()
-        )
+        self._per_page: Final = per_page
+        """Sentences per page, or None to fit as many as the pane holds."""
         self._decisions: MutableMapping[int, triage.Disposition] = {}
         self._revisions: MutableMapping[int, tuple[types.Word, ...]] = {}
         self._index = 0
-        self._limit_index = 0
+        self._offset = 0
 
     @property
     def current(self) -> triage.Candidate:
@@ -310,6 +352,7 @@ class TriageScreen(Screen):
             self.dismiss(self.results)
             return
         self._index += 1
+        self._offset = 0
         self.refresh_content()
 
     async def action_merge(self) -> None:
@@ -322,11 +365,28 @@ class TriageScreen(Screen):
         self._decide(triage.Disposition.REVIEW)
 
     @property
-    def sentence_limit(self) -> int | None:
-        return self._sentence_limits[self._limit_index]
+    def sentence_offset(self) -> int:
+        return self._offset
+
+    def _page_size(self) -> int:
+        """How many sentences the narrowest pane on screen can show.
+
+        The panes advance together so that the notes stay side by side and
+        comparable, which means the page is as big as the smallest of them.
+        """
+        views = tuple(self.query(SentencesView))
+        if not views:
+            return _FALLBACK_PER_PAGE
+        if self._per_page is not None:
+            return max(self._per_page, 1)
+        return max(min(view.fitting(*view.size) for view in views), 1)
 
     async def action_more_sentences(self) -> None:
-        self._limit_index = (self._limit_index + 1) % len(self._sentence_limits)
+        total = max(
+            (len(word.sentences) for word in self.current.current_words), default=0
+        )
+        advanced = self._offset + self._page_size()
+        self._offset = 0 if advanced >= total else advanced
         self.refresh_content()
 
     @textual.work
@@ -346,6 +406,7 @@ class TriageScreen(Screen):
         if self._index == 0:
             return
         self._index -= 1
+        self._offset = 0
         self.refresh_content()
 
     async def action_quit(self) -> None:
@@ -372,11 +433,20 @@ class TriageScreen(Screen):
             case _:
                 raise ValueError(f"Unknown action: {event.button.id}")
 
+    def _note_column(self, word: types.Word, reference: types.Word) -> Widget:
+        return Vertical(
+            word_merger.WordView(
+                word, word_merger.WordDiff.from_words(word, reference)
+            ),
+            SentencesView(word, self._offset, self._per_page, classes="sentences"),
+            classes="word-col",
+        )
+
     def _generate_layout_contents(self) -> Iterable[Widget]:
         candidate = self._resolved(self._index, self.current)
+        sides = tuple(tuple(sorted(side)) for side in candidate.current_sides)
         words = sorted(candidate.current_words)
         reference = words[0]
-        diffs = [word_merger.WordDiff.from_words(word, reference) for word in words]
 
         self.title = reference.word
         decided = self._decisions.get(self._index)
@@ -388,20 +458,25 @@ class TriageScreen(Screen):
 
         yield Header()
         yield CandidateView(candidate, classes="reason")
-        yield Static("\nGrouped notes:", classes="heading")
-        yield VerticalScroll(
-            Horizontal(
-                *(
-                    Vertical(
-                        word_merger.WordView(word, diff),
-                        SentencesView(word, self.sentence_limit, classes="sentences"),
-                        classes="word-col",
+        heading = "Sides:" if len(sides) > 1 else "Grouped notes:"
+        yield Static(heading, classes="heading")
+        if len(sides) > 1:
+            panes: list[Widget] = []
+            for index, side in enumerate(sides):
+                if index:
+                    panes.append(Static("vs", classes="divider"))
+                panes.append(
+                    Horizontal(
+                        *(self._note_column(word, reference) for word in side),
+                        classes="side",
                     )
-                    for word, diff in zip(words, diffs, strict=True)
                 )
-            ),
-            classes="group",
-        )
+            yield Horizontal(*panes, classes="group")
+        else:
+            yield Horizontal(
+                *(self._note_column(word, reference) for word in words),
+                classes="group",
+            )
         yield Horizontal(
             Button("Merge (m)", id="merge"),
             Button("Keep separate (k)", id="keep_separate"),
@@ -430,36 +505,57 @@ class TriageScreen(Screen):
 class TriageApp(App):
     """Main application for resolving triage decisions."""
 
+    # The sentences are the reason this screen exists, so the chrome is kept
+    # thin: at a 30-row terminal, generous padding on everything else left the
+    # sentence pane with no rows at all and the reader seeing two sentences by
+    # accident rather than by fit.
     CSS = """
     .heading {
         text-style: bold;
-        padding: 1;
+        padding: 0 1;
     }
 
     .reason {
-        padding: 1;
+        padding: 0 1;
     }
 
     WordView {
         border: solid green;
-        padding: 1;
-        margin: 1;
+        padding: 0 1;
+        margin: 0 1;
     }
 
     .word-col {
         width: 1fr;
-    }
-
-    .sentences {
-        padding: 0 2 1 2;
+        height: 1fr;
     }
 
     .group {
         height: 1fr;
     }
 
+    .side {
+        width: 1fr;
+        height: 1fr;
+        border: round $panel;
+    }
+
+    .divider {
+        width: 4;
+        height: 1fr;
+        content-align: center middle;
+        color: $text-muted;
+    }
+
+    .sentences {
+        padding: 0 2;
+        height: 1fr;
+        min-height: 5;
+        overflow: hidden;
+    }
+
     Button {
-        margin: 1;
+        margin: 0 1;
     }
     """
 
@@ -467,16 +563,16 @@ class TriageApp(App):
         self,
         candidates: Sequence[triage.Candidate],
         driver_class: type[Driver] | None = None,
-        sentence_limits: Sequence[int | None] = (),
+        per_page: int | None = None,
     ):
         super().__init__(driver_class=driver_class)
         self.candidates = tuple(candidates)
-        self.sentence_limits = tuple(sentence_limits)
+        self.per_page = per_page
 
     @textual.work
     async def on_mount(self) -> None:
         resolved = await self.push_screen_wait(
-            TriageScreen(self.candidates, self.sentence_limits)
+            TriageScreen(self.candidates, self.per_page)
         )
         self.exit(resolved)
 
@@ -484,7 +580,7 @@ class TriageApp(App):
 async def resolve_candidates(
     candidates: Sequence[triage.Candidate],
     driver_class: type[Driver] | None = None,
-    sentence_limit: int | None = DEFAULT_SENTENCE_LIMIT,
+    per_page: int | None = None,
 ) -> Sequence[triage.Candidate]:
     """Present candidates for decision and return them with the answers applied.
 
@@ -494,10 +590,6 @@ async def resolve_candidates(
     if not candidates:
         return candidates
 
-    app = TriageApp(
-        candidates,
-        driver_class=driver_class,
-        sentence_limits=sentence_ladder(sentence_limit),
-    )
+    app = TriageApp(candidates, driver_class=driver_class, per_page=per_page)
     resolved = await app.run_async()
     return candidates if resolved is None else tuple(resolved)

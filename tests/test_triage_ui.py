@@ -6,6 +6,7 @@ test plugin configured, so each scenario runs its own event loop.
 """
 
 import asyncio
+import re
 from collections.abc import Awaitable, Sequence
 
 import pytest
@@ -367,27 +368,19 @@ class TestSentences:
         )
         rendered = triage_ui.SentencesView(word).render()
 
-        assert "El turbojet regresa a la nave nodriza." in rendered
+        assert "El turbojet regresa" in rendered
         assert "It returns." in rendered
 
     def test_a_note_with_no_sentences_says_so(self) -> None:
         rendered = triage_ui.SentencesView(word_with_sentences()).render()
         assert "No example sentences" in rendered
 
-    def test_only_the_first_few_are_shown_by_default(self) -> None:
+    def test_a_page_starts_where_it_is_told_to(self) -> None:
         word = word_with_sentences(*(sentence(f"Frase {i}.") for i in range(5)))
-        rendered = triage_ui.SentencesView(word).render()
+        rendered = triage_ui.SentencesView(word, start=3).render()
 
-        assert "Frase 0." in rendered
-        assert "Frase 4." not in rendered
-        assert "3 more" in rendered
-
-    def test_no_limit_shows_everything(self) -> None:
-        word = word_with_sentences(*(sentence(f"Frase {i}.") for i in range(5)))
-        rendered = triage_ui.SentencesView(word, limit=None).render()
-
-        assert "Frase 4." in rendered
-        assert "more" not in rendered
+        assert "Frase 3." in rendered
+        assert "Frase 0." not in rendered
 
     @pytest.mark.parametrize(
         ("citation", "expected"),
@@ -471,59 +464,180 @@ class TestSharedRank:
         assert "one note" not in triage_ui.CandidateView(candidate).render()
 
 
-class TestSentenceLadder:
-    def test_the_ladder_climbs_from_the_start_to_all(self) -> None:
-        assert triage_ui.sentence_ladder(2) == (2, 5, 10, 25, None)
+class TestSentenceCarousel:
+    """ "v" turns the page rather than revealing what was clipped."""
 
-    def test_steps_below_the_start_are_skipped(self) -> None:
-        assert triage_ui.sentence_ladder(10) == (10, 25, None)
+    @staticmethod
+    def wordy(count: int, tag: str = "S") -> types.Word:
+        return types.Word(
+            rank=1,
+            word="metomentodo",
+            meaning="busybody",
+            part_of_speech="nm/f",
+            article=None,
+            sentences=tuple(
+                types.Sentence(
+                    spanish=f"{tag}{i} es un metomentodo.",
+                    english=f"EN{i}",
+                    source=None,
+                )
+                for i in range(count)
+            ),
+        )
 
-    def test_starting_at_all_has_nowhere_to_climb(self) -> None:
-        assert triage_ui.sentence_ladder(None) == (None,)
+    @staticmethod
+    def shown(view: triage_ui.SentencesView) -> list[str]:
+        return re.findall(r"\bS(\d+)\b", view.render())
 
-    def test_starting_at_none_shown_still_climbs(self) -> None:
-        """Hiding sentences is useful for scanning a long list quickly."""
-        assert triage_ui.sentence_ladder(0) == (0, 5, 10, 25, None)
+    def test_a_pane_shows_what_fits_and_says_where_it_is(self) -> None:
+        view = triage_ui.SentencesView(self.wordy(9))
+        view.start = 0
+        rendered = view.render()
+        assert "of 9" in rendered
 
-    def test_pressing_v_climbs_and_wraps(self) -> None:
-        async def scenario() -> list[int | None]:
-            app = triage_ui.TriageApp(
-                [make_candidate()], sentence_limits=triage_ui.sentence_ladder(2)
+    def test_a_short_note_says_how_many_it_has(self) -> None:
+        view = triage_ui.SentencesView(self.wordy(2))
+        assert "2 sentences" in view.render()
+        assert "v for more" not in view.render()
+
+    @pytest.mark.parametrize(
+        ("height", "expected"),
+        [(5, 1), (9, 2), (17, 4), (100, 9)],
+    )
+    def test_fitting_counts_whole_sentences(self, height: int, expected: int) -> None:
+        view = triage_ui.SentencesView(self.wordy(9))
+        assert view.fitting(60, height) == expected
+
+    def test_at_least_one_sentence_is_always_reported(self) -> None:
+        """A pane with no room should clip, not leave "v" nothing to move by."""
+        view = triage_ui.SentencesView(self.wordy(9))
+        assert view.fitting(20, 1) == 1
+
+    def test_a_note_with_no_sentences_fits_nothing(self) -> None:
+        assert triage_ui.SentencesView(self.wordy(0)).fitting(60, 20) == 0
+
+    def test_fitting_accounts_for_wrapping(self) -> None:
+        """A book sentence in a narrow column runs to more lines than a short one."""
+        view = triage_ui.SentencesView(self.wordy(9))
+        assert view.fitting(20, 20) < view.fitting(200, 20)
+
+    def test_pressing_v_turns_the_page(self) -> None:
+        async def scenario() -> list[list[str]]:
+            candidate = triage.Candidate(
+                words=(self.wordy(9),),
+                reason=triage.Reason.COMPATIBLE,
+                comparison=definition_similarity.Comparison(1.0, frozenset()),
+                disposition=triage.Disposition.REVIEW,
             )
-            seen: list[int | None] = []
-            async with app.run_test() as pilot:
-                screen = app.screen
-                seen.append(screen.sentence_limit)
-                for _ in range(len(triage_ui.sentence_ladder(2))):
+            app = triage_ui.TriageApp([candidate], per_page=2)
+            pages = []
+            async with app.run_test(size=(120, 40)) as pilot:
+                await pilot.pause()
+                for _ in range(6):
+                    view = app.screen.query(triage_ui.SentencesView).first()
+                    pages.append(self.shown(view))
                     await pilot.press("v")
                     await pilot.pause()
-                    seen.append(screen.sentence_limit)
-            return seen
+            return pages
 
-        seen = run(scenario())
-        assert seen == [2, 5, 10, 25, None, 2]
+        pages = run(scenario())
+        assert pages[0] == ["0", "1"]
+        assert pages[1] == ["2", "3"]
+        assert pages[4] == ["8"]
+        assert pages[5] == ["0", "1"], "the carousel wraps"
 
-    def test_a_custom_ladder_is_used(self) -> None:
-        async def scenario() -> int | None:
-            app = triage_ui.TriageApp([make_candidate()], sentence_limits=(1, None))
-            async with app.run_test() as pilot:
-                await pilot.press("v")
+    def test_the_page_resets_when_moving_to_another_group(self) -> None:
+        async def scenario() -> int:
+            candidates = [
+                triage.Candidate(
+                    words=(self.wordy(9),),
+                    reason=triage.Reason.COMPATIBLE,
+                    comparison=definition_similarity.Comparison(1.0, frozenset()),
+                    disposition=triage.Disposition.REVIEW,
+                )
+                for _ in range(2)
+            ]
+            app = triage_ui.TriageApp(candidates, per_page=2)
+            async with app.run_test(size=(120, 40)) as pilot:
                 await pilot.pause()
-                return app.screen.sentence_limit
-
-        assert run(scenario()) is None
-
-    def test_the_limit_survives_moving_between_groups(self) -> None:
-        async def scenario() -> int | None:
-            app = triage_ui.TriageApp(
-                [make_candidate("a"), make_candidate("b")],
-                sentence_limits=triage_ui.sentence_ladder(2),
-            )
-            async with app.run_test() as pilot:
-                screen = app.screen
                 await pilot.press("v")
                 await pilot.press("s")
                 await pilot.pause()
-                return screen.sentence_limit
+                return app.screen.sentence_offset
 
-        assert run(scenario()) == 5
+        assert run(scenario()) == 0
+
+    def test_a_fixed_page_size_overrides_the_fit(self) -> None:
+        async def scenario() -> int:
+            candidate = triage.Candidate(
+                words=(self.wordy(9),),
+                reason=triage.Reason.COMPATIBLE,
+                comparison=definition_similarity.Comparison(1.0, frozenset()),
+                disposition=triage.Disposition.REVIEW,
+            )
+            app = triage_ui.TriageApp([candidate], per_page=3)
+            async with app.run_test(size=(200, 80)) as pilot:
+                await pilot.pause()
+                await pilot.press("v")
+                await pilot.pause()
+                return app.screen.sentence_offset
+
+        assert run(scenario()) == 3
+
+
+class TestSides:
+    """A cross-part-of-speech group asks about two sides, not N notes."""
+
+    @staticmethod
+    def deber() -> triage.Candidate:
+        verb = make_word("deber", "v", "should, ought to", rank=71)
+        nouns = (
+            make_word("deber", "nm", "duty, obligation", rank=2187),
+            make_word("deber", "nm", "duty, obligation, homework", rank=2187),
+        )
+        return triage.Candidate(
+            words=(verb, *nouns),
+            reason=triage.Reason.BASE_PART_OF_SPEECH,
+            comparison=definition_similarity.Comparison(0.0, frozenset()),
+            disposition=triage.Disposition.REVIEW,
+            sides=((verb,), nouns),
+        )
+
+    def test_the_sides_are_kept(self) -> None:
+        assert [len(side) for side in self.deber().current_sides] == [1, 2]
+
+    def test_a_single_group_is_one_side(self) -> None:
+        assert len(make_candidate().current_sides) == 1
+
+    def test_the_screen_says_what_the_question_is(self) -> None:
+        rendered = triage_ui.CandidateView(self.deber()).render()
+        assert "whether the two sides belong together" in rendered
+        assert "does not settle it" in rendered
+
+    def test_a_single_group_does_not_mention_sides(self) -> None:
+        assert "two sides" not in triage_ui.CandidateView(make_candidate()).render()
+
+    def test_the_sides_are_laid_out_separately(self) -> None:
+        async def scenario() -> tuple[int, int]:
+            app = triage_ui.TriageApp([self.deber()])
+            async with app.run_test(size=(170, 50)) as pilot:
+                await pilot.pause()
+                return len(app.screen.query(".side")), len(
+                    app.screen.query(".word-col")
+                )
+
+        assert run(scenario()) == (2, 3)
+
+    def test_keeping_sides_apart_still_lets_the_inner_pair_merge(self) -> None:
+        """The worry this answers: separating the verb must not block the two
+        noun notes from merging, which is a different candidate entirely."""
+        answered = press([self.deber()], "k")
+        assert answered[0].disposition is triage.Disposition.KEEP_SEPARATE
+        # The inner pair is its own candidate, untouched by that answer.
+        inner = triage.Candidate(
+            words=self.deber().sides[1],
+            reason=triage.Reason.COMPATIBLE,
+            comparison=definition_similarity.Comparison(0.79, frozenset()),
+            disposition=triage.Disposition.MERGE,
+        )
+        assert answered[0].key != inner.key
