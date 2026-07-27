@@ -469,3 +469,61 @@ class TestSharedRank:
             disposition=triage.Disposition.MERGE,
         )
         assert "one note" not in triage_ui.CandidateView(candidate).render()
+
+
+class TestSentenceLadder:
+    def test_the_ladder_climbs_from_the_start_to_all(self) -> None:
+        assert triage_ui.sentence_ladder(2) == (2, 5, 10, 25, None)
+
+    def test_steps_below_the_start_are_skipped(self) -> None:
+        assert triage_ui.sentence_ladder(10) == (10, 25, None)
+
+    def test_starting_at_all_has_nowhere_to_climb(self) -> None:
+        assert triage_ui.sentence_ladder(None) == (None,)
+
+    def test_starting_at_none_shown_still_climbs(self) -> None:
+        """Hiding sentences is useful for scanning a long list quickly."""
+        assert triage_ui.sentence_ladder(0) == (0, 5, 10, 25, None)
+
+    def test_pressing_v_climbs_and_wraps(self) -> None:
+        async def scenario() -> list[int | None]:
+            app = triage_ui.TriageApp(
+                [make_candidate()], sentence_limits=triage_ui.sentence_ladder(2)
+            )
+            seen: list[int | None] = []
+            async with app.run_test() as pilot:
+                screen = app.screen
+                seen.append(screen.sentence_limit)
+                for _ in range(len(triage_ui.sentence_ladder(2))):
+                    await pilot.press("v")
+                    await pilot.pause()
+                    seen.append(screen.sentence_limit)
+            return seen
+
+        seen = run(scenario())
+        assert seen == [2, 5, 10, 25, None, 2]
+
+    def test_a_custom_ladder_is_used(self) -> None:
+        async def scenario() -> int | None:
+            app = triage_ui.TriageApp([make_candidate()], sentence_limits=(1, None))
+            async with app.run_test() as pilot:
+                await pilot.press("v")
+                await pilot.pause()
+                return app.screen.sentence_limit
+
+        assert run(scenario()) is None
+
+    def test_the_limit_survives_moving_between_groups(self) -> None:
+        async def scenario() -> int | None:
+            app = triage_ui.TriageApp(
+                [make_candidate("a"), make_candidate("b")],
+                sentence_limits=triage_ui.sentence_ladder(2),
+            )
+            async with app.run_test() as pilot:
+                screen = app.screen
+                await pilot.press("v")
+                await pilot.press("s")
+                await pilot.pause()
+                return screen.sentence_limit
+
+        assert run(scenario()) == 5

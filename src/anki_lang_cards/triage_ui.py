@@ -50,7 +50,23 @@ _REASON_TEXT: Final[Mapping[triage.Reason, str]] = {
 
 
 DEFAULT_SENTENCE_LIMIT: Final[int] = 2
-"""Sentences shown per note before "v" asks for the rest."""
+"""Sentences shown per note before "v" is pressed."""
+
+_LADDER_STEPS: Final[Sequence[int]] = (5, 10, 25)
+
+
+def sentence_ladder(
+    initial: int | None = DEFAULT_SENTENCE_LIMIT,
+) -> Sequence[int | None]:
+    """The rungs "v" steps through, from the configured start up to all of them.
+
+    Judging usage sometimes needs one sentence and sometimes needs the lot, and
+    a straight toggle between two and everything overshoots on a note with
+    twenty. Stepping up means the reader stops where they have seen enough.
+    """
+    if initial is None:
+        return (None,)
+    return (initial, *(step for step in _LADDER_STEPS if step > initial), None)
 
 
 def describe_source(citation: types.Citation | None) -> str:
@@ -239,20 +255,27 @@ class TriageScreen(Screen):
         Binding("m", "merge", "Merge", show=True),
         Binding("k", "keep_separate", "Keep separate", show=True),
         Binding("u", "undecided", "Undecided", show=True),
-        Binding("v", "toggle_sentences", "More/fewer sentences", show=True),
+        Binding("v", "more_sentences", "More sentences", show=True),
         Binding("e", "edit", "Edit", show=True),
         Binding("s", "skip", "Skip", show=True),
         Binding("b", "back", "Back", show=True),
         Binding("q", "quit", "Save and quit", show=True),
     ]
 
-    def __init__(self, candidates: Sequence[triage.Candidate]):
+    def __init__(
+        self,
+        candidates: Sequence[triage.Candidate],
+        sentence_limits: Sequence[int | None] = (),
+    ):
         super().__init__()
         self._candidates: Final = tuple(candidates)
+        self._sentence_limits: Final = tuple(sentence_limits) or tuple(
+            sentence_ladder()
+        )
         self._decisions: MutableMapping[int, triage.Disposition] = {}
         self._revisions: MutableMapping[int, tuple[types.Word, ...]] = {}
         self._index = 0
-        self._sentence_limit: int | None = DEFAULT_SENTENCE_LIMIT
+        self._limit_index = 0
 
     @property
     def current(self) -> triage.Candidate:
@@ -298,10 +321,12 @@ class TriageScreen(Screen):
     async def action_undecided(self) -> None:
         self._decide(triage.Disposition.REVIEW)
 
-    async def action_toggle_sentences(self) -> None:
-        self._sentence_limit = (
-            None if self._sentence_limit is not None else DEFAULT_SENTENCE_LIMIT
-        )
+    @property
+    def sentence_limit(self) -> int | None:
+        return self._sentence_limits[self._limit_index]
+
+    async def action_more_sentences(self) -> None:
+        self._limit_index = (self._limit_index + 1) % len(self._sentence_limits)
         self.refresh_content()
 
     @textual.work
@@ -334,8 +359,8 @@ class TriageScreen(Screen):
                 await self.action_keep_separate()
             case "undecided":
                 await self.action_undecided()
-            case "toggle_sentences":
-                await self.action_toggle_sentences()
+            case "more_sentences":
+                await self.action_more_sentences()
             case "edit":
                 self.action_edit()
             case "skip":
@@ -369,7 +394,7 @@ class TriageScreen(Screen):
                 *(
                     Vertical(
                         word_merger.WordView(word, diff),
-                        SentencesView(word, self._sentence_limit, classes="sentences"),
+                        SentencesView(word, self.sentence_limit, classes="sentences"),
                         classes="word-col",
                     )
                     for word, diff in zip(words, diffs, strict=True)
@@ -381,7 +406,7 @@ class TriageScreen(Screen):
             Button("Merge (m)", id="merge"),
             Button("Keep separate (k)", id="keep_separate"),
             Button("Undecided (u)", id="undecided"),
-            Button("Sentences (v)", id="toggle_sentences"),
+            Button("More sentences (v)", id="more_sentences"),
             Button("Edit (e)", id="edit"),
             Button("Skip (s)", id="skip"),
             Button("Back (b)", id="back"),
@@ -442,19 +467,24 @@ class TriageApp(App):
         self,
         candidates: Sequence[triage.Candidate],
         driver_class: type[Driver] | None = None,
+        sentence_limits: Sequence[int | None] = (),
     ):
         super().__init__(driver_class=driver_class)
         self.candidates = tuple(candidates)
+        self.sentence_limits = tuple(sentence_limits)
 
     @textual.work
     async def on_mount(self) -> None:
-        resolved = await self.push_screen_wait(TriageScreen(self.candidates))
+        resolved = await self.push_screen_wait(
+            TriageScreen(self.candidates, self.sentence_limits)
+        )
         self.exit(resolved)
 
 
 async def resolve_candidates(
     candidates: Sequence[triage.Candidate],
     driver_class: type[Driver] | None = None,
+    sentence_limit: int | None = DEFAULT_SENTENCE_LIMIT,
 ) -> Sequence[triage.Candidate]:
     """Present candidates for decision and return them with the answers applied.
 
@@ -464,6 +494,10 @@ async def resolve_candidates(
     if not candidates:
         return candidates
 
-    app = TriageApp(candidates, driver_class=driver_class)
+    app = TriageApp(
+        candidates,
+        driver_class=driver_class,
+        sentence_limits=sentence_ladder(sentence_limit),
+    )
     resolved = await app.run_async()
     return candidates if resolved is None else tuple(resolved)

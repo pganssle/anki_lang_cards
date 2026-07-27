@@ -100,7 +100,10 @@ def report(candidates: Sequence[triage.Candidate]) -> None:
 
 
 def resolve_in_ui(
-    candidates: Sequence[triage.Candidate], *, include_proposed: bool
+    candidates: Sequence[triage.Candidate],
+    *,
+    include_proposed: bool,
+    sentence_limit: int | None,
 ) -> Sequence[triage.Candidate]:
     """Ask about candidates in the UI, leaving the ones not shown alone."""
     shown = [
@@ -113,7 +116,9 @@ def resolve_in_ui(
         return candidates
 
     resolved = asyncio.run(
-        triage_ui.resolve_candidates([candidates[index] for index in shown])
+        triage_ui.resolve_candidates(
+            [candidates[index] for index in shown], sentence_limit=sentence_limit
+        )
     )
     out = list(candidates)
     for index, candidate in zip(shown, resolved, strict=True):
@@ -219,6 +224,15 @@ def main() -> None:
         "--deck-name",
         default=None,
         help="Deck named in the revisions CSV directives",
+    )
+    parser.add_argument(
+        "--sentences",
+        type=int,
+        default=2,
+        help=(
+            "Sentences shown per note before pressing v (default: 2). "
+            "Use a negative number to start with all of them."
+        ),
     )
     parser.add_argument(
         "--include-existing",
