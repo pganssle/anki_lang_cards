@@ -167,12 +167,28 @@ def test_nothing_is_ever_suggested_as_keep_separate(comparer) -> None:
     assert triage.Disposition.KEEP_SEPARATE not in dispositions
 
 
-def test_candidates_are_ordered_by_agreement(comparer) -> None:
+def test_undecided_candidates_come_first(comparer) -> None:
+    """The file is read top-down, so put the questions before the answers."""
     words = [
         make_word("cura", "nm", "priest", rank=1),
         make_word("cura", "nf", "cure, remedy", rank=2),
         make_word("trepa", "nm/f", "social climber", rank=3),
         make_word("trepa", "nf", "social climber", rank=4),
+    ]
+    candidates = triage.find_candidates(words, comparer)
+
+    assert [c.disposition for c in candidates] == [
+        triage.Disposition.REVIEW,
+        triage.Disposition.MERGE,
+    ]
+
+
+def test_candidates_are_ordered_by_agreement_within_a_disposition(comparer) -> None:
+    words = [
+        make_word("cura", "nm", "priest", rank=1),
+        make_word("cura", "nf", "cure, remedy", rank=2),
+        make_word("orden", "nm", "order, sequence", rank=3),
+        make_word("orden", "nf", "religious order", rank=4),
     ]
     candidates = triage.find_candidates(words, comparer)
     scores = [c.comparison.score for c in candidates]

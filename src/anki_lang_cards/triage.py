@@ -253,9 +253,25 @@ def _make_candidate(
     )
 
 
-def _ordering(candidate: Candidate) -> tuple[float, str]:
-    """Strongest agreement first, so the clear duplicates are read first."""
-    return (-candidate.comparison.score, candidate.summarize()[0])
+_DISPOSITION_ORDER: Final[Mapping[Disposition, int]] = {
+    Disposition.REVIEW: 0,
+    Disposition.MERGE: 1,
+    Disposition.KEEP_SEPARATE: 2,
+}
+
+
+def _ordering(candidate: Candidate) -> tuple[int, float, str]:
+    """Order the file the way it will be read.
+
+    Undecided groups come first, because they are the ones needing an answer;
+    within each disposition the strongest agreement leads, so the most clear-cut
+    cases are dealt with before the marginal ones.
+    """
+    return (
+        _DISPOSITION_ORDER[candidate.disposition],
+        -candidate.comparison.score,
+        candidate.summarize()[0],
+    )
 
 
 def write_triage_file(path: pathlib.Path, candidates: Iterable[Candidate]) -> None:
