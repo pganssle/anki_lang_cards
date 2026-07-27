@@ -279,6 +279,13 @@ async def main():
     )
 
     parser.add_argument(
+        "--note-cache",
+        type=pathlib.Path,
+        default=anki_import.DEFAULT_NOTE_CACHE,
+        help="Fetched Anki notes, reused while their mod times are unchanged.",
+    )
+
+    parser.add_argument(
         "--pending-file",
         type=pathlib.Path,
         default=pathlib.Path("output/merge_candidates.json"),
@@ -350,8 +357,11 @@ async def main():
             )
     else:
         print("Loading words from Anki Connect")
+        note_cache = anki_import.NoteCache(args.note_cache)
         async with anki_import.create_client() as client:
-            current_deck_notes = await client.retrieve_matching_words(deck_name, words)
+            current_deck_notes = await client.retrieve_matching_words(
+                deck_name, words, cache=note_cache
+            )
             current_deck = list(current_deck_notes.values())
         print(f"Loaded {len(current_deck)} words")
 

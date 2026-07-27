@@ -533,3 +533,68 @@ class TestDecisionFile:
         (merged,) = second.outcome.words
         assert merged.meaning == "trench, ditch"
         assert merged.rank == 1
+
+
+class TestQuitDoesNotReopen:
+    def test_walking_away_ends_the_session_for_the_run(
+        self, decisions, monkeypatch
+    ) -> None:
+        """Quitting with questions left must not reopen the screen with the
+        next batch — one q means out, and the rest goes to pending."""
+        deck = [
+            make_word("viejo", "nm", "old man", 50),
+            make_word("antiguo", "adj", "former", 60),
+            make_word("cura", "nm", "priest", 70),
+        ]
+        added = [
+            make_word("antiguo", "adj", "old, ancient", 100),
+            make_word("cura", "nf", "cure, remedy", 110),
+        ]
+        edited = make_word("viejo", "adj", "old, ancient", 100)
+
+        pytest.importorskip("textual")
+        from anki_lang_cards import triage_ui
+
+        sessions: list[int] = []
+
+        async def fake_resolve_candidates(
+            candidates, driver_class=None, per_page=None, on_decision=None
+        ):
+            sessions.append(len(candidates))
+            resolved = []
+            for candidate in candidates:
+                meanings = frozenset(w.meaning for w in candidate.words)
+                if meanings == {"former", "old, ancient"}:
+                    # Answer one question in a way that creates a new
+                    # collision, then "quit" with the cura pair unanswered.
+                    ordered = sorted(candidate.words)
+                    answered = attrs.evolve(
+                        candidate,
+                        disposition=triage.Disposition.KEEP_SEPARATE,
+                        replacements=tuple(
+                            edited if word.rank == 100 else word for word in ordered
+                        ),
+                    )
+                    if on_decision is not None:
+                        on_decision(answered)
+                    resolved.append(answered)
+                else:
+                    resolved.append(candidate)
+            return tuple(resolved)
+
+        monkeypatch.setattr(triage_ui, "resolve_candidates", fake_resolve_candidates)
+
+        result = resolve(inputs=added, existing=deck, decisions=decisions)
+
+        assert len(sessions) == 1, "the screen must not reopen after a quit"
+        assert result.passes == 1
+        assert result.interrupted
+        pending_words = {
+            frozenset(w.meaning for w in candidate.words)
+            for candidate in result.pending
+        }
+        assert {"priest", "cure, remedy"} in pending_words
+        assert {
+            "old man",
+            "old, ancient",
+        } in pending_words, "the collision the answer created is pending, not re-asked"

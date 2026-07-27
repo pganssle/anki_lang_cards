@@ -254,7 +254,7 @@ class TestLiveDeck:
         }
 
         class FakeClient:
-            async def retrieve_related_words(self, deck_name, words):
+            async def retrieve_related_words(self, deck_name, words, **kwargs):
                 state["queries"].append((deck_name, tuple(w.word for w in words)))
                 return dict(state["notes"])
 

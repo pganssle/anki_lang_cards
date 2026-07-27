@@ -214,9 +214,11 @@ async def resolve_duplicates(
             )
         # Whatever was up for answering and still is not answered — shown and
         # left, no proposal to record, or nobody to ask — stays pending.
+        walked_away = False
         for candidate in to_ask:
             if _needs_answer(candidate, decisions):
                 carryover.setdefault(candidate.key, candidate)
+                walked_away = True
 
         outcome = apply_merges.apply_decisions(
             words, decisions, comparer, resolver=resolver
@@ -231,9 +233,16 @@ async def resolve_duplicates(
             for c in apply_merges.new_collisions(outcome, inputs)
             if _needs_answer(c, decisions) and c.key not in carryover
         ]
-        fresh.extend(outcome.declined)
+        fresh.extend(c for c in outcome.declined if c.key not in carryover)
         answering = auto or interactive
         if not fresh or not answering or passes >= max_passes:
+            break
+        # A session that ended with questions unanswered was quit, or the
+        # questions were deliberately deferred. Either way the reviewer is
+        # done for this run: reopening the screen with the next batch reads
+        # as a UI that refuses to close, so everything left goes to pending
+        # instead.
+        if interactive and walked_away:
             break
         # In auto mode a second pass only helps when new proposals appeared;
         # anything else would just spin.

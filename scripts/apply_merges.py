@@ -97,7 +97,9 @@ async def load_deck(
         return deck
     print("Loading related notes from Anki Connect")
     async with anki_import.create_client() as client:
-        notes = await client.retrieve_related_words(args.deck_name, added)
+        notes = await client.retrieve_related_words(
+            args.deck_name, added, cache=anki_import.NoteCache(args.note_cache)
+        )
     deck = tuple(notes.values())
     print(f"Loaded {len(deck)} related notes from deck {args.deck_name!r}")
     return deck
@@ -224,6 +226,12 @@ async def amain() -> int:
         help="Work from a deck text export instead of live Anki Connect",
     )
     parser.add_argument("--deck-name", default=DEFAULT_DECK_NAME)
+    parser.add_argument(
+        "--note-cache",
+        type=pathlib.Path,
+        default=anki_import.DEFAULT_NOTE_CACHE,
+        help="Fetched notes, reused while their mod times are unchanged",
+    )
     parser.add_argument(
         "--decision-cache", type=pathlib.Path, default=DEFAULT_DECISION_CACHE
     )

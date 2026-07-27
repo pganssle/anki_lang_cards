@@ -1230,3 +1230,25 @@ class TestSplitEditorLayout:
         visible, focused_id = run(scenario())
         assert focused_id == "allocation-25"
         assert visible, "focusing scrolled the offending row into view"
+
+
+class TestSplitEditorFieldLabels:
+    def test_every_grid_row_is_named(self) -> None:
+        async def scenario() -> tuple[list[str], int, int]:
+            app = triage_ui.TriageApp([colliding_candidate()])
+            async with app.run_test(size=(140, 40)) as pilot:
+                await pilot.press("s")
+                await pilot.pause()
+                await pilot.press("enter")
+                await pilot.pause()
+                labels = [
+                    str(label.render()) for label in app.screen.query(".field-label")
+                ]
+                rank_label = app.screen.query(".field-label").first()
+                rank_input = app.screen.query_one("#rank-0", Input)
+                return labels, rank_label.region.y, rank_input.region.y
+
+        labels, label_y, input_y = run(scenario())
+        assert labels == ["Rank", "Word", "POS", "Article", "Meaning"]
+        # The label sits beside its row, not somewhere above or below it.
+        assert abs(label_y - input_y) <= 1

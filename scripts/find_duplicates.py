@@ -81,18 +81,18 @@ def words_to_csv(words: Sequence[types.Word]) -> str:
     return output.read()
 
 
-async def fetch_all_notes(deck_name: str) -> Sequence[types.Word]:
-    """Fetch every note in the deck as a Word."""
-    out = []
+async def fetch_all_notes(
+    deck_name: str, note_cache: pathlib.Path | None
+) -> Sequence[types.Word]:
+    """Fetch every note in the deck as a Word, reusing unchanged ones."""
     async with anki_import.create_client() as client:
         note_ids = await client.get_note_ids(deck_name, '"Rank:re:.*"')
-
         print(f"  Retrieving details for {len(note_ids)} notes...")
-        async with anki_import.create_client() as client:
-            async for note in client.get_anki_notes(note_ids):
-                word = client.word_from_anki_connect_response(note)
-                out.append(word)
-    return out
+        cache = None if note_cache is None else anki_import.NoteCache(note_cache)
+        notes = await anki_import.fetch_note_words(
+            client, note_ids, cache=cache, description="Fetching deck notes"
+        )
+    return list(notes.values())
 
 
 async def prepare_duplicate_merge(
@@ -282,6 +282,12 @@ async def amain() -> int:
     )
     parser.add_argument("--deck-name", default=DEFAULT_DECK_NAME)
     parser.add_argument(
+        "--note-cache",
+        type=pathlib.Path,
+        default=anki_import.DEFAULT_NOTE_CACHE,
+        help="Fetched notes, reused while their mod times are unchanged",
+    )
+    parser.add_argument(
         "--decision-cache", type=pathlib.Path, default=DEFAULT_DECISION_CACHE
     )
     parser.add_argument(
@@ -334,7 +340,7 @@ async def amain() -> int:
         print("Reading from cache file")
         all_words: Sequence[types.Word] = types.Word.words_from_csv(args.cache_file)
     else:
-        all_words = await fetch_all_notes(args.deck_name)
+        all_words = await fetch_all_notes(args.deck_name, args.note_cache)
         if args.cache_file is not None:
             args.cache_file.write_text(words_to_csv(all_words))
 

@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import csv
 import html
+import io
 import itertools
 import json
 import math
@@ -433,6 +434,25 @@ class AnkiConnectClient:
         result = await self._post(data=data)
         return tuple(map(NoteId, self._unwrap_result(result)))
 
+    async def notes_mod_times(self, note_ids: Sequence[NoteId]) -> Mapping[NoteId, int]:
+        """The last-modified time of each note, in one cheap request.
+
+        This is what makes caching fetched notes safe: any edit — including
+        just opening a note in Anki's editor, which normalizes its HTML —
+        bumps the note's mod, so an unchanged mod means the cached copy is
+        the current copy.
+        """
+        data = {
+            "action": "notesModTime",
+            "version": AC_VERSION,
+            "params": {"notes": list(note_ids)},
+        }
+        result = await self._post(data=data)
+        return {
+            NoteId(entry["noteId"]): int(entry["mod"])
+            for entry in self._unwrap_result(result)
+        }
+
     async def get_anki_notes(
         self, note_list: Iterable[NoteId], batch_size: int = 1
     ) -> AsyncIterator[NoteData]:
@@ -519,6 +539,8 @@ class AnkiConnectClient:
         self,
         deck_name: str,
         words: Sequence[types.Word],
+        *,
+        cache: "NoteCache | None" = None,
     ) -> Mapping[NoteId, types.Word]:
         def make_query(word: types.Word):
             word_query = f'"Word:{word.word}"'
@@ -532,19 +554,16 @@ class AnkiConnectClient:
         if not query:
             return {}
         ids = await self.get_note_ids(deck_name, query=query)
-
-        output = {}
-        async for note_data in self.get_anki_notes(ids):
-            output[note_data["noteId"]] = self.word_from_anki_connect_response(
-                note_data
-            )
-
-        return output
+        return await fetch_note_words(
+            self, ids, cache=cache, description="Fetching matching notes"
+        )
 
     async def retrieve_related_words(
         self,
         deck_name: str,
         words: Sequence[types.Word],
+        *,
+        cache: "NoteCache | None" = None,
     ) -> Mapping[NoteId, types.Word]:
         """Fetch notes matching these words or any variant spelling of them.
 
@@ -562,14 +581,9 @@ class AnkiConnectClient:
         if not query:
             return {}
         ids = await self.get_note_ids(deck_name, query=query)
-
-        output = {}
-        async for note_data in self.get_anki_notes(ids):
-            output[note_data["noteId"]] = self.word_from_anki_connect_response(
-                note_data
-            )
-
-        return output
+        return await fetch_note_words(
+            self, ids, cache=cache, description="Fetching related notes"
+        )
 
     def word_from_anki_connect_response(self, resp: NoteData) -> types.Word:
         """Creates a `Word` object from an AnkiConnect response representing a Note."""
@@ -687,6 +701,134 @@ async def create_client(endpoint: str = URL, **kwargs) -> Iterator[AnkiConnectCl
         kwargs["connector"] = aiohttp.TCPConnector(limit_per_host=5)
     async with aiohttp.ClientSession(**kwargs) as session:
         yield AnkiConnectClient(session, endpoint=endpoint)
+
+
+DEFAULT_NOTE_CACHE: Final[pathlib.Path] = pathlib.Path(".cache/anki_notes.json")
+_FETCH_BATCH_SIZE: Final[int] = 50
+"""Notes per notesInfo request. One request per note is what made fetching
+slow; batches keep the request count proportional to the deck, not the note
+count."""
+
+
+def _word_to_row(word: types.Word) -> str:
+    buffer = io.StringIO()
+    csv.writer(buffer).writerow(word.to_csv_line())
+    return buffer.getvalue().strip()
+
+
+def _word_from_row(row: str) -> types.Word:
+    buffer = io.StringIO()
+    csv.writer(buffer).writerow(types.Word.make_csv_header())
+    (word,) = types.Word.words_from_csv("\n".join((buffer.getvalue().strip(), row)))
+    return word
+
+
+class NoteCache:
+    """Words fetched from Anki, valid while each note's mod is unchanged.
+
+    Fetching a deck's notes is by far the slowest thing the tools do, and
+    most notes have not changed since the last run. Each entry records the
+    note's mod at fetch time; `notes_mod_times` asks the live deck for all
+    current mods in one request, and only notes whose mod moved — or that
+    were never seen — are fetched for real. Entries for deleted notes are
+    never requested again and simply linger.
+    """
+
+    def __init__(self, cache_path: pathlib.Path):
+        self.cache_path: Final = cache_path
+        self._entries: dict[int, tuple[int, str]] = {}
+        self._load()
+
+    def _load(self) -> None:
+        if not self.cache_path.exists():
+            return
+        try:
+            data = json.loads(self.cache_path.read_text())
+        except (OSError, json.JSONDecodeError):
+            return
+        for note_id, entry in data.items():
+            self._entries[int(note_id)] = (int(entry["mod"]), entry["row"])
+
+    def save(self) -> None:
+        if not self.cache_path.parent.exists():
+            self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            str(note_id): {"mod": mod, "row": row}
+            for note_id, (mod, row) in sorted(self._entries.items())
+        }
+        self.cache_path.write_text(json.dumps(payload, ensure_ascii=False))
+
+    def get(self, note_id: NoteId, mod: int | None) -> types.Word | None:
+        """The cached word, but only while the note still has this mod."""
+        if mod is None:
+            return None
+        entry = self._entries.get(int(note_id))
+        if entry is None or entry[0] != mod:
+            return None
+        try:
+            return _word_from_row(entry[1])
+        except (ValueError, KeyError):
+            return None
+
+    def put(self, note_id: NoteId, mod: int, word: types.Word) -> None:
+        self._entries[int(note_id)] = (mod, _word_to_row(word))
+
+    def __len__(self) -> int:
+        return len(self._entries)
+
+
+async def fetch_note_words(
+    client: AnkiConnectClient,
+    note_ids: Sequence[NoteId],
+    *,
+    cache: NoteCache | None = None,
+    description: str = "Fetching notes",
+) -> Mapping[NoteId, types.Word]:
+    """Fetch notes as Words, reusing the cache and showing progress.
+
+    With a cache, one `notesModTime` request decides which notes actually
+    need fetching; the rest are read back from disk and said so. The fetch
+    itself is batched and reported on a progress bar, since a deck-sized
+    fetch is the sort of wait that looks like a hang without one.
+    """
+    import tqdm
+
+    note_ids = list(note_ids)
+    output: dict[NoteId, types.Word] = {}
+    to_fetch: Sequence[NoteId] = note_ids
+    mods: Mapping[NoteId, int] = {}
+
+    if cache is not None and note_ids:
+        mods = await client.notes_mod_times(note_ids)
+        misses: list[NoteId] = []
+        for note_id in note_ids:
+            word = cache.get(note_id, mods.get(note_id))
+            if word is None:
+                misses.append(note_id)
+            else:
+                output[note_id] = word
+        to_fetch = misses
+        if output:
+            print(
+                f"  {len(output)} of {len(note_ids)} notes unchanged since "
+                "the last fetch, read from cache"
+            )
+
+    if to_fetch:
+        with tqdm.tqdm(total=len(to_fetch), desc=description, unit="note") as bar:
+            async for note in client.get_anki_notes(
+                to_fetch, batch_size=_FETCH_BATCH_SIZE
+            ):
+                note_id = NoteId(note["noteId"])
+                word = client.word_from_anki_connect_response(note)
+                output[note_id] = word
+                if cache is not None and note_id in mods:
+                    cache.put(note_id, mods[note_id], word)
+                bar.update(1)
+        if cache is not None:
+            cache.save()
+
+    return output
 
 
 def load_sentences(

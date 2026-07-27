@@ -610,6 +610,23 @@ class SplitEditor(Screen):
         height: auto;
     }
 
+    .field-labels {
+        width: 9;
+        height: auto;
+    }
+
+    .field-label {
+        height: 3;
+        padding: 1 1 0 0;
+        width: 100%;
+        text-align: right;
+        color: $text-muted;
+    }
+
+    .field-label-spacer {
+        height: 1;
+    }
+
     Input {
         margin-bottom: 0;
     }
@@ -737,7 +754,17 @@ class SplitEditor(Screen):
             "to the next card.",
             classes="heading",
         )
-        columns = []
+        # Placeholders vanish as soon as a field is filled, so the field
+        # names live in their own label column, row by row.
+        field_labels = Vertical(
+            Label("", classes="field-label-spacer"),
+            *(
+                Label(name, classes="field-label")
+                for name in ("Rank", "Word", "POS", "Article", "Meaning")
+            ),
+            classes="field-labels",
+        )
+        columns: list[Widget] = [field_labels]
         for index in range(self.count):
             prefill = self._prefill(index)
             rank = prefill.rank if prefill is not None else None

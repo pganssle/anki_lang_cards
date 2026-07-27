@@ -1,8 +1,7 @@
 import asyncio
 import contextlib
 import json
-from collections.abc import (AsyncIterator, Iterable, Iterator, Mapping,
-                             Sequence)
+from collections.abc import AsyncIterator, Iterable, Iterator, Mapping, Sequence
 from typing import Any, Final, NewType, TypeAlias
 
 import aiohttp
