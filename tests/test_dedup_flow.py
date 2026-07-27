@@ -113,12 +113,12 @@ class TestHeadless:
         assert result.interrupted
         assert len(result.pending) == 1
 
-    def test_a_decided_merge_without_wording_takes_its_proposal(
+    def test_a_decided_merge_without_wording_is_asked_exactly_once(
         self, decisions
     ) -> None:
-        """An answered merge must never come back as a question: the old
-        flow's decisions carry no wording, so the mechanical proposal — what
-        accepting on screen would have recorded — stands in for it."""
+        """Half an answer gets half re-asked: the old flow recorded "merge"
+        with no wording, and nothing invents the card's text mechanically —
+        the wording question is asked, once, and the answer sticks."""
         deck = [make_word("colonia", "nf", "settlement", 4181)]
         added = [make_word("colonia", "nf", "cologne", 9500)]
         decisions.remember(
@@ -130,14 +130,28 @@ class TestHeadless:
             )
         )
 
-        result = resolve(
+        first = resolve(
             inputs=added, existing=deck, decisions=decisions, interactive=False
         )
+        assert first.interrupted, "the wording still needs an answer"
+        (candidate,) = first.pending
+        assert candidate.disposition is triage.Disposition.MERGE
+        assert len(first.outcome.words) == 2, "nothing was worded mechanically"
 
-        assert not result.interrupted
-        (merged,) = result.outcome.words
-        assert merged.rank == 4181
-        assert merged.meaning == "settlement, cologne"
+        # Answering with wording — as the screen or the decision file would —
+        # settles it for good.
+        decisions.remember(
+            attrs.evolve(
+                candidate,
+                replacements=(make_word("colonia", "nf", "settlement; cologne", 4181),),
+            )
+        )
+        second = resolve(
+            inputs=added, existing=deck, decisions=decisions, interactive=False
+        )
+        assert not second.interrupted
+        (merged,) = second.outcome.words
+        assert merged.meaning == "settlement; cologne"
 
     def test_legacy_wording_comes_from_the_merge_cache(
         self, decisions, tmp_path
@@ -603,20 +617,6 @@ class TestQuitDoesNotReopen:
             "old man",
             "old, ancient",
         } in pending_words, "the collision the answer created is pending, not re-asked"
-
-
-class TestNoteUpdatesInTheFlow:
-    def test_an_update_pair_is_never_asked(self, decisions) -> None:
-        deck = [make_word("regatear", "vtr", "to haggle over, bargain", 8813)]
-        added = [make_word("regatear", "vtr", "to haggle over, to bargain", 8813)]
-
-        result = resolve(
-            inputs=added, existing=deck, decisions=decisions, interactive=False
-        )
-
-        assert not result.interrupted
-        (word,) = result.outcome.words
-        assert word.meaning == "to haggle over, bargain"
 
 
 class TestCachedWordingMigration:

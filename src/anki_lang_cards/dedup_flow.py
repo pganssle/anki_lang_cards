@@ -70,6 +70,12 @@ def _needs_answer(candidate: triage.Candidate, decisions: triage.DecisionCache) 
     holds three notes — both copies of one plus the other — and a later run
     seeing only two must still recognize it as answered, exactly as
     `apply_decisions` will when it merges the group.
+
+    A merge decision with no stored wording is half an answer. The old flow
+    recorded dispositions and worded the merge elsewhere; when that wording
+    cannot be found (see `migrate_cached_wordings`), what the card should say
+    is still an open question — asked once, and recorded with its wording
+    this time.
     """
     if apply_merges._identical(candidate.words):
         return False
@@ -77,7 +83,12 @@ def _needs_answer(candidate: triage.Candidate, decisions: triage.DecisionCache) 
     if decision is None:
         ranks = frozenset(w.rank for w in candidate.words if w.rank is not None)
         decision = apply_merges._decisions_by_rank(decisions).get(ranks)
-    return decision is None or decision.disposition is triage.Disposition.REVIEW
+    if decision is None or decision.disposition is triage.Disposition.REVIEW:
+        return True
+    return (
+        decision.disposition is triage.Disposition.MERGE
+        and decision.replacements is None
+    )
 
 
 def _recorder(decisions: triage.DecisionCache) -> Callable[[triage.Candidate], None]:
@@ -101,15 +112,13 @@ def _recorder(decisions: triage.DecisionCache) -> Callable[[triage.Candidate], N
 def make_cache_resolver(
     merge_cache: conflict_resolver.MergeCache | None,
 ) -> apply_merges.Resolver:
-    """Wording for merges decided before decisions carried their wording.
+    """Wording from the legacy merge cache, and nothing else.
 
-    The legacy merge cache is consulted first — that is where the old flow
-    put the combined text. A decided merge with no cached wording takes its
-    mechanical proposal, the same note accepting it on screen would have
-    recorded. Only decided groups ever reach a resolver, so this never words
-    anything nobody agreed to merge — while declining would send a group the
-    reviewer already answered back to the screen forever, which is exactly
-    the re-asking the caches exist to prevent.
+    Decisions recorded before merges carried their wording left the combined
+    text in a separate cache keyed on the group. Replaying it here keeps that
+    work; a group with no cached wording is declined and becomes a wording
+    question for a person rather than being worded mechanically behind the
+    reviewer's back.
     """
 
     def resolve(
@@ -118,10 +127,7 @@ def make_cache_resolver(
         results: list[types.Word | None] = []
         for group in groups:
             cached = None if merge_cache is None else merge_cache.get_merge(group)
-            if cached is not None:
-                results.append(cached.result)
-            else:
-                results.append(apply_merges.propose_merge(group))
+            results.append(None if cached is None else cached.result)
         return results
 
     return resolve
@@ -154,16 +160,24 @@ def migrate_cached_wordings(
     """Turn legacy merge-cache wordings into decisions, returning how many.
 
     Before decisions carried their outcome, an answered merge lived only in
-    the merge-wording cache — the main pipeline's answers all do. A group
-    with cached wording was answered once already, and asking again is
-    exactly the re-asking the caches exist to prevent, so the old record is
-    promoted into a decision the first time the group comes up.
+    the merge-wording cache — the main pipeline's answers all do, and the old
+    triage flow recorded dispositions with no wording at all. A group with
+    cached wording was answered once already, and asking again is exactly the
+    re-asking the caches exist to prevent, so the old record is promoted into
+    a worded decision the first time the group comes up. Groups whose wording
+    is nowhere to be found stay as they are, to be asked once.
     """
     if merge_cache is None:
         return 0
     migrated = 0
     for candidate in candidates:
-        if decisions.get(candidate.words) is not None:
+        decision = decisions.get(candidate.words)
+        if decision is not None and decision.replacements is not None:
+            continue
+        if (
+            decision is not None
+            and decision.disposition is not triage.Disposition.MERGE
+        ):
             continue
         cached = merge_cache.get_merge(candidate.words)
         if cached is None:
@@ -241,14 +255,7 @@ async def resolve_duplicates(
             f"  {migrated} groups already answered in the merge-wording "
             "cache; recorded as decisions"
         )
-    input_words = frozenset(inputs)
-
-    def _is_update(candidate: triage.Candidate) -> bool:
-        return apply_merges.as_note_update(candidate.words, input_words) is not None
-
-    to_ask = [
-        c for c in candidates if _needs_answer(c, decisions) and not _is_update(c)
-    ]
+    to_ask = [c for c in candidates if _needs_answer(c, decisions)]
     rank_only = _rank_only_matches(candidates, decisions)
 
     # Questions shown and left unanswered — by u, or by quitting. They stay
@@ -277,7 +284,7 @@ async def resolve_duplicates(
                 walked_away = True
 
         outcome = apply_merges.apply_decisions(
-            words, decisions, comparer, resolver=resolver, updates_from=input_words
+            words, decisions, comparer, resolver=resolver
         )
 
         # New questions this pass created: collisions the merges surfaced,
@@ -287,9 +294,7 @@ async def resolve_duplicates(
         fresh = [
             c
             for c in apply_merges.new_collisions(outcome, inputs)
-            if _needs_answer(c, decisions)
-            and c.key not in carryover
-            and not _is_update(c)
+            if _needs_answer(c, decisions) and c.key not in carryover
         ]
         fresh.extend(c for c in outcome.declined if c.key not in carryover)
         answering = auto or interactive

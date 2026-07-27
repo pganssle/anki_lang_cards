@@ -267,30 +267,6 @@ def shared_rank(words: Sequence[types.Word]) -> int | None:
     return None
 
 
-def as_note_update(
-    group: Sequence[types.Word], newer: Collection[types.Word]
-) -> types.Word | None:
-    """The update a shared-rank pair amounts to, or None when it is a question.
-
-    A deck note beside an import row with the same rank is not two cards to
-    adjudicate: importing the row overwrites the note no matter what anyone
-    answers. The texts are combined rather than one picked — either copy can
-    be the newer one in practice (an import correcting the deck, or the deck
-    edited since the import was generated), and the union never silently
-    drops what the other side said. The result is in the output for review
-    before anything reaches Anki.
-
-    Only the two-note case with exactly one import copy is an update;
-    anything stranger stays a question for a person.
-    """
-    if len(group) != 2 or shared_rank(group) is None:
-        return None
-    fresh = [word for word in group if word in frozenset(newer)]
-    if len(fresh) != 1:
-        return None
-    return propose_merge(group)
-
-
 def propose_merge(words: Sequence[types.Word]) -> types.Word | None:
     """The mechanical merge of a group, or None when there is no sensible one.
 
@@ -317,7 +293,6 @@ def apply_decisions(
     *,
     resolver: Resolver | None = None,
     max_rounds: int = DEFAULT_MAX_ROUNDS,
-    updates_from: Collection[types.Word] = (),
 ) -> Outcome:
     """Rewrite and combine notes according to what triage decided.
 
@@ -327,11 +302,9 @@ def apply_decisions(
     previously touch.
 
     Groups whose notes are identical are combined outright: there is only one
-    thing they can say. So are shared-rank pairs with one copy in
-    `updates_from` — the import rows updating existing notes; see
-    `as_note_update`. Every other group goes to `resolver` to have its wording
-    settled, and without one they are combined mechanically, which is only
-    appropriate when nobody is going to read the result.
+    thing they can say. Every other group goes to `resolver` to have its
+    wording settled, and without one they are combined mechanically, which is
+    only appropriate when nobody is going to read the result.
     """
     by_rank = _decisions_by_rank(decisions)
     current, revised = _apply_revisions(tuple(words), decisions)
@@ -382,24 +355,8 @@ def apply_decisions(
             )
             identical = _identical(candidate.words)
             if not decided and not identical:
-                if decision is not None:
-                    continue
-                update = (
-                    as_note_update(candidate.words, updates_from)
-                    if updates_from
-                    else None
-                )
-                if update is None:
+                if decision is None:
                     leftover.append(candidate)
-                    continue
-                consumed.update(id(word) for word in candidate.words)
-                round_merges.append(
-                    Merge(
-                        result=update,
-                        sources=tuple(candidate.words),
-                        decided=False,
-                    )
-                )
                 continue
 
             aligned, dropped = align_headwords(candidate.words)
