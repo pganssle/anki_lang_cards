@@ -301,6 +301,13 @@ async def amain() -> int:
     deck = await load_deck(args, added)
     decisions = triage.DecisionCache(args.decision_cache)
     print(f"Read {len(decisions)} decisions from {args.decision_cache}")
+    if not len(decisions):
+        print(
+            "WARNING: no recorded decisions at "
+            f"{args.decision_cache.resolve()} - if you have answered "
+            "questions before, check that you are running from the "
+            "repository root: the default cache paths are relative."
+        )
     if args.decision_file is not None:
         recorded = dedup_flow.record_decision_file(args.decision_file, decisions)
         print(f"Folded in {recorded} new answers from {args.decision_file}")

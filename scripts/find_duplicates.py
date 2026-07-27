@@ -346,6 +346,13 @@ async def amain() -> int:
 
     decisions = triage.DecisionCache(args.decision_cache)
     print(f"Read {len(decisions)} decisions from {args.decision_cache}")
+    if not len(decisions):
+        print(
+            "WARNING: no recorded decisions at "
+            f"{args.decision_cache.resolve()} - if you have answered "
+            "questions before, check that you are running from the "
+            "repository root: the default cache paths are relative."
+        )
     if args.decision_file is not None:
         recorded = dedup_flow.record_decision_file(args.decision_file, decisions)
         print(f"Folded in {recorded} new answers from {args.decision_file}")
@@ -369,25 +376,11 @@ async def amain() -> int:
             "import workflow (scripts/apply_merges.py) instead."
         )
 
-    applied = 0
-    for merge in result.outcome.merges:
-        if not merge.superseded:
-            continue
-        proceed = await apply_merge_to_anki(
-            args.deck_name,
-            merge,
-            accept=args.accept,
-            dry_run=args.dry_run,
-            verbose=args.verbose,
-        )
-        applied += 1
-        if not proceed:
-            break
-
-    if not applied:
-        print("No duplicate groups with notes to merge in Anki.")
-
     if result.interrupted:
+        # The reviewer left questions unanswered — quitting the screen means
+        # they are done for now, so nothing is applied to Anki either: a
+        # confirm stage prompting for input right after a quit reads as a UI
+        # that will not close.
         print(f"\n{len(result.pending)} groups still need an answer.")
         if not interactive:
             dedup_flow.write_pending_file(args.pending_file, result.pending)
@@ -396,8 +389,30 @@ async def amain() -> int:
                 f"with --decision-file {args.pending_file}"
             )
             return EXIT_DECISIONS_NEEDED
-        print("Answers made so far were saved; re-run to continue.")
+        print(
+            "Answers made so far were saved; nothing was applied to Anki. "
+            "Re-run to continue."
+        )
         return 1
+
+    to_apply = [merge for merge in result.outcome.merges if merge.superseded]
+    if not to_apply:
+        print("No duplicate groups with notes to merge in Anki.")
+        return 0
+
+    doing = "Planning" if args.dry_run else "Applying"
+    suffix = ":" if args.accept or args.dry_run else " — y/s/q per group:"
+    print(f"\n{doing} {len(to_apply)} merges in Anki{suffix}")
+    for merge in to_apply:
+        proceed = await apply_merge_to_anki(
+            args.deck_name,
+            merge,
+            accept=args.accept,
+            dry_run=args.dry_run,
+            verbose=args.verbose,
+        )
+        if not proceed:
+            break
     return 0
 
 

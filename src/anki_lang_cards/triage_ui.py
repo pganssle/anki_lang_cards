@@ -138,18 +138,7 @@ def describe_source(citation: types.Citation | None) -> str:
     return citation.source_type
 
 
-def _shared_rank(words: Sequence[types.Word]) -> int | None:
-    """The rank every note in a group has, when they all have the same one.
-
-    A group sharing a rank is one note read from two places — the deck and the
-    import — rather than two notes that might be duplicates. The answer is
-    almost always to merge, and saying so avoids the question of why an
-    apparently identical pair was flagged at all.
-    """
-    ranks = {word.rank for word in words}
-    if len(ranks) == 1 and (rank := next(iter(ranks))) is not None:
-        return rank
-    return None
+_shared_rank = apply_merges.shared_rank
 
 
 def _sentence_block(sentence: types.Sentence, width: int) -> Sequence[str]:

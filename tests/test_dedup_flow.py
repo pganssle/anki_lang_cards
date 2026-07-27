@@ -113,8 +113,12 @@ class TestHeadless:
         assert result.interrupted
         assert len(result.pending) == 1
 
-    def test_a_merge_without_wording_is_pending_not_mechanical(self, decisions) -> None:
-        """A recorded "merge" with no stored note must not be worded silently."""
+    def test_a_decided_merge_without_wording_takes_its_proposal(
+        self, decisions
+    ) -> None:
+        """An answered merge must never come back as a question: the old
+        flow's decisions carry no wording, so the mechanical proposal — what
+        accepting on screen would have recorded — stands in for it."""
         deck = [make_word("colonia", "nf", "settlement", 4181)]
         added = [make_word("colonia", "nf", "cologne", 9500)]
         decisions.remember(
@@ -130,9 +134,10 @@ class TestHeadless:
             inputs=added, existing=deck, decisions=decisions, interactive=False
         )
 
-        assert result.interrupted
-        assert len(result.pending) == 1
-        assert len(result.outcome.words) == 2, "nothing was merged behind our back"
+        assert not result.interrupted
+        (merged,) = result.outcome.words
+        assert merged.rank == 4181
+        assert merged.meaning == "settlement, cologne"
 
     def test_legacy_wording_comes_from_the_merge_cache(
         self, decisions, tmp_path
@@ -598,3 +603,51 @@ class TestQuitDoesNotReopen:
             "old man",
             "old, ancient",
         } in pending_words, "the collision the answer created is pending, not re-asked"
+
+
+class TestNoteUpdatesInTheFlow:
+    def test_an_update_pair_is_never_asked(self, decisions) -> None:
+        deck = [make_word("regatear", "vtr", "to haggle over, bargain", 8813)]
+        added = [make_word("regatear", "vtr", "to haggle over, to bargain", 8813)]
+
+        result = resolve(
+            inputs=added, existing=deck, decisions=decisions, interactive=False
+        )
+
+        assert not result.interrupted
+        (word,) = result.outcome.words
+        assert word.meaning == "to haggle over, bargain"
+
+
+class TestCachedWordingMigration:
+    def test_a_cached_wording_is_promoted_and_not_asked(
+        self, decisions, tmp_path
+    ) -> None:
+        """The main pipeline's old answers live only in the merge-wording
+        cache; a group answered there must not be asked again."""
+        deck = [make_word("colonia", "nf", "settlement", 4181)]
+        added = [make_word("colonia", "nf", "cologne", 9500)]
+        merge_cache = conflict_resolver.MergeCache(tmp_path / "merged.json")
+        merge_cache.add_merge(
+            conflict_resolver.MergeOperation(
+                original_words=tuple(sorted((*deck, *added))),
+                result=make_word("colonia", "nf", "settlement; cologne", 4181),
+            )
+        )
+
+        result = resolve(
+            inputs=added,
+            existing=deck,
+            decisions=decisions,
+            merge_cache=merge_cache,
+            interactive=False,
+        )
+
+        assert not result.interrupted
+        (merged,) = result.outcome.words
+        assert merged.meaning == "settlement; cologne"
+        # Promoted permanently: a rerun without the merge cache still knows.
+        second = resolve(
+            inputs=added, existing=deck, decisions=decisions, interactive=False
+        )
+        assert not second.interrupted

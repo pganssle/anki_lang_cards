@@ -393,6 +393,13 @@ async def main():
     output_wl = conflict_resolver.WordLookup(output_words)
 
     decisions = triage.DecisionCache(args.decision_cache)
+    if not len(decisions):
+        print(
+            "WARNING: no recorded decisions at "
+            f"{args.decision_cache.resolve()} - if you have answered "
+            "questions before, check that you are running from the "
+            "repository root: the default cache paths are relative."
+        )
     merge_cache = conflict_resolver.MergeCache(args.conflict_cache_path)
 
     result = await dedup_flow.resolve_duplicates(
