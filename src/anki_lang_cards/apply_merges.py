@@ -32,7 +32,7 @@ Resolver = Callable[[Sequence[Sequence[types.Word]]], Sequence[types.Word | None
 Deciding that two notes are one card does not decide what the card reads. The
 definitions still have to be reconciled, and that is a judgement — combining
 them mechanically turns "piece of clothing" and "piece of glothing, garment"
-into all three at once. `word_merger.merge_words` is the resolver in normal use;
+into all three at once. The resolver in normal use replays cached wording;
 returning None for a group leaves it unmerged.
 """
 

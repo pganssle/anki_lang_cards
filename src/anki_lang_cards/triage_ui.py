@@ -11,8 +11,7 @@ Nothing here writes to Anki, to the deck, or to any file — the resolved
 candidates are returned to the caller (and reported through `on_decision` as
 each answer is given), and the caller owns persistence.
 
-Importing this module requires `textual`, the same optional dependency as
-`word_merger`.
+Importing this module requires `textual`, the `merge_ui` optional extra.
 """
 
 import functools
@@ -31,7 +30,71 @@ from textual.widget import Widget
 from textual.widgets import Button, Footer, Header, Input, Label, Static
 
 from . import _types as types
-from . import apply_merges, conflict_resolver, triage, word_merger
+from . import apply_merges, conflict_resolver, triage
+
+
+@attrs.frozen
+class WordDiff:
+    """Which fields differ between two words, for highlighting."""
+
+    rank_diff: bool
+    word_diff: bool
+    meaning_diff: bool
+    pos_diff: bool
+    article_diff: bool
+    example_count: int
+
+    @classmethod
+    def from_words(cls, word1: types.Word, word2: types.Word) -> "WordDiff":
+        return cls(
+            rank_diff=word1.rank != word2.rank,
+            word_diff=word1.word != word2.word,
+            meaning_diff=word1.meaning != word2.meaning,
+            pos_diff=word1.part_of_speech != word2.part_of_speech,
+            article_diff=word1.article != word2.article,
+            example_count=len(word1.sentences) + len(word2.sentences),
+        )
+
+
+class WordView(Static):
+    """Displays a single word with differences highlighted."""
+
+    def __init__(self, word: types.Word, diff: WordDiff | None = None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.word = word
+        self.diff = diff
+
+    def render(self) -> str:
+        def style_text(text: str, is_diff: bool) -> str:
+            return f"[bold red]{text}[/]" if is_diff else text
+
+        rank_text = style_text(
+            f"Rank: {self.word.rank or 'None'}", bool(self.diff and self.diff.rank_diff)
+        )
+        word_text = style_text(
+            f"Word: {self.word.word}", bool(self.diff and self.diff.word_diff)
+        )
+        meaning_text = style_text(
+            f"Meaning: {self.word.meaning}", bool(self.diff and self.diff.meaning_diff)
+        )
+        pos_text = style_text(
+            f"POS: {self.word.part_of_speech}", bool(self.diff and self.diff.pos_diff)
+        )
+        article_text = style_text(
+            f"Article: {self.word.article or 'None'}",
+            bool(self.diff and self.diff.article_diff),
+        )
+        examples_text = f"Examples: {len(self.word.sentences)}"
+
+        return (
+            f"{rank_text}\n"
+            f"{word_text}\n"
+            f"{meaning_text}\n"
+            f"{pos_text}\n"
+            f"{article_text}\n"
+            f"{examples_text}"
+        )
+
 
 _REASON_TEXT: Final[Mapping[triage.Reason, str]] = {
     triage.Reason.COMPATIBLE: (
@@ -422,9 +485,7 @@ class MergedNoteEditor(Screen):
                 for number, word in enumerate(self.sources, start=1):
                     with Vertical(classes="word-col"):
                         yield Label(f"[bold]#{number}[/]")
-                        yield word_merger.WordView(
-                            word, word_merger.WordDiff.from_words(word, self.merged)
-                        )
+                        yield WordView(word, WordDiff.from_words(word, self.merged))
             yield Static("Merged note, then ctrl+s:", classes="heading")
             rank = self.merged.rank
             yield Input(
@@ -1127,9 +1188,7 @@ class TriageScreen(Screen):
     ) -> Widget:
         return Vertical(
             Label(f"[bold]#{number}[/]", classes="note-number"),
-            word_merger.WordView(
-                word, word_merger.WordDiff.from_words(word, reference)
-            ),
+            WordView(word, WordDiff.from_words(word, reference)),
             SentencesView(word, self._offset, self._per_page, classes="sentences"),
             classes="word-col",
         )
@@ -1193,9 +1252,9 @@ class TriageScreen(Screen):
         proposal = self._current_proposal()
         yield Static("Proposed result (a to accept):", classes="heading")
         if proposal is not None:
-            yield word_merger.WordView(
+            yield WordView(
                 proposal,
-                word_merger.WordDiff.from_words(proposal, reference),
+                WordDiff.from_words(proposal, reference),
                 classes="proposal",
             )
         else:
