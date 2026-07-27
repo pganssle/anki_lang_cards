@@ -1004,12 +1004,27 @@ class TestSplitEditor:
             "La zanja es honda.",
         ]
 
-    def test_allocations_default_to_the_sentence_origin(self) -> None:
-        async def act(app, pilot):
-            assert app.screen.query_one("#allocation-0", Input).value == "1"
-            assert app.screen.query_one("#allocation-1", Input).value == "2"
+    def test_allocations_start_empty_and_label_the_origin(self) -> None:
+        """Where a sentence came from is shown, not answered on your behalf."""
 
-        run(self._split(colliding_candidate(with_sentences=True), act))
+        async def act(app, pilot):
+            assert app.screen.query_one("#allocation-0", Input).value == ""
+            assert app.screen.query_one("#allocation-1", Input).value == ""
+            origins = [
+                str(label.render()) for label in app.screen.query(".allocation-origin")
+            ]
+            assert "from #1" in origins[0]
+            assert "from #2" in origins[1]
+            # Saving with nothing chosen must refuse: an empty box is not an
+            # answer.
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+            assert isinstance(app.screen, triage_ui.SplitEditor)
+            app.screen.query_one("#allocation-0", Input).value = "1"
+            app.screen.query_one("#allocation-1", Input).value = "2"
+
+        (resolved,) = run(self._split(colliding_candidate(with_sentences=True), act))
+        assert resolved.disposition is triage.Disposition.SPLIT
 
     def test_a_bad_allocation_keeps_the_editor_open(self) -> None:
         async def scenario() -> Sequence[triage.Candidate]:
@@ -1202,6 +1217,8 @@ class TestSplitEditorLayout:
                 await pilot.pause()
                 await pilot.press("enter")
                 await pilot.pause()
+                for row in app.screen.query(".allocation"):
+                    row.value = "1"
                 bad = app.screen.query_one("#allocation-25", Input)
                 bad.value = ""
                 await pilot.press("ctrl+s")

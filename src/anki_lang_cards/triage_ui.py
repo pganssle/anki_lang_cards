@@ -635,6 +635,11 @@ class SplitEditor(Screen):
         color: $text-muted;
     }
 
+    .allocation-origin {
+        width: 10;
+        padding: 1 1 0 1;
+    }
+
     .sentence-text {
         width: 1fr;
         padding: 1 0 0 0;
@@ -671,15 +676,17 @@ class SplitEditor(Screen):
                     seen.add(sentence)
                     yield sentence
 
-    def _origin_card(self, sentence: types.Sentence) -> int:
-        """Which card a sentence starts out allocated to: its source note's,
-        when that note maps to a card, and the first card otherwise."""
+    def _origin_note(self, sentence: types.Sentence) -> int | None:
+        """Which numbered note a sentence came from, for the row's label.
+
+        Shown rather than prefilled: where the sentence lived is evidence for
+        the allocation, not the answer to it. The numbers match the ones the
+        candidate screen put on the notes.
+        """
         for position, word in enumerate(self.words):
             if sentence in word.sentences:
-                if self.count is not None and position < self.count:
-                    return position + 1
-                break
-        return 1
+                return position + 1
+        return None
 
     def _prefill(self, index: int) -> types.Word | None:
         if index == 0 and self.proposal is not None and self.count != len(self.words):
@@ -777,9 +784,18 @@ class SplitEditor(Screen):
                     Horizontal(
                         Label(f"{position + 1}.", classes="sentence-number"),
                         Input(
-                            str(self._origin_card(sentence)),
+                            "",
                             id=f"allocation-{position}",
                             classes="allocation",
+                            placeholder="card #",
+                        ),
+                        Label(
+                            (
+                                f"[dim]from #{origin}[/]"
+                                if (origin := self._origin_note(sentence)) is not None
+                                else ""
+                            ),
+                            classes="allocation-origin",
                         ),
                         Static(sentence.spanish, classes="sentence-text"),
                         classes="allocation-row",
