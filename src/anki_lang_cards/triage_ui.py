@@ -642,7 +642,9 @@ class SplitEditor(Screen):
     }
 
     .allocation {
-        width: 8;
+        /* Wide enough for a shared sentence's whole answer — "1,2,3,4" —
+           after the Input's own border and padding take four cells. */
+        width: 14;
     }
 
     .sentence-number {
