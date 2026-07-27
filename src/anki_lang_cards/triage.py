@@ -183,13 +183,13 @@ class Candidate:
             "score": round(self.comparison.score, 3),
             "shared_glosses": sorted(self.comparison.shared_glosses),
             "summary": list(self.summarize()),
-            "words": _words_to_csv(self.words),
+            "words": words_to_csv(self.words),
         }
         if self.sides:
-            out["sides"] = [_words_to_csv(side) for side in self.sides]
+            out["sides"] = [words_to_csv(side) for side in self.sides]
         if self.replacements is not None:
             out["was"] = list(self.summarize(revised=False))
-            out["replacements"] = _words_to_csv(self.replacements)
+            out["replacements"] = words_to_csv(self.replacements)
         return out
 
     @classmethod
@@ -197,16 +197,16 @@ class Candidate:
         # "revisions" is the name replacements carried before splits existed.
         replacements = data.get("replacements", data.get("revisions"))
         return cls(
-            words=tuple(_words_from_csv(data["words"])),
+            words=tuple(words_from_csv(data["words"])),
             reason=Reason(data["reason"]),
             comparison=definition_similarity.Comparison(
                 score=float(data["score"]),
                 shared_glosses=frozenset(data.get("shared_glosses", ())),
             ),
             disposition=Disposition(data["disposition"]),
-            sides=tuple(tuple(_words_from_csv(side)) for side in data.get("sides", ())),
+            sides=tuple(tuple(words_from_csv(side)) for side in data.get("sides", ())),
             replacements=(
-                None if replacements is None else tuple(_words_from_csv(replacements))
+                None if replacements is None else tuple(words_from_csv(replacements))
             ),
         )
 
@@ -229,7 +229,7 @@ class Decision:
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {"disposition": self.disposition.value}
         if self.replacements is not None:
-            out["replacements"] = _words_to_csv(self.replacements)
+            out["replacements"] = words_to_csv(self.replacements)
         return out
 
     @classmethod
@@ -239,7 +239,7 @@ class Decision:
         return cls(
             disposition=Disposition(data["disposition"]),
             replacements=(
-                None if replacements is None else tuple(_words_from_csv(replacements))
+                None if replacements is None else tuple(words_from_csv(replacements))
             ),
         )
 
@@ -272,18 +272,18 @@ class DecisionCache:
             # Earlier versions stored only the groups to keep separate, as bare
             # CSV strings.
             if isinstance(entry, str):
-                self._decisions[tuple(_words_from_csv(entry))] = Decision(
+                self._decisions[tuple(words_from_csv(entry))] = Decision(
                     disposition=Disposition.KEEP_SEPARATE
                 )
                 continue
-            key = tuple(_words_from_csv(entry["words"]))
+            key = tuple(words_from_csv(entry["words"]))
             self._decisions[key] = Decision.from_dict(entry)
 
     def save(self) -> None:
         if not self.cache_path.parent.exists():
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
         payload = [
-            {"words": _words_to_csv(words), **decision.to_dict()}
+            {"words": words_to_csv(words), **decision.to_dict()}
             for words, decision in sorted(self._decisions.items())
         ]
         self.cache_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
@@ -524,14 +524,14 @@ def to_merge_sets(candidates: Iterable[Candidate]) -> Sequence[Set[types.Word]]:
     )
 
 
-def _words_to_csv(words: Iterable[types.Word]) -> str:
+def words_to_csv(words: Iterable[types.Word]) -> str:
     buffer = io.StringIO()
     csv.writer(buffer).writerows(word.to_csv_line() for word in words)
     buffer.seek(0)
     return buffer.read()
 
 
-def _words_from_csv(text: str) -> Sequence[types.Word]:
+def words_from_csv(text: str) -> Sequence[types.Word]:
     buffer = io.StringIO()
     csv.writer(buffer).writerow(types.Word.make_csv_header())
     buffer.seek(0)

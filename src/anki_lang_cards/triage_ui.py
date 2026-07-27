@@ -308,22 +308,9 @@ class CandidateEditor(Screen):
             self.action_cancel()
 
 
-def propose_merge(words: Sequence[types.Word]) -> types.Word | None:
-    """The mechanical merge of a group, or None when there is no sensible one.
-
-    This is the note "accept" records, shown so that accepting is an informed
-    act rather than a leap. Combining can fail — a group whose spellings or
-    parts of speech cannot be reconciled has no mechanical answer — and then
-    there is nothing to accept until the reviewer writes the note by hand.
-    """
-    ordered = sorted(words)
-    if len(ordered) == 1:
-        return ordered[0]
-    aligned, _ = apply_merges.align_headwords(ordered)
-    try:
-        return conflict_resolver.auto_merge_words(aligned)
-    except (ValueError, TypeError):
-        return None
+propose_merge = apply_merges.propose_merge
+"""Re-exported: the proposal shown on screen is the one the file protocol
+writes, so it lives beside the merge machinery rather than behind textual."""
 
 
 def still_collides(words: Sequence[types.Word]) -> bool:

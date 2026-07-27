@@ -255,6 +255,25 @@ def _identical(group: Sequence[types.Word]) -> bool:
     return all(word == first for word in group[1:])
 
 
+def propose_merge(words: Sequence[types.Word]) -> types.Word | None:
+    """The mechanical merge of a group, or None when there is no sensible one.
+
+    This is what accepting a merge records, shown (on screen or in the
+    decision file) so that accepting is an informed act rather than a leap.
+    Combining can fail — a group whose spellings or parts of speech cannot be
+    reconciled has no mechanical answer — and then there is nothing to accept
+    until the reviewer writes the note by hand.
+    """
+    ordered = sorted(words)
+    if len(ordered) == 1:
+        return ordered[0]
+    aligned, _ = align_headwords(ordered)
+    try:
+        return conflict_resolver.auto_merge_words(aligned)
+    except (ValueError, TypeError):
+        return None
+
+
 def apply_decisions(
     words: Iterable[types.Word],
     decisions: triage.DecisionCache,
