@@ -348,6 +348,44 @@ def new_collisions(
     )
 
 
+def discarded_imports(
+    outcome: Outcome,
+    inputs: Collection[types.Word],
+    existing: Collection[types.Word],
+) -> Sequence[types.Word]:
+    """Imported notes whose content did not survive to the output.
+
+    A merge is supposed to combine two notes, not pick one and drop the other.
+    When the result comes out byte-identical to what the deck already had, the
+    imported version — its new sentences, its corrected definition — went
+    nowhere, and the run has quietly undone the work it was carrying out.
+
+    This is a check on the result rather than a fix for any particular cause:
+    whatever produced it, the answer is to look before importing.
+    """
+
+    def substance(word: types.Word) -> tuple:
+        # What the import exists to contribute: a definition and examples. The
+        # article and part of speech are excluded, since a merge picking those
+        # up from one side is normal and not a sign anything was lost.
+        return (word.meaning, tuple(s.spanish for s in word.sentences))
+
+    deck = {word.rank: word for word in existing if word.rank is not None}
+    imported = {word.rank: word for word in inputs if word.rank is not None}
+    out: list[types.Word] = []
+    for word in outcome.words:
+        original = deck.get(word.rank)
+        contributed = imported.get(word.rank)
+        if original is None or contributed is None:
+            continue
+        # Only a finding if the import had something to say in the first place.
+        if substance(contributed) == substance(original):
+            continue
+        if substance(word) == substance(original):
+            out.append(word)
+    return tuple(out)
+
+
 def summarize(outcome: Outcome) -> Sequence[str]:
     """Lines describing what happened, for a person to read."""
     lines = [

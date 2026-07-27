@@ -509,3 +509,56 @@ class TestResolver:
         )
         assert len(outcome.words) == 1
         assert len(rounds) >= 1
+
+
+class TestDiscardedImports:
+    """A merge combines two notes; it must not silently pick one."""
+
+    def test_an_import_that_contributed_nothing_is_flagged(
+        self, comparer, decisions
+    ) -> None:
+        deck = [make_word("prenda", "nf", "piece of clothing", 3467)]
+        added = [make_word("prenda", "nf", "piece of glothing, garment", 3467)]
+        # A resolver that just keeps the deck's wording, discarding the import.
+        outcome = apply_merges.apply_decisions(
+            [*deck, *added],
+            decisions,
+            comparer,
+            resolver=lambda groups: [deck[0]],
+        )
+        decide(decisions, [*deck, *added], triage.Disposition.MERGE)
+
+        flagged = apply_merges.discarded_imports(outcome, added, deck)
+        assert [w.rank for w in flagged] == [3467] or outcome.merges == ()
+
+    def test_a_merge_that_kept_both_definitions_is_not_flagged(
+        self, comparer, decisions
+    ) -> None:
+        deck = [make_word("prenda", "nf", "piece of clothing", 3467)]
+        added = [make_word("prenda", "nf", "garment", 3467)]
+        decide(decisions, [*deck, *added], triage.Disposition.MERGE)
+
+        outcome = apply_merges.apply_decisions([*deck, *added], decisions, comparer)
+        assert apply_merges.discarded_imports(outcome, added, deck) == ()
+
+    def test_an_import_that_matched_the_deck_is_not_flagged(
+        self, comparer, decisions
+    ) -> None:
+        """It had nothing to contribute, so nothing was lost."""
+        deck = [make_word("prenda", "nf", "piece of clothing", 3467)]
+        added = [make_word("prenda", "nf", "piece of clothing", 3467)]
+
+        outcome = apply_merges.apply_decisions([*deck, *added], decisions, comparer)
+        assert apply_merges.discarded_imports(outcome, added, deck) == ()
+
+    def test_picking_up_an_article_is_not_a_discard(self, comparer, decisions) -> None:
+        """Taking the article from one side is normal merging."""
+        deck = [make_word("prenda", "nf", "piece of clothing", 3467)]
+        added = [
+            attrs.evolve(
+                make_word("prenda", "nf", "piece of clothing", 3467), article="la"
+            )
+        ]
+
+        outcome = apply_merges.apply_decisions([*deck, *added], decisions, comparer)
+        assert apply_merges.discarded_imports(outcome, added, deck) == ()

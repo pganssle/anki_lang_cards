@@ -170,6 +170,18 @@ def main() -> None:
             for line in candidate.summarize():
                 print(f"  {line}")
 
+    discarded = apply_merges.discarded_imports(outcome, added, deck)
+    if discarded:
+        print(
+            f"\nWARNING: {len(discarded)} notes came out exactly as the deck already"
+            " has them, so the imported version was dropped:"
+        )
+        for word in discarded:
+            print(f"  {word.rank} {word.word} ({word.part_of_speech}) {word.meaning}")
+        print(
+            "  Check these before importing; the new sentences are not in the output."
+        )
+
     mine = apply_merges.new_collisions(outcome, added)
     if mine:
         print("\nNew collisions this import created, for another triage pass:")
