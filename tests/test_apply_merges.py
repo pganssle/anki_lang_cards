@@ -562,3 +562,91 @@ class TestDiscardedImports:
 
         outcome = apply_merges.apply_decisions([*deck, *added], decisions, comparer)
         assert apply_merges.discarded_imports(outcome, added, deck) == ()
+
+
+class TestRevisionPairing:
+    """Revisions belong to specific notes, not to whatever shares their rank."""
+
+    @staticmethod
+    def prenda_pair() -> tuple[types.Word, types.Word]:
+        sentence = types.Sentence(
+            spanish="encontró las llaves en alguna prenda", english="", source=None
+        )
+        from_deck = make_word("prenda", "nf", "piece of clothing", 3467, [sentence])
+        from_import = make_word(
+            "prenda",
+            "nf",
+            "piece of glothing, garment",
+            3467,
+            [
+                types.Sentence(spanish=f"Frase {i}.", english="", source=None)
+                for i in range(8)
+            ],
+        )
+        return from_deck, from_import
+
+    def test_a_group_sharing_a_rank_is_not_cross_wired(
+        self, comparer, decisions
+    ) -> None:
+        """The deck's text was being written over the import's, losing its
+        corrected definition and all eight of its new sentences."""
+        from_deck, from_import = self.prenda_pair()
+        # Triage saw both notes; the editor was opened and nothing was changed.
+        decide(
+            decisions,
+            [from_deck, from_import],
+            triage.Disposition.MERGE,
+            revisions=sorted([from_deck, from_import]),
+        )
+
+        # The deck is not loaded this run, so only the import is present.
+        outcome = apply_merges.apply_decisions([from_import], decisions, comparer)
+
+        assert outcome.revised == (), "nothing was actually rewritten"
+        assert outcome.words[0].meaning == "piece of glothing, garment"
+        assert len(outcome.words[0].sentences) == 8
+
+    def test_a_real_rewrite_still_reaches_the_right_note(
+        self, comparer, decisions
+    ) -> None:
+        from_deck, from_import = self.prenda_pair()
+        ordered = sorted([from_deck, from_import])
+        rewritten = [
+            attrs.evolve(ordered[0], meaning="piece of clothing"),
+            attrs.evolve(ordered[1], meaning="piece of clothing, garment"),
+        ]
+        decide(
+            decisions,
+            [from_deck, from_import],
+            triage.Disposition.MERGE,
+            revisions=rewritten,
+        )
+
+        outcome = apply_merges.apply_decisions([from_import], decisions, comparer)
+        assert outcome.words[0].meaning == "piece of clothing, garment"
+        assert len(outcome.words[0].sentences) == 8, "the examples survive a rewrite"
+
+    def test_a_mismatched_revision_list_is_ignored(self, comparer, decisions) -> None:
+        """Position means nothing if the shapes disagree, so guessing is worse
+        than leaving the group alone."""
+        from_deck, from_import = self.prenda_pair()
+        decide(
+            decisions,
+            [from_deck, from_import],
+            triage.Disposition.MERGE,
+            revisions=[attrs.evolve(from_deck, meaning="something else")],
+        )
+
+        outcome = apply_merges.apply_decisions([from_import], decisions, comparer)
+        assert outcome.words[0].meaning == "piece of glothing, garment"
+
+    def test_collect_revisions_pairs_by_position_too(self) -> None:
+        from_deck, from_import = self.prenda_pair()
+        candidate = triage.Candidate(
+            words=(from_deck, from_import),
+            reason=triage.Reason.COMPATIBLE,
+            comparison=definition_similarity.Comparison(0.3, frozenset()),
+            disposition=triage.Disposition.MERGE,
+            revisions=tuple(sorted([from_deck, from_import])),
+        )
+        assert triage.collect_revisions([candidate]) == ()

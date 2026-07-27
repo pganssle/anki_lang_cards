@@ -473,10 +473,14 @@ def collect_revisions(candidates: Iterable[Candidate]) -> Sequence[types.Word]:
     for candidate in candidates:
         if candidate.revisions is None:
             continue
-        originals = {word.rank: word for word in candidate.words}
-        for word in candidate.revisions:
-            if originals.get(word.rank) != word:
-                revised.append(word)
+        ordered = sorted(candidate.words)
+        if len(ordered) != len(candidate.revisions):
+            continue
+        # Paired by position, not by rank: a group can hold two notes at one
+        # rank, and matching on it writes one note's text over the other.
+        for original, rewritten in zip(ordered, candidate.revisions, strict=True):
+            if original != rewritten:
+                revised.append(rewritten)
     return tuple(revised)
 
 

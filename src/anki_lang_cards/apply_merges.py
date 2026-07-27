@@ -109,34 +109,41 @@ def _apply_revisions(
 ) -> tuple[list[types.Word], list[types.Word]]:
     """Replace notes with the versions they were rewritten to.
 
-    Revisions are paired with the notes they came from inside their own
-    decision, and only the ones that actually changed something are kept. Two
-    notes in a group can share a rank — the deck's copy and the imported copy of
-    one note — so a map keyed on rank alone would let one silently displace the
-    other, which is how a typo the rewrite fixed came back.
+    A decision's revisions are parallel to its group in sorted order — that is
+    how the editor builds them — so they are paired by position. Matching them
+    up by rank instead cross-wires a group whose notes share one: "prenda"
+    exists twice at rank 3467, once as the deck holds it and once as the import
+    revises it, and rank-matching wrote the deck's text over the import's,
+    losing the corrected definition and all eight of its new sentences.
+
+    Only pairs that actually differ count as a rewrite, so opening the editor
+    and saving changes nothing.
     """
-    replacements: dict[tuple[int, str, str], types.Word] = {}
+    replacements: list[tuple[types.Word, types.Word]] = []
     for group, decision in decisions.entries():
         if decision.revisions is None:
             continue
-        originals = {w.rank: [] for w in group if w.rank is not None}
-        for word in group:
-            if word.rank is not None:
-                originals[word.rank].append(word)
-        for revised in decision.revisions:
-            if revised.rank is None:
-                continue
-            for original in originals.get(revised.rank, ()):
-                if original != revised:
-                    key = (original.rank, original.word, original.meaning)
-                    replacements[key] = revised
+        ordered = sorted(group)
+        if len(ordered) != len(decision.revisions):
+            # Shapes disagree, so position means nothing; leave the group alone
+            # rather than guess which note each revision belongs to.
+            continue
+        for original, revised in zip(ordered, decision.revisions, strict=True):
+            if original != revised:
+                replacements.append((original, revised))
 
     out: list[types.Word] = []
     applied: list[types.Word] = []
     for word in words:
-        key = (word.rank, word.word, word.meaning)
-        replacement = replacements.get(key) if word.rank is not None else None
-        if replacement is not None and replacement != word:
+        replacement = next(
+            (
+                rev
+                for orig, rev in replacements
+                if orig == word and orig.rank == word.rank
+            ),
+            None,
+        )
+        if replacement is not None:
             # Keep the sentences: a rewrite is about the headword and the
             # definition, and the examples were never in the editor.
             merged = attrs.evolve(
