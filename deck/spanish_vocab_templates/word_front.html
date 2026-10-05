@@ -243,8 +243,9 @@
 
     // Speak `text`, showing a stop symbol on `button` while it plays. The
     // promise resolves when the speech finishes, is stopped, or is replaced
-    // by another utterance.
-    async function speak(text, button = null) {
+    // by another utterance. A `queue_mode` of 1 (QUEUE_ADD) plays after any
+    // audio still going instead of cutting it off.
+    async function speak(text, button = null, queue_mode = 0) {
         if (!SUPPORTS_ANKIDROID_JS) return;
 
         if (!ASYNC_API) {
@@ -260,7 +261,7 @@
         try {
             await set_tts_language();
             if (generation !== speech_generation) return;
-            await api.ankiTtsSpeak(text);
+            await api.ankiTtsSpeak(text, queue_mode);
             await wait_for_tts_idle(generation);
         } catch (e) {
             report_error("Text-to-speech failed: ", e);
@@ -590,15 +591,16 @@
             }
 
             // Set up automatic sentence reading if enabled. The sentence
-            // waits for the word to finish rather than cutting it off.
+            // waits for the word to finish rather than cutting it off, and is
+            // queued behind it because isSpeaking goes false slightly before
+            // the last of the word's audio has played.
             if (!is_back && settings.read_sentence) {
                 on_sentence_shown = async function() {
                     if (sentence_shown) return;
                     sentence_shown = true;
                     await word_speech;
-                    await sleep(300);
                     if (auto_read_cancelled) return;
-                    speak(currentSentence.spanish, document.querySelector("button.native-spanish-tts"));
+                    speak(currentSentence.spanish, document.querySelector("button.native-spanish-tts"), 1);
                 };
             }
         }
@@ -608,7 +610,9 @@
 
         // Show sentence automatically if enabled
         if (settings.show_sentence) {
-            setTimeout(show_sentence, settings.sentence_delay);
+            // Reveal after the delay or once the word has been read,
+            // whichever comes later
+            Promise.all([sleep(settings.sentence_delay), word_speech]).then(show_sentence);
         }
     }
 
