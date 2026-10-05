@@ -261,12 +261,25 @@
         return document.getElementById(id).textContent.trim();
     }
 
+    // Like get_field_data, but keeps the field's line breaks (<br>, <p>,
+    // <div>) as "\n" so multi-line sentences like dialogue survive.
+    function get_field_text(id) {
+        const elem = document.getElementById(id).cloneNode(true);
+        for (const br of elem.querySelectorAll("br")) {
+            br.replaceWith("\n");
+        }
+        for (const block of elem.querySelectorAll("p, div")) {
+            block.append("\n");
+        }
+        return elem.textContent.trim();
+    }
+
     // Build and cache the sentence pool (parses field data once)
     function get_sentence_pool() {
         if (_sentence_pool !== null) return _sentence_pool;
 
-        const current_spanish = get_field_data("data-spanish");
-        const current_english = get_field_data("data-english");
+        const current_spanish = get_field_text("data-spanish");
+        const current_english = get_field_text("data-english");
         let json_data = get_field_data("data-extra-sentences");
 
         let sentences = [];

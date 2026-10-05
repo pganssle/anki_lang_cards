@@ -106,3 +106,8 @@ div.error-reporting {
     font-size: 0.5em;
     color: red;
 }
+
+/* Sentences are set via textContent; keep their "\n" line breaks (dialogue) */
+#sentence-tts, span.native-spanish-tts, #english-sentence {
+    white-space: pre-line;
+}
