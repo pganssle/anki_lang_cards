@@ -35,8 +35,14 @@
         <input type="checkbox" id="show-sentence-cb" name="show-sentence-setting" onchange="update_settings();">
         <label for="show-sentence-cb">Automatically show sentence</label>
     </div>
+    <!-- AnkiDroid doesn't raise the soft keyboard for inputs on a card, so the
+         delay can also be stepped with buttons. -->
     <div class="checkbox-container">
-        <input type="number" id="sentence-delay" name="sentence-delay" min="0" onchange="update_settings();"> <label for="sentence-delay">Delay before sentence (ms)</label> </div>
+        <button class="delay-step" onclick="step_sentence_delay(-250);" aria-label="Shorter delay">−</button>
+        <input type="number" id="sentence-delay" name="sentence-delay" min="0" step="250" inputmode="numeric" onchange="update_settings();">
+        <button class="delay-step" onclick="step_sentence_delay(250);" aria-label="Longer delay">+</button>
+        <label for="sentence-delay">Delay before sentence (ms)</label>
+    </div>
 </div>
 
 <div id="errors" class="error-reporting"></div>
@@ -165,6 +171,17 @@
         const sentence_display = document.querySelector("#sentence-delay");
         sentence_display.valueAsNumber = settings.sentence_delay;
         sentence_display.disabled = !settings.show_sentence;
+        for (const button of document.querySelectorAll(".delay-step")) {
+            button.disabled = !settings.show_sentence;
+        }
+    }
+
+    // Change the sentence delay by `delta` ms without needing a keyboard
+    function step_sentence_delay(delta) {
+        const input = document.querySelector("#sentence-delay");
+        const current = Number.isNaN(input.valueAsNumber) ? 0 : input.valueAsNumber;
+        input.valueAsNumber = Math.max(0, current + delta);
+        update_settings();
     }
 
     // Toggle settings panel visibility
