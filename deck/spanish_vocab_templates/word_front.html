@@ -3,7 +3,7 @@
     <tts service="android" voice="es_ES" id="word-tts">{{#Article}}{{Article}} {{/Article}}{{Word}}</tts>
     <span class="ankitts native-word-tts">[anki:tts lang=es_US]{{#Article}}{{Article}} {{/Article}}{{Word}}[/anki:tts]</span>
     <span class="part-of-speech">{{Part-of-Speech}}</span>
-    <button class="ankidroidTtsButton native-word-tts" onclick="speak(DISPLAY_WORD);">▶</button>
+    <button class="ankidroidTtsButton native-word-tts" onclick="toggle_speech(this, DISPLAY_WORD);" title="Play">▶</button>
 </div>
 
 <!-- Toggle button for showing/hiding example sentence -->
@@ -14,7 +14,7 @@
     <!-- We leave these empty as they'll be populated by JavaScript -->
     <tts service="android" voice="es_ES" id="sentence-tts"></tts>
     <span class="ankitts native-spanish-tts"></span>
-    <button class="ankidroidTtsButton native-spanish-tts" onclick="_speak_contents(this.previousElementSibling);">▶</button>
+    <button class="ankidroidTtsButton native-spanish-tts" onclick="toggle_speech(this, currentSentence.spanish);" title="Play">▶</button>
     <button id="refresh-sentence-btn" onclick="refresh_sentence();" title="Pick a different sentence">🔄</button>
 </div>
 
@@ -89,6 +89,10 @@
     let hidden = true; // Controls visibility of example sentence
     let sentence_shown = false; // Tracks if sentence has been shown for TTS purposes
     let on_sentence_shown = null; // Callback for when sentence is shown
+    let speech_generation = 0; // Bumped by every new utterance and by stop
+    let active_speech = null; // { button, generation } of the utterance playing now
+    let word_speech = Promise.resolve(); // Resolves when the auto-read word ends
+    let auto_read_cancelled = false; // Set once the user plays or stops anything
     let currentSentence = {
         spanish: '',
         english: '',
@@ -124,10 +128,6 @@
     // Verify TTS support specifically
     SUPPORTS_ANKIDROID_JS = SUPPORTS_ANKIDROID_JS && typeof api?.ankiTtsSpeak === 'function';
 
-    // Helper function to speak the contents of a DOM element
-    function _speak_contents(elem) {
-        speak(elem.textContent);
-    }
 
     // Settings Management Functions
 
@@ -191,16 +191,102 @@
     }
 
     // TTS functionality
-    function speak(text) {
+
+    function sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // The JS API wraps results as {success, value}; the legacy API returns
+    // bare values.
+    function api_value(result) {
+        if (result !== null && typeof result === "object" && "value" in result) {
+            return result.value;
+        }
+        return result;
+    }
+
+    // AnkiDroid creates a fresh TTS engine when the reviewer opens and binds
+    // to it asynchronously. Until it is bound setLanguage fails, but a speak
+    // that arrives after binding still succeeds in the default voice, which
+    // is why the first word of a session was read in English. Retry until the
+    // engine accepts the language, giving up (and speaking anyway) after ~3s.
+    async function set_tts_language() {
+        for (let attempt = 0; attempt < 30; attempt++) {
+            if (api_value(await api.ankiTtsSetLanguage("es_ES")) >= 0) return;
+            await sleep(100);
+        }
+        console.warn("TTS engine never accepted the Spanish voice");
+    }
+
+    // Resolve once the engine goes quiet, or once `generation` is superseded.
+    // isSpeaking can read false for a moment before the engine starts a new
+    // utterance, so a false only counts once it has been seen speaking or a
+    // second has passed.
+    async function wait_for_tts_idle(generation) {
+        const start = Date.now();
+        let seen_speaking = false;
+        while (generation === speech_generation && Date.now() - start < 120000) {
+            if (api_value(await api.ankiTtsIsSpeaking())) {
+                seen_speaking = true;
+            } else if (seen_speaking || Date.now() - start > 1000) {
+                return;
+            }
+            await sleep(100);
+        }
+    }
+
+    function set_button_playing(button, playing) {
+        if (!button) return;
+        button.textContent = playing ? "⏹" : "▶";
+        button.title = playing ? "Stop" : "Play";
+    }
+
+    // Speak `text`, showing a stop symbol on `button` while it plays. The
+    // promise resolves when the speech finishes, is stopped, or is replaced
+    // by another utterance.
+    async function speak(text, button = null) {
         if (!SUPPORTS_ANKIDROID_JS) return;
 
-        if (ASYNC_API) {
-            api.ankiTtsSetLanguage("es_ES").then(() => {
-                api.ankiTtsSpeak(text).then();
-            });
-        } else {
+        if (!ASYNC_API) {
             api.ankiTtsSetLanguage("es_US");
             api.ankiTtsSpeak(text);
+            return;
+        }
+
+        const generation = ++speech_generation;
+        if (active_speech) set_button_playing(active_speech.button, false);
+        active_speech = { button, generation };
+        set_button_playing(button, true);
+        try {
+            await set_tts_language();
+            if (generation !== speech_generation) return;
+            await api.ankiTtsSpeak(text);
+            await wait_for_tts_idle(generation);
+        } catch (e) {
+            report_error("Text-to-speech failed: ", e);
+        } finally {
+            if (active_speech?.generation === generation) {
+                set_button_playing(button, false);
+                active_speech = null;
+            }
+        }
+    }
+
+    function stop_speech() {
+        speech_generation++;
+        if (active_speech) set_button_playing(active_speech.button, false);
+        active_speech = null;
+        api.ankiTtsStop();
+    }
+
+    // Handler for the ▶/⏹ buttons. Any manual use of them also cancels a
+    // pending automatic read of the sentence.
+    function toggle_speech(button, text) {
+        auto_read_cancelled = true;
+        if (active_speech && active_speech.button === button) {
+            stop_speech();
+        } else {
+            speak(text, button);
         }
     }
 
@@ -393,7 +479,8 @@
 
         // Auto-read if the setting is on
         if (SUPPORTS_ANKIDROID_JS && get_settings().read_sentence) {
-            speak(currentSentence.spanish);
+            auto_read_cancelled = true;
+            speak(currentSentence.spanish, document.querySelector("button.native-spanish-tts"));
         }
 
         // Reset the "already spoken" guard so the on_sentence_shown callback
@@ -499,16 +586,19 @@
         if (SUPPORTS_ANKIDROID_JS) {
             // Set up automatic word reading if enabled
             if (!is_back && settings.read_word) {
-                speak(DISPLAY_WORD);
+                word_speech = speak(DISPLAY_WORD, document.querySelector("button.native-word-tts"));
             }
 
-            // Set up automatic sentence reading if enabled
+            // Set up automatic sentence reading if enabled. The sentence
+            // waits for the word to finish rather than cutting it off.
             if (!is_back && settings.read_sentence) {
-                on_sentence_shown = function() {
-                    if (!sentence_shown) {
-                        speak(currentSentence.spanish);
-                        sentence_shown = true;
-                    }
+                on_sentence_shown = async function() {
+                    if (sentence_shown) return;
+                    sentence_shown = true;
+                    await word_speech;
+                    await sleep(300);
+                    if (auto_read_cancelled) return;
+                    speak(currentSentence.spanish, document.querySelector("button.native-spanish-tts"));
                 };
             }
         }
