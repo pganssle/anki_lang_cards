@@ -185,7 +185,12 @@ async def main() -> None:
         conf = config.Config.from_file(args.config)
         # A single interactive request gains nothing from batching.
         args.batch = False
-        _, query_runner = selection.make_runner(args, conf, caches.CacheTypes.RESPONSES)
+        try:
+            _, query_runner = selection.make_runner(
+                args, conf, caches.CacheTypes.RESPONSES
+            )
+        except selection.SelectionError as e:
+            parser.exit(2, f"error: {e}\n")
 
         # Read piped input
         input_data = await asyncio.to_thread(lambda: sys.stdin.read().strip())

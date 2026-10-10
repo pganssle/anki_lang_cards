@@ -594,7 +594,7 @@ async def main() -> None:
         model, query_runner = selection.make_runner(
             args, conf, caches.CacheTypes.ANNOTATIONS
         )
-    except selection.FeatureUnavailableError as e:
+    except selection.SelectionError as e:
         parser.exit(2, f"error: {e}\n")
 
     dictionaries: Sequence[Path] = args.dictionary

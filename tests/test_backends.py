@@ -6,6 +6,7 @@ import pathlib
 from collections.abc import Callable, Mapping, Sequence
 from typing import ClassVar, Self
 
+import attrs
 import pytest
 
 from anki_lang_cards import caches, config
@@ -167,7 +168,6 @@ TGW_CONFIG = config.TGWConfig(api_base_url="http://localhost:5000/v1/")
 @pytest.mark.parametrize(
     ("argv", "conf", "expected"),
     [
-        ((), _config(), selection.DEFAULT_MODEL),
         (
             (),
             _config(anthropic=config.AnthropicConfig(default_model="anthropic/x")),
@@ -186,17 +186,19 @@ TGW_CONFIG = config.TGWConfig(api_base_url="http://localhost:5000/v1/")
             _config(models=config.ModelsConfig(default_model="anthropic/y")),
             "gpt-5",
         ),
-        (
-            ("--model-service", "tgw"),
-            _config(),
-            f"tgw/{tgw.TGWBackend.DEFAULT_MODEL}",
-        ),
     ],
 )
 def test_model_spec_precedence(
     argv: Sequence[str], conf: config.Config, expected: str
 ) -> None:
     assert selection.model_spec(_parse(*argv), conf) == expected
+
+
+@pytest.mark.parametrize("argv", [(), ("--model-service", "tgw")])
+def test_model_spec_requires_a_model(argv: Sequence[str]) -> None:
+    """There is no built-in default model, for any backend."""
+    with pytest.raises(selection.ModelNotConfiguredError, match="default_model"):
+        selection.model_spec(_parse(*argv), _config(tgw_config=TGW_CONFIG))
 
 
 @pytest.mark.parametrize(
@@ -218,7 +220,10 @@ def test_make_runner_anthropic_features(
     caching: bool,
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    conf = _config(models=models, anthropic=config.AnthropicConfig(api_key="key"))
+    conf = _config(
+        models=attrs.evolve(models, default_model="anthropic/claude-sonnet-5"),
+        anthropic=config.AnthropicConfig(api_key="key"),
+    )
 
     resolved, query_runner = selection.make_runner(
         _parse(*argv), conf, caches.CacheTypes.SENTENCES, confirm=_never_asked

@@ -338,7 +338,7 @@ async def main():
         _, query_runner = selection.make_runner(
             args, conf_obj, caches.CacheTypes.SENTENCES
         )
-    except selection.FeatureUnavailableError as e:
+    except selection.SelectionError as e:
         parser.exit(2, f"error: {e}\n")
 
     # Words from the input CSV

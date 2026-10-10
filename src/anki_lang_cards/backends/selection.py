@@ -10,8 +10,6 @@ import attrs
 from .. import caches, config
 from . import anthropic_sdk, base, llm_fallback, runner, tgw
 
-DEFAULT_MODEL: Final[str] = "anthropic/claude-sonnet-5"
-
 DEDICATED_BACKENDS: Final[Mapping[str, type[base.Backend]]] = {
     "anthropic": anthropic_sdk.AnthropicBackend,
     "tgw": tgw.TGWBackend,
@@ -33,7 +31,15 @@ _FEATURE_FLAGS: Final[Mapping[base.Feature, str]] = {
 }
 
 
-class FeatureUnavailableError(Exception):
+class SelectionError(Exception):
+    """The configuration and command line do not settle on a usable model."""
+
+
+class ModelNotConfiguredError(SelectionError):
+    """No model was named on the command line or in the config."""
+
+
+class FeatureUnavailableError(SelectionError):
     """A feature the user required is unsupported, and they declined to go on."""
 
 
@@ -132,8 +138,8 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         help="The model to use, e.g. 'anthropic/claude-sonnet-5'. Models "
         "prefixed with 'anthropic/' or 'tgw/' use a dedicated backend; "
         "anything else goes through the `llm` library and its plugins. "
-        "Defaults to [models] default_model from the config, or "
-        f"{DEFAULT_MODEL}.",
+        "Defaults to [models] default_model from the config; one of the two "
+        "is required.",
     )
     group.add_argument(
         "--model-service",
@@ -175,15 +181,20 @@ def _feature_request(
 
 
 def model_spec(args: argparse.Namespace, conf: config.Config) -> str:
+    """The model the command line or, failing that, the config names.
+
+    :raises ModelNotConfiguredError: If neither names one.
+    """
     if args.model_name is not None:
         return args.model_name
     if conf.models.default_model is not None:
         return conf.models.default_model
     if conf.anthropic is not None and conf.anthropic.default_model is not None:
         return conf.anthropic.default_model
-    if args.model_service == "tgw":
-        return f"tgw/{tgw.TGWBackend.DEFAULT_MODEL}"
-    return DEFAULT_MODEL
+    raise ModelNotConfiguredError(
+        "No model is configured: pass --model, or set default_model under "
+        "[models] in the config file."
+    )
 
 
 def make_runner(
@@ -195,6 +206,7 @@ def make_runner(
 ) -> tuple[ResolvedModel, runner.QueryRunner]:
     """Build the runner for the model the CLI arguments and config select.
 
+    :raises ModelNotConfiguredError: See :func:`model_spec`.
     :raises FeatureUnavailableError: See :func:`choose_features`.
     """
     resolved = resolve(model_spec(args, conf), args.model_service)

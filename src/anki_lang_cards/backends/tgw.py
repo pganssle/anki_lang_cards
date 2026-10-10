@@ -2,7 +2,7 @@
 
 import urllib.parse
 from collections.abc import Mapping
-from typing import Any, ClassVar, Final, Self
+from typing import Any, ClassVar, Self
 
 import aiohttp
 import backoff
@@ -23,8 +23,6 @@ class TGWBackend:
     service: ClassVar[str] = "tgw"
     features: ClassVar[frozenset[base.Feature]] = frozenset()
     default_words_per_prompt: ClassVar[int] = 2
-
-    DEFAULT_MODEL: Final[str] = "Meta-Llama-3-70B-Instruct-IQ1_M.gguf"
 
     def __init__(
         self,
