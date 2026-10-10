@@ -209,7 +209,7 @@ def handle_book_skipping(
 
             book_filter = match_book
 
-        if "page_numbers" not in rule and "chapter" not in rule:
+        if "page_numbers" not in rule and "chapters" not in rule:
 
             def filter_book(book_annotations: CombinedBookAnnotations):
                 if book_filter(book_annotations):
