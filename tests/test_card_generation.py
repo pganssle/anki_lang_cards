@@ -778,6 +778,55 @@ def test_main_folds_in_an_answered_decision_file(
     assert third.returncode == 0, third.stdout + third.stderr
 
 
+def test_main_exports_a_merge_that_needs_no_new_sentences(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """A merged note already at the sentence target is still exported, even
+    when nothing in the run needs the LLM, and no stale diff or superseded-notes
+    file from an earlier run survives to contradict it."""
+    workdir = tmp_path_factory.mktemp("include-only")
+    inputs = _conflicting_inputs(workdir)
+    output_dir = workdir / "output"
+    superseded_path = output_dir / "superseded_notes.csv"
+    run_args = (
+        "--no-ui",
+        "--max-sentences",
+        "2",
+        "--superseded-output",
+        str(superseded_path),
+    )
+    first = _run_main_raw(workdir, inputs, dictionary_paths, run_args)
+    assert first.returncode == 3, first.stdout + first.stderr
+
+    # Leftovers from an earlier run, which re-importing would act on.
+    stale_diff = output_dir / "diff.csv"
+    stale_diff.write_text("#separator:Comma\n9999,obsoleto,adj,stale,,,,,,,,,,\n")
+    superseded_path.write_text("rank,word,part_of_speech,meaning\n1400,x,nm,stale\n")
+
+    pending_path = _answer_pending(workdir, disposition="merge")
+    second = _run_main_raw(
+        workdir,
+        inputs,
+        dictionary_paths,
+        (*run_args, "--decision-file", str(pending_path)),
+    )
+
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert "Generating sentences" not in second.stdout
+    exported = _words_by_headword(output_dir / "output.csv")
+    assert exported["existente"].rank == 1400
+    diffed = _words_by_headword(stale_diff)
+    assert set(diffed) == {"existente"}
+    assert diffed["existente"].rank == 1400
+
+    # Nothing may tell the user to delete the note the diff updates.
+    if superseded_path.exists():
+        with superseded_path.open(newline="") as f:
+            superseded_ranks = {int(row["rank"]) for row in csv.DictReader(f)}
+        assert superseded_ranks
+        assert superseded_ranks.isdisjoint(word.rank for word in diffed.values())
+
+
 def test_main_leaves_review_groups_pending(
     dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
