@@ -11,10 +11,17 @@ from pathlib import Path
 from typing import Any, Literal, TypeAlias, TypedDict, cast
 
 import attrs
-import llm
 import tqdm
 
-from . import _types, caches, config, dictionary_entries, prompts
+from . import (
+    _types,
+    caches,
+    config,
+    dictionary_entries,
+    model_selection,
+    prompts,
+    runner,
+)
 from ._types import (
     BookCitation,
     CombinedAnnotation,
@@ -23,6 +30,7 @@ from ._types import (
     Sentence,
     Word,
 )
+from .backends import base
 
 WordMap: TypeAlias = Mapping[str, Sequence[dictionary_entries.DictionaryEntry]]
 
@@ -377,7 +385,7 @@ def prepare_prompt_inputs(
 
 def _generate_prompt(
     prompt_inputs: Sequence[PromptInput], dialect: str = config.DEFAULT_DIALECT
-) -> str:
+) -> base.Request:
     annotation_input = json.dumps(
         [prompt_input.annotation_entry for prompt_input in prompt_inputs],
         indent=2,
@@ -393,46 +401,43 @@ def _generate_prompt(
             seen_headwords.add(headword)
             all_rag_entries.append(rag_entry)
 
-    return prompts.BOOK_ANNOTATION_PROMPT % {
-        "input": annotation_input,
-        "rag_entries": "\n\n".join(all_rag_entries),
-        "dialect": dialect,
-    }
+    return base.Request(
+        system_prompt=prompts.BOOK_ANNOTATION_SYSTEM_PROMPT % {"dialect": dialect},
+        prompt=prompts.BOOK_ANNOTATION_PROMPT_TEMPLATE
+        % {
+            "input": annotation_input,
+            "rag_entries": "\n\n".join(all_rag_entries),
+        },
+    )
 
 
-def _estimate_tokens(prompt: str) -> int:
-    return len(prompt) / 4
+def _estimate_tokens(request: base.Request) -> float:
+    return (len(request.system_prompt) + len(request.prompt)) / 4
 
 
 def generate_prompts(
     prompt_inputs: Sequence[PromptInput],
     max_tokens: int = 2048,
     dialect: str = config.DEFAULT_DIALECT,
-) -> Iterable[str]:
-    # TODO: Can use heuristic to estimate how many fit in the context window to
-    # make this faster
+) -> Iterable[base.Request]:
+    """Pack annotation entries into as few prompts as fit in ``max_tokens``.
 
-    current_prompt_stack: list[PromptInput] = []
-    last_prompt: str = ""
+    An entry too big to share a prompt with anything gets one to itself.
+    """
     if not prompt_inputs:
         raise ValueError("No prompt inputs provided")
 
+    stack: list[PromptInput] = []
     for prompt_input in prompt_inputs:
-        current_prompt_stack.append(prompt_input)
+        if stack and (
+            _estimate_tokens(_generate_prompt([*stack, prompt_input], dialect=dialect))
+            > max_tokens
+        ):
+            yield _generate_prompt(stack, dialect=dialect)
+            stack = []
+        stack.append(prompt_input)
 
-        prompt: str = _generate_prompt(current_prompt_stack, dialect=dialect)
-        if _estimate_tokens(prompt) > max_tokens:
-            if not last_prompt:
-                raise RuntimeError(
-                    "Current prompt input is too big to fit in max_tokens"
-                )
-
-            yield last_prompt
-            current_prompt_stack = [prompt_input]
-        else:
-            last_prompt = prompt
-
-    yield prompt
+    yield _generate_prompt(stack, dialect=dialect)
 
 
 def _prepare_source_mapping(
@@ -441,72 +446,6 @@ def _prepare_source_mapping(
     return {
         prompt_input.source.id: prompt_input.source for prompt_input in prompt_inputs
     }
-
-
-async def _extract_response_data(response: llm.AsyncResponse) -> dict:
-    text = await response.text()
-    usage = await response.usage()
-
-    return {
-        "text": text,
-        "usage": {
-            "input": usage.input,
-            "output": usage.output,
-            "details": usage.details,
-        },
-    }
-
-
-async def _process_input_with_llm_nocache(
-    prompt: str, model_service: str, model_name: str, conf_obj: config.Config
-) -> Mapping:
-    if model_service == "anthropic":
-        if not conf_obj.anthropic:
-            raise ValueError("Anthropic configuration is missing.")
-        model = llm.get_async_model(model_name)
-        model.key = conf_obj.anthropic.api_key
-    elif model_service == "tgw":
-        raise NotImplementedError("Getting around to it.")
-    else:
-        raise ValueError(f"Unsupported model service: {model_service}")
-
-    # Prepare and send the request
-    response = await model.prompt(prompt)
-    return await _extract_response_data(response)
-
-
-async def process_input_with_llm(
-    prompt: str,
-    model_service: str,
-    model_name: str,
-    conf_obj: config.Config,
-    query_cacher: caches.QueryCacher,
-    invalidate_cache: bool = False,
-    skip_cache: bool = False,
-) -> str:
-    """Processes input using the specified LLM model service."""
-    if invalidate_cache and skip_cache:
-        raise ValueError("Only one of invalidate_cache and skip_cache can be true")
-
-    response_data: Mapping | None = None
-    cache_hit: bool = False
-    if not (skip_cache or invalidate_cache):
-        cached_response = query_cacher.load_from_cache(prompt)
-        if cached_response is not None:
-            response_data = cached_response["response"]
-            cache_hit = True
-
-    if not cache_hit:
-        response_data = await _process_input_with_llm_nocache(
-            prompt, model_service, model_name, conf_obj
-        )
-
-        if not skip_cache:
-            query_cacher.cache_result(prompt, response_data)
-
-    assert response_data is not None
-
-    return response_data["text"]
 
 
 def _sentence_to_citation(
@@ -590,20 +529,13 @@ async def main() -> None:
         default=Path("/usr/share/hunspell/es_ES.dic"),
         help="Path to the hunspell dictionary for headword stemming",
     )
+    model_selection.add_arguments(parser)
     parser.add_argument(
-        "--model-service",
-        type=str,
-        default="anthropic",
-        help="Which model service to use. Options are:\n"
-        "    tgw: Text Generation Web\n"
-        "    anthropic: Anthropic",
-    )
-    parser.add_argument(
-        "--model-name",
-        type=str,
-        default=None,
-        help="The specific model to use. If unspecified, the default value "
-        "for the chosen model is selected.",
+        "--max-retries",
+        type=int,
+        default=2,
+        help="How many times to retry a prompt whose response could not be "
+        "used before giving up on it.",
     )
     parser.add_argument(
         "--config",
@@ -639,12 +571,6 @@ async def main() -> None:
     )
 
     parser.add_argument(
-        "--max-simultaneous-queries",
-        type=int,
-        default=5,
-        help="Maximum number of simultaneous queries to the LLM service.",
-    )
-    parser.add_argument(
         "--csv-header",
         action="store_true",
         help="Include a header row in the output CSV. Note that Anki's CSV "
@@ -672,15 +598,12 @@ async def main() -> None:
         )
 
     conf = config.Config.from_file(args.config)
-    if args.model_name is not None:
-        model_name = args.model_name
-    elif args.model_service == "anthropic":
-        if conf.anthropic is not None and conf.anthropic.default_model is not None:
-            model_name = conf.anthropic.default_model
-        else:
-            model_name = "anthropic/claude-sonnet-4-0"
-    else:
-        raise NotImplementedError("No model name")
+    try:
+        model, query_runner = model_selection.make_runner(
+            args, conf, caches.CacheTypes.ANNOTATIONS
+        )
+    except model_selection.SelectionError as e:
+        parser.exit(2, f"error: {e}\n")
 
     dictionaries: Sequence[Path] = args.dictionary
     if conf.annotations.dictionaries:
@@ -706,60 +629,36 @@ async def main() -> None:
     source_mapping = _prepare_source_mapping(prompt_inputs)
 
     existing: dict[Word, Word] = {}
-    query_cacher = caches.QueryCacher(
-        cache_type=caches.CacheTypes.ANNOTATIONS,
-        model_name=model_name,
-        model_service=args.model_service,
+    requests = list(generate_prompts(prompt_inputs, dialect=conf.sentences.dialect))
+
+    def parse(request: base.Request, response: caches.ResponseData) -> Sequence[Word]:
+        return parse_llm_response(
+            response["text"], model_used=model.spec, source_mapping=source_mapping
+        )
+
+    mode = (
+        "as a batch job"
+        if query_runner.batch
+        else f"with up to {query_runner.max_concurrency} parallel queries"
     )
-
-    semaphore = asyncio.Semaphore(args.max_simultaneous_queries)
-    prompts_to_process = list(
-        generate_prompts(prompt_inputs, dialect=conf.sentences.dialect)
-    )
-
-    async def process_single_prompt(prompt: str) -> Sequence[Word]:
-        """Helper to process one prompt with retries and semaphore."""
-        async with semaphore:
-            for i in range(1, 4):
-                # Invalidate cache on retries (i > 1)
-                invalidate_cache = i > 1 or args.invalidate_response_cache
-
-                try:
-                    response = await process_input_with_llm(
-                        prompt,
-                        model_service=args.model_service,
-                        model_name=model_name,
-                        conf_obj=conf,
-                        query_cacher=query_cacher,
-                        invalidate_cache=invalidate_cache,
-                        skip_cache=args.skip_response_cache,
-                    )
-                    return parse_llm_response(
-                        response, model_used=model_name, source_mapping=source_mapping
-                    )
-                except (ValueError, json.JSONDecodeError) as e:
-                    msg = f"Attempt {i} failed for prompt. Error: {e}"
-                    print(msg)
-                    if i == 3:
-                        print(f"Final attempt failed. Prompt was:\n---\n{prompt}\n---")
-
-            return []
-
-    print(
-        f"Processing {len(prompts_to_process)} prompts with up to "
-        f"{args.max_simultaneous_queries} parallel queries."
-    )
-    tasks = [process_single_prompt(prompt) for prompt in prompts_to_process]
-
-    for future in tqdm.tqdm(
-        asyncio.as_completed(tasks), total=len(tasks), desc="Processing prompts"
-    ):
-        words = await future
-        for word in words:
-            if word in existing:
-                existing[word].update(word)
-            else:
-                existing[word] = word
+    print(f"Processing {len(requests)} prompts {mode}.")
+    async with query_runner:
+        with tqdm.tqdm(total=len(requests), desc="Processing prompts") as progress:
+            async for _, words in runner.run_with_retries(
+                query_runner,
+                requests,
+                parse,
+                max_retries=args.max_retries,
+                describe=lambda request: f"prompt {request.key}",
+                invalidate_cache=args.invalidate_response_cache,
+                skip_cache=args.skip_response_cache,
+            ):
+                progress.update()
+                for word in words:
+                    if word in existing:
+                        existing[word].update(word)
+                    else:
+                        existing[word] = word
 
     print(f"Generated {len(existing)} entries.")
     with open(args.output, "wt") as f:

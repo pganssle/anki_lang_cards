@@ -128,8 +128,7 @@ def _write_config(
 ) -> pathlib.Path:
     config_path = workdir / "config.toml"
     config_text = (
-        "[anthropic]\n"
-        'api_key="fake-key"\n'
+        "[models]\n"
         'default_model="fake-cards"\n'
         "[annotations]\n"
         f'dictionaries = ["{dictionaries.stardict_prefix.as_posix()}"]\n'
@@ -159,8 +158,6 @@ def _run_annotations_to_csv(
             str(combined_annotations),
             "--output",
             str(output_csv),
-            "--model-service",
-            "anthropic",
             "--model-name",
             "fake-cards",
             "--hunspell-dict-path",
@@ -449,8 +446,6 @@ def _run_main(
             str(inputs),
             "--output",
             str(output_csv),
-            "--model-service",
-            "anthropic",
             "--model-name",
             "fake-cards",
             "--config",
@@ -623,10 +618,15 @@ def test_main_limit(
 
 
 def _cached_annotation_prompts(workdir: pathlib.Path) -> Sequence[str]:
+    """Everything sent to the model for each cached request, system prompt
+    included."""
     cache_dir = workdir / ".cache" / "annotations"
-    return [
-        json.loads(path.read_text(encoding="utf-8"))["input"]["prompt"]
+    cached_inputs = [
+        json.loads(path.read_text(encoding="utf-8"))["input"]
         for path in cache_dir.rglob("*.json")
+    ]
+    return [
+        (cached["system_prompt"] or "") + cached["prompt"] for cached in cached_inputs
     ]
 
 
@@ -678,8 +678,6 @@ def _run_main_raw(
             str(inputs),
             "--output",
             str(output_dir / "output.csv"),
-            "--model-service",
-            "anthropic",
             "--model-name",
             "fake-cards",
             "--config",

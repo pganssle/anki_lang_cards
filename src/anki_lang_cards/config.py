@@ -12,8 +12,17 @@ from . import _types as types
 
 @attrs.frozen
 class AnthropicConfig:
-    api_key: str
+    api_key: str | None = None
+    """If unset, the SDK looks for credentials itself (ANTHROPIC_API_KEY, ...)."""
+
     default_model: str | None = None
+    """Deprecated in favor of ``[models] default_model``, which wins if set."""
+
+    effort: str | None = None
+    """The ``output_config.effort`` level; unset leaves the model's default."""
+
+    max_tokens: int | None = None
+    base_url: str | None = None
 
     @classmethod
     def from_values(cls, vals: Mapping[str, Any]) -> Self:
@@ -33,6 +42,24 @@ class TGWConfig:
 
 
 DEFAULT_DIALECT: Final[str] = "international Spanish"
+
+
+@attrs.frozen
+class ModelsConfig:
+    """Which model to use, and which optional backend features to use with it.
+
+    A feature left unset is used wherever the backend supports it; one set
+    to true is treated as a requirement, and the user is asked before
+    running without it.
+    """
+
+    default_model: str | None = None
+    batch: bool | None = None
+    prompt_caching: bool | None = None
+
+    @classmethod
+    def from_values(cls, vals: Mapping[str, Any]) -> Self:
+        return cls(**vals)
 
 
 @attrs.frozen
@@ -68,6 +95,7 @@ class Config:
     tgw: TGWConfig | None = None
     anthropic: AnthropicConfig | None = None
     sentences: SentencesConfig = SentencesConfig()
+    models: ModelsConfig = ModelsConfig()
 
     @classmethod
     def from_file(cls, path: pathlib.Path) -> Self:
@@ -94,7 +122,13 @@ class Config:
         else:
             sentences_config = SentencesConfig()
 
+        if (models_values := config.get("models", None)) is not None:
+            models_config = ModelsConfig.from_values(models_values)
+        else:
+            models_config = ModelsConfig()
+
         return cls(
+            models=models_config,
             tgw=tgw_config,
             anthropic=anthropic_config,
             annotations=annotations_config,

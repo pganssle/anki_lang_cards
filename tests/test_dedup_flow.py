@@ -14,12 +14,7 @@ import attrs
 import pytest
 
 from anki_lang_cards import _types as types
-from anki_lang_cards import (
-    apply_merges,
-    conflict_resolver,
-    dedup_flow,
-    triage,
-)
+from anki_lang_cards import apply_merges, conflict_resolver, dedup_flow, triage
 
 
 def run[T](coroutine: Awaitable[T]) -> T:
@@ -143,7 +138,9 @@ class TestHeadless:
         decisions.remember(
             attrs.evolve(
                 candidate,
-                replacements=(make_word("colonia", "nf", "colonial settlement, cologne", 4181),),
+                replacements=(
+                    make_word("colonia", "nf", "colonial settlement, cologne", 4181),
+                ),
             )
         )
         second = resolve(

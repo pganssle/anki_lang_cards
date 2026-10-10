@@ -2,8 +2,22 @@
 api_base_url="https://my-tgw.example.com/v1/"
 request_timeout=720
 
+[models]
+# Models prefixed "anthropic/" or "tgw/" use a dedicated backend; anything
+# else goes through the `llm` library and whatever plugins it has installed.
+default_model = "anthropic/claude-sonnet-5"
+# Batching (half price, slower) and prompt caching are used wherever the
+# backend supports them. Set one to true to require it -- you will be asked
+# before a run goes ahead without it -- or to false to turn it off.
+# batch = true
+# prompt_caching = true
+
 [anthropic]
+# Optional: without it the SDK uses ANTHROPIC_API_KEY or an `ant auth login`
+# profile.
 api_key="sk-ant-...."
+# Optional: low, medium, high, xhigh or max; unset uses the model default.
+# effort = "medium"
 
 [annotations]
 dictionaries = [

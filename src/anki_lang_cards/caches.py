@@ -7,7 +7,7 @@ import operator
 import pathlib
 import typing
 from collections.abc import Callable, Mapping
-from typing import Final, TypedDict
+from typing import Any, Final, TypedDict
 
 import attrs
 
@@ -33,7 +33,7 @@ class PromptInput(TypedDict):
 class UsageData(TypedDict):
     input: int
     output: int
-    details: str | None
+    details: Mapping[str, Any] | None
 
 
 class ResponseData(TypedDict):

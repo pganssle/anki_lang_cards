@@ -38,9 +38,9 @@ With everything set up (see prerequisites below), a full annotation run is:
 ```console
 python -m anki_lang_cards.annotation_extractor -i ~/Calibre/SpanishLibrary -l es --context-sentences 2 --output output --json
 python -m anki_lang_cards.combine_annotations -i output/annotations.json -o output/combined_annotations.json
-python -m anki_lang_cards.annotations_to_csv --model-service anthropic
+python -m anki_lang_cards.annotations_to_csv
 # review output/words_from_annotations.csv by hand
-python -m anki_lang_cards --model-service anthropic --inputs output/words_from_annotations.csv
+python -m anki_lang_cards --inputs output/words_from_annotations.csv
 # import output/diff_from_existing.csv into Anki
 ```
 
@@ -132,7 +132,7 @@ to skip it even if you don't think you have overlapping highlights.
 ## Step 4: turn annotations into a word CSV
 
 ```console
-python -m anki_lang_cards.annotations_to_csv --model-service anthropic
+python -m anki_lang_cards.annotations_to_csv
 ```
 
 The defaults line up with the previous step (`-i
@@ -150,6 +150,14 @@ Things to know:
   already processed, or for things highlighted for reasons other than
   vocabulary. `--processed-pages-output` writes `output/processed_pages.json`,
   which is handy as a starting point for updating the skip list after a run.
+- **Model, batching and prompt caching**: the model comes from `[models]
+  default_model` in `config.toml` (or `--model`). `anthropic/...` models go
+  through the Anthropic SDK and by default run as a batch job (half price,
+  but results can take minutes or occasionally hours) with the shared
+  instructions prompt-cached; `--no-batch` sends requests immediately. Other
+  models go through the `llm` library. If a batched run is interrupted, the
+  pending job is remembered under `.cache/` and picked up by the next run
+  rather than paid for twice.
 - **Caching**: all LLM responses are cached in `.cache/annotations`, so
   re-running after an interruption (or after fixing something downstream) is
   cheap and doesn't re-query the model. `--invalidate-response-cache` and
@@ -185,7 +193,7 @@ Have Anki running with Anki Connect (or pass `--exported-deck` with a TSV
 export of the deck), then:
 
 ```console
-python -m anki_lang_cards --model-service anthropic --inputs output/words_from_annotations.csv
+python -m anki_lang_cards --inputs output/words_from_annotations.csv
 ```
 
 (The default `--inputs` is `input/words.csv`, so point it at whichever CSV

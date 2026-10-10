@@ -19,6 +19,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      # The hunspell package builds against the system library's headers.
+      - run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends libhunspell-dev
       - run: python -m pip install tox
       - run: tox -e ${{ matrix.tox-env }}
 

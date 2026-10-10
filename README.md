@@ -77,9 +77,14 @@ If you do not want to manually construct the input CSVs, you can use either the 
 The full invocation is:
 ```
 $ python -m anki_lang_cards --help
-usage: __main__.py [-h] [--inputs INPUTS] [--output OUTPUT] [--model-service MODEL_SERVICE] [--model-name MODEL_NAME]
-                   [--config CONFIG] [--start-rank-at START_RANK_AT] [--exported-deck EXPORTED_DECK]
-                   [--diff-output DIFF_OUTPUT] [--deck-name DECK_NAME]
+usage: __main__.py [-h] [--inputs INPUTS] [--output OUTPUT] [--model-name MODEL_NAME]
+                   [--model-service {anthropic,tgw,llm}] [--batch | --no-batch]
+                   [--prompt-caching | --no-prompt-caching] [--max-simultaneous-queries MAX_SIMULTANEOUS_QUERIES]
+                   [--config CONFIG] [--start-rank-at START_RANK_AT] [--max-retries MAX_RETRIES]
+                   [--max-sentences MAX_SENTENCES] [--exported-deck EXPORTED_DECK] [--diff-output DIFF_OUTPUT]
+                   [--conflict-cache-path CONFLICT_CACHE_PATH] [--decision-cache DECISION_CACHE]
+                   [--note-cache NOTE_CACHE] [--pending-file PENDING_FILE] [--superseded-output SUPERSEDED_OUTPUT]
+                   [--no-ui] [--deck-name DECK_NAME] [--csv-header] [--limit LIMIT]
 
 Anki Language Card Creator
 
@@ -87,18 +92,52 @@ options:
   -h, --help            show this help message and exit
   --inputs INPUTS       Path to a CSV containing words and their meanings
   --output OUTPUT       Path to an output CSV file
-  --model-service MODEL_SERVICE
-                        Which model service to use. Options are: tgw: Text Generation Web anthropic: Anthropic
-  --model-name MODEL_NAME
-                        The specific model to use. If unspecified, the default value for the chosen model is selected,
-                        which is: tgw: Meta-Llama-3-70B-Instruct-IQ1_M.gguf anthropic: claude-3-5-sonnet-20241022
   --config CONFIG       Config file location
   --start-rank-at START_RANK_AT
+  --max-retries MAX_RETRIES
+                        How many times to retry a prompt whose response could not be used before giving up on it.
+  --max-sentences MAX_SENTENCES
+                        If adding a word that is already in the deck and it has greater than this many sentences, do
+                        not generate new sentences.
   --exported-deck EXPORTED_DECK
                         Path to a text export of the deck.
   --diff-output DIFF_OUTPUT
                         Path to output a CSV only including new and updated words.
+  --conflict-cache-path CONFLICT_CACHE_PATH
+                        Legacy merge-wording cache, consulted for merges decided before decisions carried their
+                        wording.
+  --decision-cache DECISION_CACHE
+                        Record of duplicate-group answers; shared with the merge scripts so a decision is only ever
+                        made once.
+  --note-cache NOTE_CACHE
+                        Fetched Anki notes, reused while their mod times are unchanged.
+  --pending-file PENDING_FILE
+                        Where unanswered duplicate groups are written when no UI can ask about them (exit code 3).
+  --superseded-output SUPERSEDED_OUTPUT
+                        Where to list existing notes a merge replaced, which importing cannot delete; written only
+                        when there are any.
+  --no-ui               Never open the duplicate-resolution screen; write unanswered groups to the pending file and
+                        exit 3 instead.
   --deck-name DECK_NAME
+  --csv-header          Include a header row when creating the output CSV. Note that Anki's CSV importer has no
+                        header-skipping option, so a header row imports as a junk note; it is useful mainly for
+                        matching up columns in the import dialog.
+  --limit LIMIT         Process at most this many input words; useful for a trial run over a subset before committing
+                        to a full one.
+
+model selection:
+  --model-name MODEL_NAME, --model MODEL_NAME
+                        The model to use, e.g. 'anthropic/claude-sonnet-5'. A model prefixed with a backend's name
+                        goes to that backend if it takes prefixes; anything else goes to the 'llm' backend. Defaults
+                        to [models] default_model from the config; one of the two is required.
+  --model-service {anthropic,tgw,llm}
+                        Force a backend instead of choosing one from the model name.
+  --batch, --no-batch   Send requests as a discounted batch job, which can take a while to come back. On by default
+                        where the backend supports it.
+  --prompt-caching, --no-prompt-caching
+                        Cache the shared system prompt between requests. On by default where the backend supports it.
+  --max-simultaneous-queries MAX_SIMULTANEOUS_QUERIES
+                        Maximum number of requests in flight at once when not batching.
 ```
 
 To better merge with the existing deck, you should either be running [Anki Connect](https://ankiweb.net/shared/info/2055492159) or export the deck from Anki in text format (TSV) and provide the path to the exported deck with the `--exported-deck` option. If you are running Anki Connect, it will automatically find any existing cards to be updated and the rank for the next card. For the moment, you still need to manually import the CSV that is produced by this script.
@@ -179,9 +218,13 @@ You then want to invoke `anki_lang_cards.annotations_to_csv` to generate cards f
 ```
 $ python -m anki_lang_cards.annotations_to_csv --help
 usage: annotations_to_csv.py [-h] [-i INPUT] [-o OUTPUT] [--dictionary DICTIONARY]
-                             [--hunspell-dict-path HUNSPELL_DICT_PATH] [--model-service MODEL_SERVICE]
-                             [--model-name MODEL_NAME] [--config CONFIG] [--skip-list SKIP_LIST]
-                             [--invalidate-response-cache] [--skip-response-cache]
+                             [--hunspell-dict-path HUNSPELL_DICT_PATH] [--model-name MODEL_NAME]
+                             [--model-service {anthropic,tgw,llm}] [--batch | --no-batch]
+                             [--prompt-caching | --no-prompt-caching]
+                             [--max-simultaneous-queries MAX_SIMULTANEOUS_QUERIES] [--max-retries MAX_RETRIES]
+                             [--config CONFIG] [--skip-list SKIP_LIST]
+                             [--processed-pages-output PROCESSED_PAGES_OUTPUT] [--invalidate-response-cache]
+                             [--skip-response-cache] [--csv-header] [--limit LIMIT]
 
 Convert extracted and combined annotations into Anki cards
 
@@ -194,19 +237,37 @@ options:
                         annotations.dictionaries.
   --hunspell-dict-path HUNSPELL_DICT_PATH
                         Path to the hunspell dictionary for headword stemming
-  --model-service MODEL_SERVICE
-                        Which model service to use. Options are: tgw: Text Generation Web anthropic: Anthropic
-  --model-name MODEL_NAME
-                        The specific model to use. If unspecified, the default value for the chosen model is
-                        selected.
+  --max-retries MAX_RETRIES
+                        How many times to retry a prompt whose response could not be used before giving up on it.
   --config CONFIG       Config file location
   --skip-list SKIP_LIST
                         List of books to skip, or page ranges within books
+  --processed-pages-output PROCESSED_PAGES_OUTPUT
+                        Path to output a JSON file containing processed pages
   --invalidate-response-cache
-                        If specified, delete any existing caches for this given response and replace them with the
-                        new query response.
+                        If specified, delete any existing caches for this given response and replace them with the new
+                        query response.
   --skip-response-cache
                         If specified, don't use existing caches, but also don't replace them.
+  --csv-header          Include a header row in the output CSV. Note that Anki's CSV importer has no header-skipping
+                        option, so a header row imports as a junk note; it is useful mainly for matching up columns in
+                        the import dialog.
+  --limit LIMIT         Process at most this many annotation entries; useful for a trial run over a subset before
+                        committing to a full one. The processed-pages output is not written for a limited run.
+
+model selection:
+  --model-name MODEL_NAME, --model MODEL_NAME
+                        The model to use, e.g. 'anthropic/claude-sonnet-5'. A model prefixed with a backend's name
+                        goes to that backend if it takes prefixes; anything else goes to the 'llm' backend. Defaults
+                        to [models] default_model from the config; one of the two is required.
+  --model-service {anthropic,tgw,llm}
+                        Force a backend instead of choosing one from the model name.
+  --batch, --no-batch   Send requests as a discounted batch job, which can take a while to come back. On by default
+                        where the backend supports it.
+  --prompt-caching, --no-prompt-caching
+                        Cache the shared system prompt between requests. On by default where the backend supports it.
+  --max-simultaneous-queries MAX_SIMULTANEOUS_QUERIES
+                        Maximum number of requests in flight at once when not batching.
 ```
 
 This script uses `hunspell` to find all potential stems for the library (default location of the Hunspell dictionary is `/usr/share/hunspell/es_ES.dic`, but this is something you need to install separately for each language. You may specify multiple dictionaries as long as they are in the STARDICT format. One source of bilingual stardict dictionaries is [this list of Wiktionary dictionaries](https://github.com/Vuizur/Wiktionary-Dictionaries). The value passed to `--dictionary` should be the root name of all the dictionary files. For example, if I have a dictionary in `input/dicts/sp-en-wik/` with files `sp-en-wik.dict.dz`, `sp-en-wik.idx`, `sp-en-wik.ifo`, `sp-en-wik.syn`, I would specify `--dictionary inputs/dict/sp-en-wik/sp-en-wik`. These can also be configured in the config file (see example config in the `examples` folder).

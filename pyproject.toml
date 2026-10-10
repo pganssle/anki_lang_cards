@@ -17,7 +17,7 @@ dependencies = [
     "cattrs",
     "llm",
     "llm-claude-3",
-    "anthropic",
+    "anthropic>=1",
     "tqdm",
 ]
 
@@ -31,8 +31,11 @@ books = [
 ]
 testing = [
     "pytest>=7.0.0",
+    "httpx2>=2.0",
     "hypothesis",
-    "time-machine"
+    "pytest-recording>=0.14",
+    "time-machine",
+    "vcrpy>=7",
 ]
 merge_ui = [
     "textual"

@@ -18,6 +18,7 @@ from . import (
     config,
     conflict_resolver,
     dedup_flow,
+    model_selection,
     prompts,
     query,
     triage,
@@ -55,42 +56,6 @@ def _unique(s: Sequence[str], key: Callable[[str], Any] | None = None) -> Sequen
             existing_entry.update(entry)
 
     return out
-
-
-def _make_api_obj(
-    conf_obj: config.Config, service: str, model_name: str | None
-) -> query.ModelAPIBase:
-    if service == "anthropic":
-        if conf_obj.anthropic is None:
-            raise ValueError("Anthropic model selected but no config found.")
-        if model_name is None and conf_obj.anthropic.default_model is not None:
-            model_name = conf_obj.anthropic.default_model
-        query_cacher = caches.QueryCacher(
-            cache_type=caches.CacheTypes.SENTENCES,
-            model_name=model_name or query.AnthropicAPI.DEFAULT_MODEL,
-            model_service=service,
-        )
-        model_api = query.AnthropicAPI(
-            api_key=conf_obj.anthropic.api_key,
-            query_cacher=query_cacher,
-            model_name=model_name,
-            max_connections=1,
-        )
-    elif service == "tgw":
-        if conf_obj.tgw is None:
-            raise ValueError("tgw model selected but no config found.")
-
-        model_api = query.TGWModelAPI(
-            api_base_url=conf_obj.tgw.api_base_url,
-            request_timeout=conf_obj.tgw.request_timeout,
-            max_connections=conf_obj.tgw.max_connections,
-            max_tokens=conf_obj.tgw.max_tokens,
-            model_name=model_name,
-        )
-    else:
-        raise ValueError(f"Unknown model service: {service}")
-
-    return model_api
 
 
 @attrs.frozen
@@ -205,23 +170,7 @@ async def main():
         default="output/output.csv",
         help="Path to an output CSV file",
     )
-    parser.add_argument(
-        "--model-service",
-        type=str,
-        default="tgw",
-        help="Which model service to use. Options are:\n"
-        "    tgw: Text Generation Web\n"
-        "    anthropic: Anthropic",
-    )
-    parser.add_argument(
-        "--model-name",
-        type=str,
-        default=None,
-        help="The specific model to use. If unspecified, the default value "
-        "for the chosen model is selected, which is:\n"
-        f"    tgw: {query.TGWModelAPI.DEFAULT_MODEL}\n"
-        + f"    anthropic: {query.AnthropicAPI.DEFAULT_MODEL}",
-    )
+    model_selection.add_arguments(parser)
     parser.add_argument(
         "--config",
         type=pathlib.Path,
@@ -238,7 +187,8 @@ async def main():
         "--max-retries",
         type=int,
         default=3,
-        help="Maximum number of failed responses from the LLM before giving up.",
+        help="How many times to retry a prompt whose response could not be "
+        "used before giving up on it.",
     )
 
     parser.add_argument(
@@ -377,10 +327,19 @@ async def main():
 
     config_file = pathlib.Path(args.config)
     if not config_file.exists():
-        print(f"Config file {config.abs()} does not exist.")
+        print(f"Config file {config_file.resolve()} does not exist.")
         raise OSError("At least one model config is required.")
     else:
         conf_obj = config.Config.from_file(config_file)
+
+    # Settle the model before any slow work, so that a missing feature the
+    # user asked for stops the run straight away.
+    try:
+        _, query_runner = model_selection.make_runner(
+            args, conf_obj, caches.CacheTypes.SENTENCES
+        )
+    except model_selection.SelectionError as e:
+        parser.exit(2, f"error: {e}\n")
 
     # Words from the input CSV
     inputs_wl = conflict_resolver.WordLookup(words)
@@ -487,16 +446,12 @@ async def main():
     diff_out: list[types.Word] = []
     if diff_words:
         print(f"Generating sentences for {len(diff_words)} words")
-        model_api = _make_api_obj(
-            conf_obj=conf_obj,
-            service=args.model_service,
-            model_name=args.model_name,
-        )
-
-        async with model_api as api:
-            query_results = api.make_queries(
+        async with query_runner:
+            query_results = query.generate_sentences(
+                query_runner,
                 diff_words,
                 prompt=prompt_handler,
+                model_name=query_runner.backend.model_name,
                 max_invalid_output_retries=args.max_retries,
             )
 
