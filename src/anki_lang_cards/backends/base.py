@@ -2,7 +2,7 @@
 
 import enum
 from collections.abc import Mapping, Sequence
-from typing import ClassVar, Protocol, Self
+from typing import Any, ClassVar, Protocol, Self
 
 import attrs
 
@@ -18,6 +18,9 @@ class Feature(enum.StrEnum):
     PROMPT_CACHING = "prompt_caching"
     """Reusing a processed system prompt across requests at a discount."""
 
+    STRUCTURED_OUTPUT = "structured_output"
+    """Constraining the response to a request's JSON schema."""
+
 
 @attrs.frozen
 class Request:
@@ -25,6 +28,13 @@ class Request:
 
     prompt: str
     system_prompt: str = ""
+    json_schema: Mapping[str, Any] | None = attrs.field(
+        default=None, eq=False, kw_only=True
+    )
+    """The JSON schema the response should follow, for backends that can
+    enforce one. The prompt must still ask for the same format, since not
+    every backend can. It is not part of a request's identity: the schema
+    follows from the kind of prompt."""
 
     @property
     def key(self) -> str:
@@ -57,7 +67,13 @@ class Backend(Protocol):
     fallback, leaves this off: its model names already contain slashes.
     """
 
-    features: ClassVar[frozenset[Feature]]
+    @classmethod
+    def supported_features(cls, model_name: str) -> frozenset[Feature]:
+        """The features this backend supports for a model."""
+        ...
+
+    features: frozenset[Feature]
+    """The features this instance supports."""
 
     default_words_per_prompt: ClassVar[int]
     """How many words to put in one sentence-generation prompt."""
@@ -75,7 +91,7 @@ class Backend(Protocol):
         """Build the backend for a model from the config file's settings.
 
         :param features: The optional features to use; a subset of
-            :attr:`features`.
+            :meth:`supported_features` for the model.
         :raises ConfigurationError: If the config lacks something required.
         """
         ...

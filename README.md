@@ -79,9 +79,10 @@ The full invocation is:
 $ python -m anki_lang_cards --help
 usage: __main__.py [-h] [--inputs INPUTS] [--output OUTPUT] [--model-name MODEL_NAME]
                    [--model-service {anthropic,tgw,llm}] [--batch | --no-batch]
-                   [--prompt-caching | --no-prompt-caching] [--max-simultaneous-queries MAX_SIMULTANEOUS_QUERIES]
-                   [--config CONFIG] [--start-rank-at START_RANK_AT] [--max-retries MAX_RETRIES]
-                   [--max-sentences MAX_SENTENCES] [--exported-deck EXPORTED_DECK] [--diff-output DIFF_OUTPUT]
+                   [--prompt-caching | --no-prompt-caching] [--structured-output | --no-structured-output]
+                   [--max-simultaneous-queries MAX_SIMULTANEOUS_QUERIES] [--config CONFIG]
+                   [--start-rank-at START_RANK_AT] [--max-retries MAX_RETRIES] [--max-sentences MAX_SENTENCES]
+                   [--exported-deck EXPORTED_DECK] [--diff-output DIFF_OUTPUT]
                    [--conflict-cache-path CONFLICT_CACHE_PATH] [--decision-cache DECISION_CACHE]
                    [--note-cache NOTE_CACHE] [--pending-file PENDING_FILE] [--superseded-output SUPERSEDED_OUTPUT]
                    [--no-ui] [--deck-name DECK_NAME] [--csv-header] [--limit LIMIT]
@@ -136,6 +137,9 @@ model selection:
                         where the backend supports it.
   --prompt-caching, --no-prompt-caching
                         Cache the shared system prompt between requests. On by default where the backend supports it.
+  --structured-output, --no-structured-output
+                        Have the model's API enforce the response format, so responses always parse. On by default
+                        where the model supports it.
   --max-simultaneous-queries MAX_SIMULTANEOUS_QUERIES
                         Maximum number of requests in flight at once when not batching.
 ```
@@ -220,7 +224,7 @@ $ python -m anki_lang_cards.annotations_to_csv --help
 usage: annotations_to_csv.py [-h] [-i INPUT] [-o OUTPUT] [--dictionary DICTIONARY]
                              [--hunspell-dict-path HUNSPELL_DICT_PATH] [--model-name MODEL_NAME]
                              [--model-service {anthropic,tgw,llm}] [--batch | --no-batch]
-                             [--prompt-caching | --no-prompt-caching]
+                             [--prompt-caching | --no-prompt-caching] [--structured-output | --no-structured-output]
                              [--max-simultaneous-queries MAX_SIMULTANEOUS_QUERIES] [--max-retries MAX_RETRIES]
                              [--config CONFIG] [--skip-list SKIP_LIST]
                              [--processed-pages-output PROCESSED_PAGES_OUTPUT] [--invalidate-response-cache]
@@ -266,6 +270,9 @@ model selection:
                         where the backend supports it.
   --prompt-caching, --no-prompt-caching
                         Cache the shared system prompt between requests. On by default where the backend supports it.
+  --structured-output, --no-structured-output
+                        Have the model's API enforce the response format, so responses always parse. On by default
+                        where the model supports it.
   --max-simultaneous-queries MAX_SIMULTANEOUS_QUERIES
                         Maximum number of requests in flight at once when not batching.
 ```

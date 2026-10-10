@@ -174,3 +174,35 @@ def _require_recording(request: pytest.FixtureRequest) -> None:
             f"No recording for {request.node.nodeid}. Record one with real "
             f"credentials:\n    pytest '{request.node.nodeid}' --record-mode=once"
         )
+
+
+def _caused_by_unmatched_request(error: BaseException) -> bool:
+    """Whether VCR refused a request somewhere in an exception's chain.
+
+    HTTP clients like the Anthropic SDK re-raise transport errors as their
+    own connection errors, so VCR's exception is usually the cause.
+    """
+    seen: set[int] = set()
+    current: BaseException | None = error
+    while current is not None and id(current) not in seen:
+        if type(current).__name__ == "CannotOverwriteExistingCassetteException":
+            return True
+        seen.add(id(current))
+        current = current.__cause__ or current.__context__
+    return False
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[None]):  # type: ignore[no-untyped-def]
+    """Say how to fix a recording that no longer matches the requests."""
+    report = yield
+    if call.excinfo is not None and _caused_by_unmatched_request(call.excinfo.value):
+        report.sections.append(
+            (
+                "recording",
+                "A request no longer matches the recording, probably because a "
+                "prompt or request parameter changed. Re-record it with real "
+                f"credentials:\n    pytest '{item.nodeid}' --record-mode=rewrite",
+            )
+        )
+    return report
