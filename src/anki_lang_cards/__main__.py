@@ -317,7 +317,7 @@ async def main():
         print("Loading words from Anki Connect")
         note_cache = anki_import.NoteCache(args.note_cache)
         async with anki_import.create_client() as client:
-            current_deck_notes = await client.retrieve_matching_words(
+            current_deck_notes = await client.retrieve_related_words(
                 deck_name, words, cache=note_cache
             )
             current_deck = list(current_deck_notes.values())
