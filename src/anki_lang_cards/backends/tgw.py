@@ -6,7 +6,7 @@ It talks to TGW's OpenAI-style completions API. Model specs written
 
 import urllib.parse
 from collections.abc import Mapping
-from typing import Any, ClassVar, Self
+from typing import Any, ClassVar, Final, Self
 
 import aiohttp
 import backoff
@@ -20,6 +20,25 @@ def _backoff_logger(details: Mapping[str, Any]) -> None:
     print(
         "Backing off {wait:0.1f} seconds after {tries} tries "
         "calling the Text Generation WebUI API".format(**details)
+    )
+
+
+MAX_TRIES: Final[int] = 5
+"""Attempts per query before an HTTP error is passed on to the runner."""
+
+_RETRYABLE_CLIENT_STATUSES: Final[frozenset[int]] = frozenset({408, 429})
+
+
+def gives_up(error: Exception) -> bool:
+    """Whether an HTTP error is not worth retrying.
+
+    A 4xx means the request itself is wrong, so sending it again cannot
+    help, except for a timeout (408) or rate limiting (429), which can clear.
+    """
+    return (
+        isinstance(error, aiohttp.ClientResponseError)
+        and 400 <= error.status < 500
+        and error.status not in _RETRYABLE_CLIENT_STATUSES
     )
 
 
@@ -82,7 +101,9 @@ class TGWBackend:
 
     @backoff.on_exception(
         backoff.expo,
-        aiohttp.client_exceptions.ClientResponseError,
+        aiohttp.ClientResponseError,
+        max_tries=MAX_TRIES,
+        giveup=gives_up,
         on_backoff=[_backoff_logger],
     )
     async def query(self, request: base.Request) -> caches.ResponseData:
@@ -97,6 +118,10 @@ class TGWBackend:
         if "text" not in choice:
             raise base.IncompleteResponseError(
                 f"No text in the response; finish_reason={choice['finish_reason']}"
+            )
+        if choice["finish_reason"] == "length":
+            raise base.IncompleteResponseError(
+                "The response was cut off at the output token limit"
             )
         if choice["finish_reason"] != "stop":
             print(f"Query finished for reason {choice['finish_reason']}")
