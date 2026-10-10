@@ -109,7 +109,7 @@ def filter_csv(input_path, output_path, filter_spec, all_books):
 
             if should_exclude:
                 if bad_lines and bad_lines[-1][-1] == line_start - 1:
-                    bad_lines[-1][-1] == reader.line_num
+                    bad_lines[-1][-1] = reader.line_num
                 else:
                     bad_lines.append([line_start - 1, reader.line_num])
                 filtered_lines += 1
