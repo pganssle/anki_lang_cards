@@ -102,6 +102,8 @@ class FakeAnki:
         return {card_id: self.suspended[card_id] for card_id in card_ids}
 
     async def unsuspend_cards(self, card_ids):
+        # Anki Connect wants a flat list of known card ids
+        assert all(card_id in self.suspended for card_id in card_ids), card_ids
         self.unsuspended.extend(card_ids)
         return True
 
