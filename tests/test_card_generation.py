@@ -13,6 +13,7 @@ citation ids, and terms the model fails to echo back.
 
 import csv
 import json
+import os
 import pathlib
 import struct
 import subprocess
@@ -24,7 +25,7 @@ import attrs
 import pytest
 
 from anki_lang_cards import _types as types
-from anki_lang_cards import anki_import, definition_similarity
+from anki_lang_cards import anki_import, annotations_to_csv, definition_similarity
 
 try:
     import llm_fake_cards  # noqa: F401
@@ -601,6 +602,54 @@ def test_annotations_limit(
     assert "Limiting to the first 1 of 5 entries." in run.stdout
     assert set(_words_by_headword(run.output_csv)) == {"gatos", "fiambres (comida)"}
     assert not (workdir / "processed_pages.json").exists()
+
+
+def test_annotations_default_prompt_token_budget() -> None:
+    """The CLI's default budget is the one generate_prompts uses by default."""
+    result = subprocess.run(
+        (sys.executable, "-m", "anki_lang_cards.annotations_to_csv", "--help"),
+        check=True,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "COLUMNS": "1000"},
+    )
+    default = annotations_to_csv.DEFAULT_PROMPT_TOKEN_BUDGET
+    assert default == 8192
+    assert f"Default: {default}." in result.stdout
+
+
+def test_annotations_prompt_token_budget(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """A budget smaller than any one entry's prompt sends each entry in a
+    prompt of its own, and the output is unchanged."""
+    workdir = tmp_path_factory.mktemp("annotations-budget-run")
+    run = _run_annotations_to_csv(
+        workdir,
+        CARDS_DIR / "combined_annotations.json",
+        dictionary_paths,
+        extra_args=("--prompt-token-budget", "1"),
+    )
+    assert "Processing 5 prompts" in run.stdout
+    assert len(_cached_annotation_prompts(workdir)) == 5
+
+
+@pytest.mark.parametrize("budget", ["0", "-10"])
+def test_annotations_prompt_token_budget_must_be_positive(
+    budget: str,
+    dictionary_paths: DictionaryPaths,
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    workdir = tmp_path_factory.mktemp("annotations-bad-budget-run")
+    with pytest.raises(subprocess.CalledProcessError) as excinfo:
+        _run_annotations_to_csv(
+            workdir,
+            CARDS_DIR / "combined_annotations.json",
+            dictionary_paths,
+            extra_args=("--prompt-token-budget", budget),
+        )
+    assert excinfo.value.returncode == 2
+    assert "--prompt-token-budget must be a positive integer" in excinfo.value.stderr
 
 
 def test_main_limit(

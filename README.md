@@ -234,6 +234,7 @@ usage: annotations_to_csv.py [-h] [-i INPUT] [-o OUTPUT] [--dictionary DICTIONAR
                              [--config CONFIG] [--skip-list SKIP_LIST]
                              [--processed-pages-output PROCESSED_PAGES_OUTPUT] [--invalidate-response-cache]
                              [--skip-response-cache] [--csv-header] [--limit LIMIT]
+                             [--prompt-token-budget PROMPT_TOKEN_BUDGET]
 
 Convert extracted and combined annotations into Anki cards
 
@@ -263,6 +264,11 @@ options:
                         the import dialog.
   --limit LIMIT         Process at most this many annotation entries; useful for a trial run over a subset before
                         committing to a full one. The processed-pages output is not written for a limited run.
+  --prompt-token-budget PROMPT_TOKEN_BUDGET
+                        Pack annotation entries into prompts of at most roughly this many input tokens (estimated as
+                        characters / 4, system prompt included); an entry too big to share a prompt still gets one to
+                        itself. Bigger prompts mean fewer requests and less repeated instruction text, but more
+                        entries for the model to handle in each response. Default: 8192.
 
 model selection:
   --model-name MODEL_NAME, --model MODEL_NAME

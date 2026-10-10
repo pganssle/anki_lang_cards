@@ -107,3 +107,31 @@ def test_packing_properties(context_sizes: Sequence[int]) -> None:
             max_tokens=10**9,
         )
         assert _estimated_tokens(next(iter(combined))) > MAX_TOKENS
+
+
+def test_default_budget_is_the_cli_default() -> None:
+    prompt_inputs = [_prompt_input(i, 600) for i in range(60)]
+
+    default = annotations_to_csv.generate_prompts(prompt_inputs)
+    explicit = annotations_to_csv.generate_prompts(
+        prompt_inputs, max_tokens=annotations_to_csv.DEFAULT_PROMPT_TOKEN_BUDGET
+    )
+
+    assert [_source_ids(r) for r in default] == [_source_ids(r) for r in explicit]
+
+
+def test_default_budget_packs_more_than_the_old_one() -> None:
+    """The budget used to be 2048 tokens, most of which the system prompt
+    took up, so only a few entries went in each request."""
+    prompt_inputs = [_prompt_input(i, 600) for i in range(60)]
+
+    old = list(annotations_to_csv.generate_prompts(prompt_inputs, max_tokens=2048))
+    new = list(annotations_to_csv.generate_prompts(prompt_inputs))
+
+    assert max(len(_source_ids(r)) for r in old) == 4
+    assert min(len(_source_ids(r)) for r in new[:-1]) > 4 * 4
+    assert len(new) < len(old) / 4
+    for request in new:
+        assert (
+            _estimated_tokens(request) <= annotations_to_csv.DEFAULT_PROMPT_TOKEN_BUDGET
+        )
