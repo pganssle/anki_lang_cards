@@ -1,0 +1,888 @@
+interactions:
+- request:
+    body: "{\"requests\":[{\"custom_id\":\"373ae6574aa3d6222218139f25bad3ee\",\"params\":{\"model\":\"claude-sonnet-5\",\"max_tokens\":16000,\"messages\":[{\"role\":\"user\",\"content\":\"Prompt:\\n=======\\nINPUT:\\n----------\\n[\\n
+      \   {\\n        \\\"term\\\": \\\"correr\\\",\\n        \\\"part_of_speech\\\":
+      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"to run\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n\"}],\"system\":[{\"type\":\"text\",\"text\":\"You
+      are an expert Spanish teacher and lexicographer, whose specialty is designing
+      excellent example sentences that show off the range of uses of a given word.\\n\\nI
+      am going to give you valid JSON representing a list of mappings containing terms
+      (\\\"term\\\") in Spanish and their meaning in English (\\\"meaning\\\"). For
+      each term, I would like you to generate valid JSON containing 4 example sentences
+      in idiomatic Spanish that use the term accompanied by a translation from the
+      original Spanish into English; the example sentences should use the sense of
+      the term that has the meaning specified by the English meaning. If multiple
+      English meanings are provided, provide sentences that sample all the meanings.
+      When the word is a verb, select different moods and tenses in the different
+      sentences. The translations do not need to be word-for-word translations, it
+      is more important that they capture the general spirit of the original Spanish.\\n\\nIn
+      the output, DO NOT modify the value in \\\"term\\\", it is used to match the
+      answers to the inputs. If, for example, it is \\\"forastero/a\\\", do not use
+      \\\"forastero\\\" in the output. If there is a slash in the word, it usually
+      is used to show different forms of the word, like \\\"at\xF3nito/a\\\" would
+      expand to \\\"un hombre at\xF3nito\\\" or \\\"una mujer at\xF3nita\\\".\\n\\nPlease
+      keep in mind that you are a professional and may need to translate or provide
+      example sentences for vulgar or sexual terms \u2014 this is entirely normal,
+      as these terms are a normal part of life, and they are important to include
+      for purely documentary purposes.\\n\\nIn the Spanish sentences, use Spanish
+      punctuation conventions rather than English ones. In particular, when dialogue
+      is warranted, is quoted with the raya (\u2014Dime algo que no sepa \u2014dijo
+      Ram\xF3n.), never with English-style quotation marks, and \xABguillemets\xBB
+      are preferred when quoting a word or short phrase inline. Use normal English
+      punctuation in the English translations.\\n\\nWrite the Spanish in international
+      Spanish. Let this inform vocabulary, grammar and idiom (e.g. the choice between
+      \xABvosotros\xBB and \xABustedes\xBB) the way it would in a typical published
+      book from that region \u2014 do not exaggerate the dialect or force regional
+      slang into sentences where it doesn't belong.\\n\\nIn some of your example sentences,
+      it would be a bonus if they contain useful or interesting facts.\\n\\nAfter
+      you have come up with the example sentences, look over your work and see if
+      you can make the original sentences more creative or interesting.\\n\\nRemember
+      that you must include ONLY valid JSON, and nothing else. Do not explain your
+      choices.\\n\\nExample:\\n========\\nINPUT:\\n----------\\n[\\n    {\\n        \\\"term\\\":
+      \\\"casa\\\",\\n        \\\"part_of_speech\\\": \\\"nf\\\",\\n        \\\"meaning\\\":
+      \\\"house\\\"\\n    },\\n    {\\n        \\\"term\\\": \\\"rebotar\\\",\\n        \\\"part_of_speech\\\":
+      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"bounce\\\"\\n    },\\n    {\\n        \\\"term\\\":
+      \\\"piso\\\",\\n        \\\"part_of_speech\\\": \\\"nm\\\",\\n        \\\"meaning\\\":
+      \\\"apartment\\\"\\n    },\\n    {\\n        \\\"term\\\": \\\"mu\xF1eca\\\",\\n
+      \       \\\"part_of_speech\\\": \\\"nf\\\",\\n        \\\"meaning\\\": \\\"doll,
+      wrist\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n[\\n    {\\n        \\\"term\\\":
+      \\\"casa\\\",\\n        \\\"meaning\\\": \\\"house\\\",\\n        \\\"examples\\\":
+      [\\n            {\\n                \\\"spanish\\\": \\\"La casa de mi abuela
+      est\xE1 en el campo.\\\",\\n                \\\"english\\\": \\\"My grandmother's
+      house is in the country.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"En la Edad Media, las casas se constru\xEDan a menudo con bahareque, que
+      consist\xEDa en revestir ramas y paja con arcilla, barro y esti\xE9rcol.\\\",\\n
+      \               \\\"english\\\": \\\"In the Middle Ages, houses were often made
+      of wattle and daub, which involved plastering branches and straw with clay,
+      mud and dung.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Voy a limpiar mi casa este fin de semana.\\\",\\n                \\\"english\\\":
+      \\\"I am going to clean my house this weekend.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"Me gusta pasar tiempo en casa de mis padres.\\\",\\n
+      \               \\\"english\\\": \\\"I like to spend time at my parents' house.\\\"\\n
+      \           },\\n        ]\\n    },\\n    {\\n        \\\"word\\\": \\\"piso\\\",\\n
+      \       \\\"meaning\\\": \\\"apartment\\\",\\n        \\\"examples\\\": [\\n
+      \           {\\n                \\\"spanish\\\": \\\"\u2014Vivo en un piso en
+      el centro de la ciudad \u2014dijo Mar\xEDa.\\\",\\n                \\\"english\\\":
+      \\\"\\\\\\\"I live in an apartment in the city center,\\\\\\\" said Mar\xEDa.\\\"\\n
+      \           },\\n            {\\n                \\\"spanish\\\": \\\"El piso
+      de mi hermano tiene tres dormitorios.\\\",\\n                \\\"english\\\":
+      \\\"My brother's apartment has three bedrooms.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"Necesito arreglar el fregadero del piso.\\\",\\n
+      \               \\\"english\\\": \\\"I need to fix the sink in my apartment.\\\"\\n
+      \           },\\n            {\\n                \\\"spanish\\\": \\\"El piso
+      de al lado est\xE1 alquilado.\\\",\\n                \\\"english\\\": \\\"The
+      apartment next door is rented.\\\"\\n            }\\n        ]\\n    },\\n    {\\n
+      \       \\\"term\\\": \\\"rebotar\\\",\\n        \\\"meaning\\\": \\\"bounce\\\",\\n
+      \       \\\"examples\\\": [\\n            {\\n                \\\"spanish\\\":
+      \\\"El bal\xF3n rebota contra el suelo.\\\",\\n                \\\"english\\\":
+      \\\"The ball is bouncing on the ground.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"\xA1Rebota m\xE1s alto!\\\",\\n                \\\"english\\\":
+      \\\"Bounce higher!\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Los delfines pueden \xABver\xBB rebotando ondas sonoras en su entorno.\\\"\\n
+      \               \\\"english\\\": \\\"Dolphins can 'see' by bouncing sound waves
+      off their surroundings.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Rebotaremos la luz en la luna.\\\",\\n                \\\"english\\\": \\\"We
+      will bounce the light off the moon.\\\"\\n            },\\n        ]\\n    }\\n
+      \   {\\n        \\\"term\\\": \\\"mu\xF1eca\\\",\\n        \\\"meaning\\\":
+      \\\"doll, wrist\\\",\\n        \\\"examples\\\": [\\n            {\\n                \\\"spanish\\\":
+      \\\"Le regalaron una mu\xF1eca preciosa por su cumplea\xF1os.\\\",\\n                \\\"english\\\":
+      \\\"They gave her a pretty doll for her birthday.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"Se cay\xF3 patinando y se rompi\xF3 la
+      mu\xF1eca.\\\",\\n                \\\"english\\\": \\\"She fell when she was
+      skating and broke her wrist.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Se puso una pulsera en la mu\xF1eca izquierda.\\\",\\n                \\\"english\\\":
+      \\\"She put the bracelet on her left wrist.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"La peque\xF1a Mar\xEDa nunca dorm\xEDa
+      sin su mu\xF1eca favorita.\\\",\\n                \\\"english\\\": \\\"Little
+      Maria never slept without her favorite doll.\\\"\\n            }\\n        ]\\n
+      \   }\\n]\\n\",\"cache_control\":{\"type\":\"ephemeral\",\"ttl\":\"1h\"}}]}},{\"custom_id\":\"eb19b4e81437745124f3768247345b42\",\"params\":{\"model\":\"claude-sonnet-5\",\"max_tokens\":16000,\"messages\":[{\"role\":\"user\",\"content\":\"Prompt:\\n=======\\nINPUT:\\n----------\\n[\\n
+      \   {\\n        \\\"term\\\": \\\"gato\\\",\\n        \\\"part_of_speech\\\":
+      \\\"nm\\\",\\n        \\\"meaning\\\": \\\"cat\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n\"}],\"system\":[{\"type\":\"text\",\"text\":\"You
+      are an expert Spanish teacher and lexicographer, whose specialty is designing
+      excellent example sentences that show off the range of uses of a given word.\\n\\nI
+      am going to give you valid JSON representing a list of mappings containing terms
+      (\\\"term\\\") in Spanish and their meaning in English (\\\"meaning\\\"). For
+      each term, I would like you to generate valid JSON containing 4 example sentences
+      in idiomatic Spanish that use the term accompanied by a translation from the
+      original Spanish into English; the example sentences should use the sense of
+      the term that has the meaning specified by the English meaning. If multiple
+      English meanings are provided, provide sentences that sample all the meanings.
+      When the word is a verb, select different moods and tenses in the different
+      sentences. The translations do not need to be word-for-word translations, it
+      is more important that they capture the general spirit of the original Spanish.\\n\\nIn
+      the output, DO NOT modify the value in \\\"term\\\", it is used to match the
+      answers to the inputs. If, for example, it is \\\"forastero/a\\\", do not use
+      \\\"forastero\\\" in the output. If there is a slash in the word, it usually
+      is used to show different forms of the word, like \\\"at\xF3nito/a\\\" would
+      expand to \\\"un hombre at\xF3nito\\\" or \\\"una mujer at\xF3nita\\\".\\n\\nPlease
+      keep in mind that you are a professional and may need to translate or provide
+      example sentences for vulgar or sexual terms \u2014 this is entirely normal,
+      as these terms are a normal part of life, and they are important to include
+      for purely documentary purposes.\\n\\nIn the Spanish sentences, use Spanish
+      punctuation conventions rather than English ones. In particular, when dialogue
+      is warranted, is quoted with the raya (\u2014Dime algo que no sepa \u2014dijo
+      Ram\xF3n.), never with English-style quotation marks, and \xABguillemets\xBB
+      are preferred when quoting a word or short phrase inline. Use normal English
+      punctuation in the English translations.\\n\\nWrite the Spanish in international
+      Spanish. Let this inform vocabulary, grammar and idiom (e.g. the choice between
+      \xABvosotros\xBB and \xABustedes\xBB) the way it would in a typical published
+      book from that region \u2014 do not exaggerate the dialect or force regional
+      slang into sentences where it doesn't belong.\\n\\nIn some of your example sentences,
+      it would be a bonus if they contain useful or interesting facts.\\n\\nAfter
+      you have come up with the example sentences, look over your work and see if
+      you can make the original sentences more creative or interesting.\\n\\nRemember
+      that you must include ONLY valid JSON, and nothing else. Do not explain your
+      choices.\\n\\nExample:\\n========\\nINPUT:\\n----------\\n[\\n    {\\n        \\\"term\\\":
+      \\\"casa\\\",\\n        \\\"part_of_speech\\\": \\\"nf\\\",\\n        \\\"meaning\\\":
+      \\\"house\\\"\\n    },\\n    {\\n        \\\"term\\\": \\\"rebotar\\\",\\n        \\\"part_of_speech\\\":
+      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"bounce\\\"\\n    },\\n    {\\n        \\\"term\\\":
+      \\\"piso\\\",\\n        \\\"part_of_speech\\\": \\\"nm\\\",\\n        \\\"meaning\\\":
+      \\\"apartment\\\"\\n    },\\n    {\\n        \\\"term\\\": \\\"mu\xF1eca\\\",\\n
+      \       \\\"part_of_speech\\\": \\\"nf\\\",\\n        \\\"meaning\\\": \\\"doll,
+      wrist\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n[\\n    {\\n        \\\"term\\\":
+      \\\"casa\\\",\\n        \\\"meaning\\\": \\\"house\\\",\\n        \\\"examples\\\":
+      [\\n            {\\n                \\\"spanish\\\": \\\"La casa de mi abuela
+      est\xE1 en el campo.\\\",\\n                \\\"english\\\": \\\"My grandmother's
+      house is in the country.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"En la Edad Media, las casas se constru\xEDan a menudo con bahareque, que
+      consist\xEDa en revestir ramas y paja con arcilla, barro y esti\xE9rcol.\\\",\\n
+      \               \\\"english\\\": \\\"In the Middle Ages, houses were often made
+      of wattle and daub, which involved plastering branches and straw with clay,
+      mud and dung.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Voy a limpiar mi casa este fin de semana.\\\",\\n                \\\"english\\\":
+      \\\"I am going to clean my house this weekend.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"Me gusta pasar tiempo en casa de mis padres.\\\",\\n
+      \               \\\"english\\\": \\\"I like to spend time at my parents' house.\\\"\\n
+      \           },\\n        ]\\n    },\\n    {\\n        \\\"word\\\": \\\"piso\\\",\\n
+      \       \\\"meaning\\\": \\\"apartment\\\",\\n        \\\"examples\\\": [\\n
+      \           {\\n                \\\"spanish\\\": \\\"\u2014Vivo en un piso en
+      el centro de la ciudad \u2014dijo Mar\xEDa.\\\",\\n                \\\"english\\\":
+      \\\"\\\\\\\"I live in an apartment in the city center,\\\\\\\" said Mar\xEDa.\\\"\\n
+      \           },\\n            {\\n                \\\"spanish\\\": \\\"El piso
+      de mi hermano tiene tres dormitorios.\\\",\\n                \\\"english\\\":
+      \\\"My brother's apartment has three bedrooms.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"Necesito arreglar el fregadero del piso.\\\",\\n
+      \               \\\"english\\\": \\\"I need to fix the sink in my apartment.\\\"\\n
+      \           },\\n            {\\n                \\\"spanish\\\": \\\"El piso
+      de al lado est\xE1 alquilado.\\\",\\n                \\\"english\\\": \\\"The
+      apartment next door is rented.\\\"\\n            }\\n        ]\\n    },\\n    {\\n
+      \       \\\"term\\\": \\\"rebotar\\\",\\n        \\\"meaning\\\": \\\"bounce\\\",\\n
+      \       \\\"examples\\\": [\\n            {\\n                \\\"spanish\\\":
+      \\\"El bal\xF3n rebota contra el suelo.\\\",\\n                \\\"english\\\":
+      \\\"The ball is bouncing on the ground.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"\xA1Rebota m\xE1s alto!\\\",\\n                \\\"english\\\":
+      \\\"Bounce higher!\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Los delfines pueden \xABver\xBB rebotando ondas sonoras en su entorno.\\\"\\n
+      \               \\\"english\\\": \\\"Dolphins can 'see' by bouncing sound waves
+      off their surroundings.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Rebotaremos la luz en la luna.\\\",\\n                \\\"english\\\": \\\"We
+      will bounce the light off the moon.\\\"\\n            },\\n        ]\\n    }\\n
+      \   {\\n        \\\"term\\\": \\\"mu\xF1eca\\\",\\n        \\\"meaning\\\":
+      \\\"doll, wrist\\\",\\n        \\\"examples\\\": [\\n            {\\n                \\\"spanish\\\":
+      \\\"Le regalaron una mu\xF1eca preciosa por su cumplea\xF1os.\\\",\\n                \\\"english\\\":
+      \\\"They gave her a pretty doll for her birthday.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"Se cay\xF3 patinando y se rompi\xF3 la
+      mu\xF1eca.\\\",\\n                \\\"english\\\": \\\"She fell when she was
+      skating and broke her wrist.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Se puso una pulsera en la mu\xF1eca izquierda.\\\",\\n                \\\"english\\\":
+      \\\"She put the bracelet on her left wrist.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"La peque\xF1a Mar\xEDa nunca dorm\xEDa
+      sin su mu\xF1eca favorita.\\\",\\n                \\\"english\\\": \\\"Little
+      Maria never slept without her favorite doll.\\\"\\n            }\\n        ]\\n
+      \   }\\n]\\n\",\"cache_control\":{\"type\":\"ephemeral\",\"ttl\":\"1h\"}}]}}]}"
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      anthropic-version:
+      - '2023-06-01'
+      connection:
+      - keep-alive
+      content-length:
+      - '14475'
+      content-type:
+      - application/json
+      host:
+      - api.anthropic.com
+      user-agent:
+      - AsyncAnthropic/Python 0.120.0
+      x-stainless-arch:
+      - x64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 0.120.0
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.12.12
+      x-stainless-timeout:
+      - NOT_GIVEN
+    method: POST
+    uri: https://api.anthropic.com/v1/messages/batches
+  response:
+    body:
+      string: '{"id":"msgbatch_012QwbyfBVkxBvP8Sc29m74j","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":2,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T15:01:45.337717+00:00","expires_at":"2026-10-11T15:01:45.337717+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+    headers:
+      anthropic-ratelimit-batch-requests-limit:
+      - '300000'
+      anthropic-ratelimit-batch-requests-remaining:
+      - '299998'
+      anthropic-workspace-id:
+      - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
+      cf-cache-status:
+      - DYNAMIC
+      connection:
+      - keep-alive
+      content-length:
+      - '361'
+      content-security-policy:
+      - default-src 'none'; frame-ancestors 'none'
+      content-type:
+      - application/json
+      date:
+      - Sat, 10 Oct 2026 15:01:45 GMT
+      request-id:
+      - req_011Cftkvg91kPjTZgiqFLJ8G
+      server:
+      - cloudflare
+      server-timing:
+      - x-originResponse;dur=425
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-robots-tag:
+      - none
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      anthropic-version:
+      - '2023-06-01'
+      connection:
+      - keep-alive
+      host:
+      - api.anthropic.com
+      user-agent:
+      - AsyncAnthropic/Python 0.120.0
+      x-stainless-arch:
+      - x64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 0.120.0
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.12.12
+      x-stainless-timeout:
+      - NOT_GIVEN
+    method: GET
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_012QwbyfBVkxBvP8Sc29m74j
+  response:
+    body:
+      string: '{"id":"msgbatch_012QwbyfBVkxBvP8Sc29m74j","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":2,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T15:01:45.337717+00:00","expires_at":"2026-10-11T15:01:45.337717+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+    headers:
+      anthropic-workspace-id:
+      - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
+      cf-cache-status:
+      - DYNAMIC
+      connection:
+      - keep-alive
+      content-length:
+      - '361'
+      content-security-policy:
+      - default-src 'none'; frame-ancestors 'none'
+      content-type:
+      - application/json
+      date:
+      - Sat, 10 Oct 2026 15:01:45 GMT
+      request-id:
+      - req_011CftkviCXutBzNdno5DN68
+      retry-after:
+      - '10'
+      server:
+      - cloudflare
+      server-timing:
+      - x-originResponse;dur=198
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-robots-tag:
+      - none
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      anthropic-version:
+      - '2023-06-01'
+      connection:
+      - keep-alive
+      host:
+      - api.anthropic.com
+      user-agent:
+      - AsyncAnthropic/Python 0.120.0
+      x-stainless-arch:
+      - x64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 0.120.0
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.12.12
+      x-stainless-timeout:
+      - NOT_GIVEN
+    method: GET
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_012QwbyfBVkxBvP8Sc29m74j
+  response:
+    body:
+      string: '{"id":"msgbatch_012QwbyfBVkxBvP8Sc29m74j","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":2,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T15:01:45.337717+00:00","expires_at":"2026-10-11T15:01:45.337717+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+    headers:
+      anthropic-workspace-id:
+      - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
+      cf-cache-status:
+      - DYNAMIC
+      connection:
+      - keep-alive
+      content-length:
+      - '361'
+      content-security-policy:
+      - default-src 'none'; frame-ancestors 'none'
+      content-type:
+      - application/json
+      date:
+      - Sat, 10 Oct 2026 15:01:55 GMT
+      request-id:
+      - req_011CftkwU6VVY7nR57beSkDH
+      retry-after:
+      - '10'
+      server:
+      - cloudflare
+      server-timing:
+      - x-originResponse;dur=142
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-robots-tag:
+      - none
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      anthropic-version:
+      - '2023-06-01'
+      connection:
+      - keep-alive
+      host:
+      - api.anthropic.com
+      user-agent:
+      - AsyncAnthropic/Python 0.120.0
+      x-stainless-arch:
+      - x64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 0.120.0
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.12.12
+      x-stainless-timeout:
+      - NOT_GIVEN
+    method: GET
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_012QwbyfBVkxBvP8Sc29m74j
+  response:
+    body:
+      string: '{"id":"msgbatch_012QwbyfBVkxBvP8Sc29m74j","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":2,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T15:01:45.337717+00:00","expires_at":"2026-10-11T15:01:45.337717+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+    headers:
+      anthropic-workspace-id:
+      - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
+      cf-cache-status:
+      - DYNAMIC
+      connection:
+      - keep-alive
+      content-length:
+      - '361'
+      content-security-policy:
+      - default-src 'none'; frame-ancestors 'none'
+      content-type:
+      - application/json
+      date:
+      - Sat, 10 Oct 2026 15:02:16 GMT
+      request-id:
+      - req_011CftkxxezN5h4rdszjYUg5
+      retry-after:
+      - '10'
+      server:
+      - cloudflare
+      server-timing:
+      - x-originResponse;dur=129
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-robots-tag:
+      - none
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      anthropic-version:
+      - '2023-06-01'
+      connection:
+      - keep-alive
+      host:
+      - api.anthropic.com
+      user-agent:
+      - AsyncAnthropic/Python 0.120.0
+      x-stainless-arch:
+      - x64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 0.120.0
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.12.12
+      x-stainless-timeout:
+      - NOT_GIVEN
+    method: GET
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_012QwbyfBVkxBvP8Sc29m74j
+  response:
+    body:
+      string: '{"id":"msgbatch_012QwbyfBVkxBvP8Sc29m74j","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":2,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T15:01:45.337717+00:00","expires_at":"2026-10-11T15:01:45.337717+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+    headers:
+      anthropic-workspace-id:
+      - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
+      cf-cache-status:
+      - DYNAMIC
+      connection:
+      - keep-alive
+      content-length:
+      - '361'
+      content-security-policy:
+      - default-src 'none'; frame-ancestors 'none'
+      content-type:
+      - application/json
+      date:
+      - Sat, 10 Oct 2026 15:02:56 GMT
+      request-id:
+      - req_011Cftm1vqwAKLDmEvCnobuT
+      retry-after:
+      - '10'
+      server:
+      - cloudflare
+      server-timing:
+      - x-originResponse;dur=119
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-robots-tag:
+      - none
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      anthropic-version:
+      - '2023-06-01'
+      connection:
+      - keep-alive
+      host:
+      - api.anthropic.com
+      user-agent:
+      - AsyncAnthropic/Python 0.120.0
+      x-stainless-arch:
+      - x64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 0.120.0
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.12.12
+      x-stainless-timeout:
+      - NOT_GIVEN
+    method: GET
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_012QwbyfBVkxBvP8Sc29m74j
+  response:
+    body:
+      string: '{"id":"msgbatch_012QwbyfBVkxBvP8Sc29m74j","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":2,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T15:01:45.337717+00:00","expires_at":"2026-10-11T15:01:45.337717+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+    headers:
+      anthropic-workspace-id:
+      - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
+      cf-cache-status:
+      - DYNAMIC
+      connection:
+      - keep-alive
+      content-length:
+      - '361'
+      content-security-policy:
+      - default-src 'none'; frame-ancestors 'none'
+      content-type:
+      - application/json
+      date:
+      - Sat, 10 Oct 2026 15:03:57 GMT
+      request-id:
+      - req_011Cftm6PEoCrVXa4ZJ8xtj8
+      retry-after:
+      - '10'
+      server:
+      - cloudflare
+      server-timing:
+      - x-originResponse;dur=939
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-robots-tag:
+      - none
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      anthropic-version:
+      - '2023-06-01'
+      connection:
+      - keep-alive
+      host:
+      - api.anthropic.com
+      user-agent:
+      - AsyncAnthropic/Python 0.120.0
+      x-stainless-arch:
+      - x64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 0.120.0
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.12.12
+      x-stainless-timeout:
+      - NOT_GIVEN
+    method: GET
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_012QwbyfBVkxBvP8Sc29m74j
+  response:
+    body:
+      string: '{"id":"msgbatch_012QwbyfBVkxBvP8Sc29m74j","type":"message_batch","processing_status":"ended","request_counts":{"processing":0,"succeeded":2,"errored":0,"canceled":0,"expired":0},"ended_at":"2026-10-10T15:04:21.157626+00:00","created_at":"2026-10-10T15:01:45.337717+00:00","expires_at":"2026-10-11T15:01:45.337717+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":"https://api.anthropic.com/v1/messages/batches/msgbatch_012QwbyfBVkxBvP8Sc29m74j/results"}'
+    headers:
+      anthropic-workspace-id:
+      - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
+      cf-cache-status:
+      - DYNAMIC
+      connection:
+      - keep-alive
+      content-length:
+      - '470'
+      content-security-policy:
+      - default-src 'none'; frame-ancestors 'none'
+      content-type:
+      - application/json
+      date:
+      - Sat, 10 Oct 2026 15:04:57 GMT
+      request-id:
+      - req_011CftmAsU2wb9H4rENbAWGN
+      server:
+      - cloudflare
+      server-timing:
+      - x-originResponse;dur=240
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-robots-tag:
+      - none
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      anthropic-version:
+      - '2023-06-01'
+      connection:
+      - keep-alive
+      host:
+      - api.anthropic.com
+      user-agent:
+      - AsyncAnthropic/Python 0.120.0
+      x-stainless-arch:
+      - x64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 0.120.0
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.12.12
+      x-stainless-timeout:
+      - NOT_GIVEN
+    method: GET
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_012QwbyfBVkxBvP8Sc29m74j
+  response:
+    body:
+      string: '{"id":"msgbatch_012QwbyfBVkxBvP8Sc29m74j","type":"message_batch","processing_status":"ended","request_counts":{"processing":0,"succeeded":2,"errored":0,"canceled":0,"expired":0},"ended_at":"2026-10-10T15:04:21.157626+00:00","created_at":"2026-10-10T15:01:45.337717+00:00","expires_at":"2026-10-11T15:01:45.337717+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":"https://api.anthropic.com/v1/messages/batches/msgbatch_012QwbyfBVkxBvP8Sc29m74j/results"}'
+    headers:
+      anthropic-workspace-id:
+      - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
+      cf-cache-status:
+      - DYNAMIC
+      connection:
+      - keep-alive
+      content-length:
+      - '470'
+      content-security-policy:
+      - default-src 'none'; frame-ancestors 'none'
+      content-type:
+      - application/json
+      date:
+      - Sat, 10 Oct 2026 15:04:57 GMT
+      request-id:
+      - req_011CftmAtaGAtueBmEVSeUvU
+      server:
+      - cloudflare
+      server-timing:
+      - x-originResponse;dur=120
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-robots-tag:
+      - none
+    status:
+      code: 200
+      message: OK
+- request:
+    body: ''
+    headers:
+      accept:
+      - application/binary
+      accept-encoding:
+      - gzip, deflate
+      anthropic-version:
+      - '2023-06-01'
+      connection:
+      - keep-alive
+      host:
+      - api.anthropic.com
+      user-agent:
+      - AsyncAnthropic/Python 0.120.0
+      x-stainless-arch:
+      - x64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 0.120.0
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.12.12
+      x-stainless-timeout:
+      - NOT_GIVEN
+    method: GET
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_012QwbyfBVkxBvP8Sc29m74j/results
+  response:
+    body:
+      string: "{\"custom_id\":\"eb19b4e81437745124f3768247345b42\",\"result\":{\"type\":\"succeeded\",\"message\":{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011Cftkygkocixnuye5xS7qw\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"EsAGCscCCBIYAipA8gcWgwgTCxU2sTI9vAfJSvcwCSfbjXm6amljfdJql2pczhgq6k9bsyO2Puy5AYG8jn0cy/WFti4oLDgYEqeEETIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQwYTk5M2IyZS1kNWZlLTRjYWItYjg0ZS0yMmEyY2JhNGVjNDKaAREKD2NsYXVkZS1zb25uZXQtNagBg6ep1gbCAT0IBRAAGg8Bf6YC2ooDTzcFUtkEJq0gAjIEEnHPJToEnTi82EIEODMjikoEODMjilAAWgTZBeFWYAJoAXAB2gFgChZwcmVmaXhfYmVmb3JlX2Jsb2NrX3YxEiCUNtx0E7Z31deye0zUr9APZ7pawtlONp4RYFgf/UzNgCIAMiDCwBPIapyS4i+Wbz2GF3aPi3pEyQKtzAl7+h4JivtOH0gDEgwYwIfB+T93S7h7+Z4aDK/hq7cJbuDy5Yj8YiIwmkHgeeJP5dyvqguaMwwnAnXz8AGWChuf/aJ0u3ur20fowWKDnA+9G41EJToLR8rGKqUDepnnBBaS3k/+XQeavDBbs6dGKntpxQ5G3vfliXG9pOO5wvjy15xX1D4MIA1eeEkn5ovU3li/XG3vMVGq71yHV8F7VmiOCPTxVQwuTmxD0/MxfCgtCPIxt0Q3keBG1VOErUFCBArNMSlXGJWXeDkH/SMRlgOpVk57cIJ7qP/SaykppXSBgIU9JonI11/Cu5mack1prPZ7EgjudjAUq0fEaEoMMBT0Ta7fVLZX6HyJ2X7bZhx2qz0Knmr9XgZg1IrXjTb4+ahLPEmDWA/mKqcsAB51WEjqfyNLIg8xu27XykJyXSrGbAXXR6CtkTF7a6HYp2jGwN6ewHZplK5wu5rSn7wZG9vsamz84GH3/4j3vsrf+4k7d/oaT02FePAj0EmeqcYonhiS2n+VTz961cM3CfiTL9puKCJDtAS0pdijikrUdOL2O4o3r8fQx/WHuc6VOKy9M1u53v1HkbtOsHNLC5QpKoZrGJnTLVm2svqgouufCTBSRHHUIYEIFzp+DpvRwMMVJZB5dRnLLUA1TDCP+te+2hylMoKJ1EkVQRzzPzU4iOeCNhgB\"},{\"type\":\"text\",\"text\":\"```json\\n[\\n
+        \   {\\n        \\\"term\\\": \\\"gato\\\",\\n        \\\"meaning\\\": \\\"cat\\\",\\n
+        \       \\\"examples\\\": [\\n            {\\n                \\\"spanish\\\":
+        \\\"El gato dorm\xEDa acurrucado sobre el alf\xE9izar de la ventana.\\\",\\n
+        \               \\\"english\\\": \\\"The cat was sleeping curled up on the
+        windowsill.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+        \\\"Los gatos dom\xE9sticos descienden de una especie de gato salvaje africano
+        domesticada hace unos nueve mil a\xF1os.\\\",\\n                \\\"english\\\":
+        \\\"Domestic cats descend from a species of African wild cat domesticated
+        around nine thousand years ago.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+        \\\"\u2014No le des m\xE1s pescado al gato, que ya ha comido \u2014dijo mi
+        abuela.\\\",\\n                \\\"english\\\": \\\"\\\\\\\"Don't give the
+        cat any more fish, he's already eaten,\\\\\\\" said my grandmother.\\\"\\n
+        \           },\\n            {\\n                \\\"spanish\\\": \\\"Cuando
+        llegamos a la fiesta, \xE9ramos cuatro gatos y la m\xFAsica segu\xEDa sonando.\\\",\\n
+        \               \\\"english\\\": \\\"When we got to the party, there was hardly
+        anyone there and the music kept playing.\\\"\\n            }\\n        ]\\n
+        \   }\\n]\\n```\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":76,\"cache_creation_input_tokens\":2071,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":2071},\"output_tokens\":512,\"output_tokens_details\":{\"thinking_tokens\":148},\"service_tier\":\"batch\",\"inference_geo\":\"global\"},\"diagnostics\":null}}}\n{\"custom_id\":\"373ae6574aa3d6222218139f25bad3ee\",\"result\":{\"type\":\"succeeded\",\"message\":{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011Cftkyiun9LSnKjrz7fTMq\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"EoEECscCCBIYAipAc8dUmCnL7SGAoycnwlQPCLMV8E9uERU2ofVnKL7481vvYM9cS2lcQXP3R/QJpkBSiBV+MXRyv1b0rdhlEwd/9TIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQwYTk5M2IyZS1kNWZlLTRjYWItYjg0ZS0yMmEyY2JhNGVjNDKaAREKD2NsYXVkZS1zb25uZXQtNagBg6ep1gbCAT0IBRAAGg8Bf6YC2ooDTzcF7IsEJq0gAjIEEnHPJToEnTi82EIEODMjikoEODMjilAAWgTZBeFWYAJoAXAB2gFgChZwcmVmaXhfYmVmb3JlX2Jsb2NrX3YxEiD4f2AEM4mr3jFmxnIMf91Af5gCJAoznErLDk1MAc2PISIAMiDCwBPIapyS4i+Wbz2GF3aPi3pEyQKtzAl7+h4JivtOH0gDEgzRi9PJw0yK5+lYAEIaDP7V+/xIa9rxDHxlKiIwQg+8Vmn5QSfQg9DFGASfcOGRkyVIbP4UY22UxcfbO2ZChZqoAWO3qO63xGLMvEh3Kme3hDGwh2ZrElmpwjwv1w6sVU4q8slrsehn+3TITzXZWozHWsqCKBp+bnvxxgOWpNJMzk7YB3bulLUWP3mxwcha7wgDHyqKwUqfnpg3+617CV7uWOdQF+WLsQ/desqpo0oYtUVFK/IQGAE=\"},{\"type\":\"text\",\"text\":\"```json\\n[\\n
+        \   {\\n        \\\"term\\\": \\\"correr\\\",\\n        \\\"meaning\\\": \\\"to
+        run\\\",\\n        \\\"examples\\\": [\\n            {\\n                \\\"spanish\\\":
+        \\\"Todas las ma\xF1anas corro cinco kil\xF3metros por el parque.\\\",\\n
+        \               \\\"english\\\": \\\"Every morning I run five kilometers through
+        the park.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+        \\\"Usain Bolt corri\xF3 los cien metros en 9,58 segundos, un r\xE9cord mundial
+        que sigue vigente.\\\",\\n                \\\"english\\\": \\\"Usain Bolt
+        ran the hundred meters in 9.58 seconds, a world record that still stands.\\\"\\n
+        \           },\\n            {\\n                \\\"spanish\\\": \\\"\u2014\xA1Corre,
+        que llegamos tarde! \u2014grit\xF3 mi madre desde la puerta.\\\",\\n                \\\"english\\\":
+        \\\"\\\\\\\"Run, we're going to be late!\\\\\\\" my mother shouted from the
+        door.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+        \\\"Si hubiera corrido m\xE1s r\xE1pido, habr\xEDa alcanzado el autob\xFAs.\\\",\\n
+        \               \\\"english\\\": \\\"If I had run faster, I would have caught
+        the bus.\\\"\\n            }\\n        ]\\n    }\\n]\\n```\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":76,\"cache_creation_input_tokens\":2071,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":2071},\"output_tokens\":371,\"output_tokens_details\":{\"thinking_tokens\":32},\"service_tier\":\"batch\",\"inference_geo\":\"global\"},\"diagnostics\":null}}}\n"
+    headers:
+      anthropic-workspace-id:
+      - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
+      cf-cache-status:
+      - DYNAMIC
+      connection:
+      - keep-alive
+      content-disposition:
+      - attachment; filename*=utf-8''msgbatch_012QwbyfBVkxBvP8Sc29m74j_results.jsonl
+      content-security-policy:
+      - default-src 'none'; frame-ancestors 'none'
+      content-type:
+      - application/x-jsonl
+      date:
+      - Sat, 10 Oct 2026 15:04:58 GMT
+      request-id:
+      - req_011CftmAuEhKawEamSYYRMSc
+      server:
+      - cloudflare
+      server-timing:
+      - x-originResponse;dur=559
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-robots-tag:
+      - none
+    status:
+      code: 200
+      message: OK
+version: 1

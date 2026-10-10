@@ -339,7 +339,7 @@ INPUT:
 OUTPUT:
 """
 
-BOOK_ANNOTATION_PROMPT: Final[str] = """
+BOOK_ANNOTATION_SYSTEM_PROMPT: Final[str] = """
 You are an expert Spanish teacher and lexicographer, whose speciality is designing excellent sample sentences that show off the range of uses of a given word in context.
 
 TASK:
@@ -430,6 +430,12 @@ BACKGROUND:
 
 Here are some potential dictionary headwords for highlighted words found in this text, along with entries from a Spanish-English dictionary corresponding to their meanings. The correct meaning in context may be one of these, or it may not be found here at all.
 
+"""
+
+# The user turn that follows BOOK_ANNOTATION_SYSTEM_PROMPT. The two are split
+# so the static instructions can be cached, at a point that keeps their
+# concatenation (and so the response cache key) unchanged.
+BOOK_ANNOTATION_PROMPT_TEMPLATE: Final[str] = """\
 %(rag_entries)s
 
 

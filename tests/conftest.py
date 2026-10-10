@@ -111,3 +111,66 @@ def calibre_library(
                     _add_book(library, book_directory)
 
     return library
+
+
+#####
+# Recorded HTTP interactions (VCR.py, through pytest-recording)
+#
+# Tests marked ``@pytest.mark.vcr`` replay real API exchanges checked in
+# under ``tests/cassettes/<test module>/``. By default they never touch the
+# network. To record a cassette that is missing, run the test with
+# credentials and ``--record-mode=once``; to re-record, ``--record-mode=rewrite``;
+# to check the recorded behavior still matches the live API without touching
+# the cassettes, ``--disable-recording``.
+_SECRET_REQUEST_HEADERS: Final = ("authorization", "x-api-key", "cookie")
+_DROPPED_RESPONSE_HEADERS: Final = frozenset(
+    {"anthropic-organization-id", "set-cookie", "cf-ray"}
+)
+
+
+def _scrub_response(response: dict) -> dict:
+    response["headers"] = {
+        name: value
+        for name, value in response["headers"].items()
+        if name.lower() not in _DROPPED_RESPONSE_HEADERS
+    }
+    return response
+
+
+@pytest.fixture(scope="module")
+def vcr_config() -> dict:
+    return {
+        "filter_headers": _SECRET_REQUEST_HEADERS,
+        "before_record_response": _scrub_response,
+        "decode_compressed_response": True,
+        # Matching on the body means a changed prompt or request parameter
+        # needs a fresh recording rather than silently replaying a stale one.
+        "match_on": ("method", "scheme", "host", "port", "path", "query", "body"),
+    }
+
+
+@pytest.fixture(scope="session")
+def live_api(record_mode: str, disable_recording: bool) -> bool:
+    """Whether requests in recorded tests reach the real API this run."""
+    return disable_recording or record_mode != "none"
+
+
+@pytest.fixture(autouse=True)
+def _require_recording(request: pytest.FixtureRequest) -> None:
+    """Fail a replay-only run of a recorded test that has no recording yet,
+    saying how to make one, rather than with VCR's cryptic mismatch error."""
+    # Looked up only for recorded tests, so that environments without
+    # pytest-recording (like the calibre end-to-end image) can still run the
+    # rest of the suite.
+    if request.node.get_closest_marker("vcr") is None:
+        return
+    if request.getfixturevalue("disable_recording"):
+        return
+    if request.getfixturevalue("record_mode") != "none":
+        return
+    cassette = request.getfixturevalue("vcr")
+    if cassette is not None and not cassette.data:
+        pytest.fail(
+            f"No recording for {request.node.nodeid}. Record one with real "
+            f"credentials:\n    pytest '{request.node.nodeid}' --record-mode=once"
+        )

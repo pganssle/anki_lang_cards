@@ -19,13 +19,10 @@ from anki_lang_cards import prompts
             prompts.MULTI_SENTENCE_SYSTEM_PROMPT,
             {"dialect": "zz-dialect-zz"},
         ),
+        (prompts.BOOK_ANNOTATION_SYSTEM_PROMPT, {"dialect": "zz-dialect-zz"}),
         (
-            prompts.BOOK_ANNOTATION_PROMPT,
-            {
-                "dialect": "zz-dialect-zz",
-                "input": "zz-input-zz",
-                "rag_entries": "zz-rag-zz",
-            },
+            prompts.BOOK_ANNOTATION_PROMPT_TEMPLATE,
+            {"input": "zz-input-zz", "rag_entries": "zz-rag-zz"},
         ),
         (
             prompts.SENTENCE_PROMPT,

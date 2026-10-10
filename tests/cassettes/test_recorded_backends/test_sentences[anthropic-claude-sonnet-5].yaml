@@ -1,0 +1,421 @@
+interactions:
+- request:
+    body: "{\"max_tokens\":16000,\"messages\":[{\"role\":\"user\",\"content\":\"Prompt:\\n=======\\nINPUT:\\n----------\\n[\\n
+      \   {\\n        \\\"term\\\": \\\"correr\\\",\\n        \\\"part_of_speech\\\":
+      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"to run\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n\"}],\"model\":\"claude-sonnet-5\",\"system\":[{\"type\":\"text\",\"text\":\"You
+      are an expert Spanish teacher and lexicographer, whose specialty is designing
+      excellent example sentences that show off the range of uses of a given word.\\n\\nI
+      am going to give you valid JSON representing a list of mappings containing terms
+      (\\\"term\\\") in Spanish and their meaning in English (\\\"meaning\\\"). For
+      each term, I would like you to generate valid JSON containing 4 example sentences
+      in idiomatic Spanish that use the term accompanied by a translation from the
+      original Spanish into English; the example sentences should use the sense of
+      the term that has the meaning specified by the English meaning. If multiple
+      English meanings are provided, provide sentences that sample all the meanings.
+      When the word is a verb, select different moods and tenses in the different
+      sentences. The translations do not need to be word-for-word translations, it
+      is more important that they capture the general spirit of the original Spanish.\\n\\nIn
+      the output, DO NOT modify the value in \\\"term\\\", it is used to match the
+      answers to the inputs. If, for example, it is \\\"forastero/a\\\", do not use
+      \\\"forastero\\\" in the output. If there is a slash in the word, it usually
+      is used to show different forms of the word, like \\\"at\xF3nito/a\\\" would
+      expand to \\\"un hombre at\xF3nito\\\" or \\\"una mujer at\xF3nita\\\".\\n\\nPlease
+      keep in mind that you are a professional and may need to translate or provide
+      example sentences for vulgar or sexual terms \u2014 this is entirely normal,
+      as these terms are a normal part of life, and they are important to include
+      for purely documentary purposes.\\n\\nIn the Spanish sentences, use Spanish
+      punctuation conventions rather than English ones. In particular, when dialogue
+      is warranted, is quoted with the raya (\u2014Dime algo que no sepa \u2014dijo
+      Ram\xF3n.), never with English-style quotation marks, and \xABguillemets\xBB
+      are preferred when quoting a word or short phrase inline. Use normal English
+      punctuation in the English translations.\\n\\nWrite the Spanish in international
+      Spanish. Let this inform vocabulary, grammar and idiom (e.g. the choice between
+      \xABvosotros\xBB and \xABustedes\xBB) the way it would in a typical published
+      book from that region \u2014 do not exaggerate the dialect or force regional
+      slang into sentences where it doesn't belong.\\n\\nIn some of your example sentences,
+      it would be a bonus if they contain useful or interesting facts.\\n\\nAfter
+      you have come up with the example sentences, look over your work and see if
+      you can make the original sentences more creative or interesting.\\n\\nRemember
+      that you must include ONLY valid JSON, and nothing else. Do not explain your
+      choices.\\n\\nExample:\\n========\\nINPUT:\\n----------\\n[\\n    {\\n        \\\"term\\\":
+      \\\"casa\\\",\\n        \\\"part_of_speech\\\": \\\"nf\\\",\\n        \\\"meaning\\\":
+      \\\"house\\\"\\n    },\\n    {\\n        \\\"term\\\": \\\"rebotar\\\",\\n        \\\"part_of_speech\\\":
+      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"bounce\\\"\\n    },\\n    {\\n        \\\"term\\\":
+      \\\"piso\\\",\\n        \\\"part_of_speech\\\": \\\"nm\\\",\\n        \\\"meaning\\\":
+      \\\"apartment\\\"\\n    },\\n    {\\n        \\\"term\\\": \\\"mu\xF1eca\\\",\\n
+      \       \\\"part_of_speech\\\": \\\"nf\\\",\\n        \\\"meaning\\\": \\\"doll,
+      wrist\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n[\\n    {\\n        \\\"term\\\":
+      \\\"casa\\\",\\n        \\\"meaning\\\": \\\"house\\\",\\n        \\\"examples\\\":
+      [\\n            {\\n                \\\"spanish\\\": \\\"La casa de mi abuela
+      est\xE1 en el campo.\\\",\\n                \\\"english\\\": \\\"My grandmother's
+      house is in the country.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"En la Edad Media, las casas se constru\xEDan a menudo con bahareque, que
+      consist\xEDa en revestir ramas y paja con arcilla, barro y esti\xE9rcol.\\\",\\n
+      \               \\\"english\\\": \\\"In the Middle Ages, houses were often made
+      of wattle and daub, which involved plastering branches and straw with clay,
+      mud and dung.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Voy a limpiar mi casa este fin de semana.\\\",\\n                \\\"english\\\":
+      \\\"I am going to clean my house this weekend.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"Me gusta pasar tiempo en casa de mis padres.\\\",\\n
+      \               \\\"english\\\": \\\"I like to spend time at my parents' house.\\\"\\n
+      \           },\\n        ]\\n    },\\n    {\\n        \\\"word\\\": \\\"piso\\\",\\n
+      \       \\\"meaning\\\": \\\"apartment\\\",\\n        \\\"examples\\\": [\\n
+      \           {\\n                \\\"spanish\\\": \\\"\u2014Vivo en un piso en
+      el centro de la ciudad \u2014dijo Mar\xEDa.\\\",\\n                \\\"english\\\":
+      \\\"\\\\\\\"I live in an apartment in the city center,\\\\\\\" said Mar\xEDa.\\\"\\n
+      \           },\\n            {\\n                \\\"spanish\\\": \\\"El piso
+      de mi hermano tiene tres dormitorios.\\\",\\n                \\\"english\\\":
+      \\\"My brother's apartment has three bedrooms.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"Necesito arreglar el fregadero del piso.\\\",\\n
+      \               \\\"english\\\": \\\"I need to fix the sink in my apartment.\\\"\\n
+      \           },\\n            {\\n                \\\"spanish\\\": \\\"El piso
+      de al lado est\xE1 alquilado.\\\",\\n                \\\"english\\\": \\\"The
+      apartment next door is rented.\\\"\\n            }\\n        ]\\n    },\\n    {\\n
+      \       \\\"term\\\": \\\"rebotar\\\",\\n        \\\"meaning\\\": \\\"bounce\\\",\\n
+      \       \\\"examples\\\": [\\n            {\\n                \\\"spanish\\\":
+      \\\"El bal\xF3n rebota contra el suelo.\\\",\\n                \\\"english\\\":
+      \\\"The ball is bouncing on the ground.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"\xA1Rebota m\xE1s alto!\\\",\\n                \\\"english\\\":
+      \\\"Bounce higher!\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Los delfines pueden \xABver\xBB rebotando ondas sonoras en su entorno.\\\"\\n
+      \               \\\"english\\\": \\\"Dolphins can 'see' by bouncing sound waves
+      off their surroundings.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Rebotaremos la luz en la luna.\\\",\\n                \\\"english\\\": \\\"We
+      will bounce the light off the moon.\\\"\\n            },\\n        ]\\n    }\\n
+      \   {\\n        \\\"term\\\": \\\"mu\xF1eca\\\",\\n        \\\"meaning\\\":
+      \\\"doll, wrist\\\",\\n        \\\"examples\\\": [\\n            {\\n                \\\"spanish\\\":
+      \\\"Le regalaron una mu\xF1eca preciosa por su cumplea\xF1os.\\\",\\n                \\\"english\\\":
+      \\\"They gave her a pretty doll for her birthday.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"Se cay\xF3 patinando y se rompi\xF3 la
+      mu\xF1eca.\\\",\\n                \\\"english\\\": \\\"She fell when she was
+      skating and broke her wrist.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Se puso una pulsera en la mu\xF1eca izquierda.\\\",\\n                \\\"english\\\":
+      \\\"She put the bracelet on her left wrist.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"La peque\xF1a Mar\xEDa nunca dorm\xEDa
+      sin su mu\xF1eca favorita.\\\",\\n                \\\"english\\\": \\\"Little
+      Maria never slept without her favorite doll.\\\"\\n            }\\n        ]\\n
+      \   }\\n]\\n\",\"cache_control\":{\"type\":\"ephemeral\"}}]}"
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      anthropic-version:
+      - '2023-06-01'
+      connection:
+      - keep-alive
+      content-length:
+      - '7163'
+      content-type:
+      - application/json
+      host:
+      - api.anthropic.com
+      user-agent:
+      - AsyncAnthropic/Python 0.120.0
+      x-stainless-arch:
+      - x64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 0.120.0
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.12.12
+      x-stainless-timeout:
+      - '600'
+    method: POST
+    uri: https://api.anthropic.com/v1/messages
+  response:
+    body:
+      string: "{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011Cftkuy1zXgezQ9ch7JHLv\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"EpQGCscCCBIYAipAjRnH8cB+i5xDJF7jtyMZHeJXsBcD/CVrvydIwAUPyum9G/Oupv5p5d+FC2c8isbnLMpwVtuuQJOvczrYthpOizIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQwYTk5M2IyZS1kNWZlLTRjYWItYjg0ZS0yMmEyY2JhNGVjNDKaAREKD2NsYXVkZS1zb25uZXQtNagB0aap1gbCAT0IBRAAGg8Bf6YC2ooDTzcF7IsEJq0gAjIEEnHPJToEnTi82EIEODMjikoEODMjilAAWgTZBeFWYAJoAXAB2gFgChZwcmVmaXhfYmVmb3JlX2Jsb2NrX3YxEiD4f2AEM4mr3jFmxnIMf91Af5gCJAoznErLDk1MAc2PISIAMiDCwBPIapyS4i+Wbz2GF3aPi3pEyQKtzAl7+h4JivtOH0gDEgzOVxq7+hSzH3lhPPQaDEKA7ziDTkOg9X+SRSIw5le0Qo3dNM+C+72xU0McPbt4rsMsOk3IDGwmeMex2sDFRDT2ZSQdtXUYWmSPVuHOKvkCtjD5WKEB71hpVrf0NMrI3eA9TO4sxbRDOp9VhIFmZtHALIih/GCqi62Y7+wWZlmGEnoSwaSeBJyFEblgTigPOutV5CvzDTDBLdWOopcxg5cMZwvf/NiK3qtbABvYq0dsiIjsu4NSxgnSw8OwjA0khvaXx7XPp0fR7h8NCaxcKOFuQm8FVN3tUSC122v9QG+6Xx4zZiPpP3t/cP/MUnpFmYctguEzUgIUoKMfWy2j+LD2SYUxer2/MrcK5vqkTLqFunkXi7oCjlysp4eQ/9xOC+On+Q2nF9Hlq6nC+oWIZ6842sKTI6923nPx8/otAIpjm6wiqFmM3+PWae+jX4NBOV1I+rl6iBpsrGAb2qtjmahFMN8UmfN+NcZhaOLaLhR3+Tlkuo96VNYUPFbGjPGkLKarjA57zeKifXrS136uT5DXSjPrgDwxrP24aRdAg6sm4hIA/4InjiAwpDQzK0KEF4XZwB/x+6YVfIvq0N6oR0rodmmpGrKil3YYAQ==\"},{\"type\":\"text\",\"text\":\"```json\\n[\\n
+        \   {\\n        \\\"term\\\": \\\"correr\\\",\\n        \\\"meaning\\\": \\\"to
+        run\\\",\\n        \\\"examples\\\": [\\n            {\\n                \\\"spanish\\\":
+        \\\"Todas las ma\xF1anas corro cinco kil\xF3metros por el parque.\\\",\\n
+        \               \\\"english\\\": \\\"Every morning I run five kilometers through
+        the park.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+        \\\"Los atletas corrieron la marat\xF3n de Boston bajo una lluvia torrencial.\\\",\\n
+        \               \\\"english\\\": \\\"The athletes ran the Boston Marathon
+        in pouring rain.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+        \\\"\u2014\xA1Corre, que perdemos el tren! \u2014grit\xF3 Marta, agarrando
+        su maleta.\\\",\\n                \\\"english\\\": \\\"\\\\\\\"Run, we're
+        going to miss the train!\\\\\\\" shouted Marta, grabbing her suitcase.\\\"\\n
+        \           },\\n            {\\n                \\\"spanish\\\": \\\"Si siguen
+        corriendo rumores sobre la empresa, las acciones podr\xEDan desplomarse.\\\",\\n
+        \               \\\"english\\\": \\\"If rumors keep running about the company,
+        the stock could crash.\\\"\\n            }\\n        ]\\n    }\\n]\\n```\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":76,\"cache_creation_input_tokens\":2071,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":2071,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":463,\"output_tokens_details\":{\"thinking_tokens\":126},\"service_tier\":\"standard\",\"inference_geo\":\"global\"},\"diagnostics\":null}"
+    headers:
+      anthropic-ratelimit-input-tokens-limit:
+      - '5000000'
+      anthropic-ratelimit-input-tokens-remaining:
+      - '4999000'
+      anthropic-ratelimit-input-tokens-reset:
+      - '2026-10-10T15:01:35Z'
+      anthropic-ratelimit-output-tokens-limit:
+      - '1000000'
+      anthropic-ratelimit-output-tokens-remaining:
+      - '1000000'
+      anthropic-ratelimit-output-tokens-reset:
+      - '2026-10-10T15:01:40Z'
+      anthropic-ratelimit-requests-limit:
+      - '5000'
+      anthropic-ratelimit-requests-remaining:
+      - '4999'
+      anthropic-ratelimit-requests-reset:
+      - '2026-10-10T15:01:35Z'
+      anthropic-ratelimit-tokens-limit:
+      - '6000000'
+      anthropic-ratelimit-tokens-remaining:
+      - '5999000'
+      anthropic-ratelimit-tokens-reset:
+      - '2026-10-10T15:01:35Z'
+      anthropic-workspace-id:
+      - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
+      cf-cache-status:
+      - DYNAMIC
+      connection:
+      - keep-alive
+      content-length:
+      - '2710'
+      content-security-policy:
+      - default-src 'none'; frame-ancestors 'none'
+      content-type:
+      - application/json
+      date:
+      - Sat, 10 Oct 2026 15:01:40 GMT
+      request-id:
+      - req_011Cftkux7AvC4EjmDDfLTbU
+      server:
+      - cloudflare
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      traceresponse:
+      - 00-5cb904cab1d4f91463bc13ef0903086d-a3c880c34fbf5b1c-01
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-robots-tag:
+      - none
+    status:
+      code: 200
+      message: OK
+- request:
+    body: "{\"max_tokens\":16000,\"messages\":[{\"role\":\"user\",\"content\":\"Prompt:\\n=======\\nINPUT:\\n----------\\n[\\n
+      \   {\\n        \\\"term\\\": \\\"gato\\\",\\n        \\\"part_of_speech\\\":
+      \\\"nm\\\",\\n        \\\"meaning\\\": \\\"cat\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n\"}],\"model\":\"claude-sonnet-5\",\"system\":[{\"type\":\"text\",\"text\":\"You
+      are an expert Spanish teacher and lexicographer, whose specialty is designing
+      excellent example sentences that show off the range of uses of a given word.\\n\\nI
+      am going to give you valid JSON representing a list of mappings containing terms
+      (\\\"term\\\") in Spanish and their meaning in English (\\\"meaning\\\"). For
+      each term, I would like you to generate valid JSON containing 4 example sentences
+      in idiomatic Spanish that use the term accompanied by a translation from the
+      original Spanish into English; the example sentences should use the sense of
+      the term that has the meaning specified by the English meaning. If multiple
+      English meanings are provided, provide sentences that sample all the meanings.
+      When the word is a verb, select different moods and tenses in the different
+      sentences. The translations do not need to be word-for-word translations, it
+      is more important that they capture the general spirit of the original Spanish.\\n\\nIn
+      the output, DO NOT modify the value in \\\"term\\\", it is used to match the
+      answers to the inputs. If, for example, it is \\\"forastero/a\\\", do not use
+      \\\"forastero\\\" in the output. If there is a slash in the word, it usually
+      is used to show different forms of the word, like \\\"at\xF3nito/a\\\" would
+      expand to \\\"un hombre at\xF3nito\\\" or \\\"una mujer at\xF3nita\\\".\\n\\nPlease
+      keep in mind that you are a professional and may need to translate or provide
+      example sentences for vulgar or sexual terms \u2014 this is entirely normal,
+      as these terms are a normal part of life, and they are important to include
+      for purely documentary purposes.\\n\\nIn the Spanish sentences, use Spanish
+      punctuation conventions rather than English ones. In particular, when dialogue
+      is warranted, is quoted with the raya (\u2014Dime algo que no sepa \u2014dijo
+      Ram\xF3n.), never with English-style quotation marks, and \xABguillemets\xBB
+      are preferred when quoting a word or short phrase inline. Use normal English
+      punctuation in the English translations.\\n\\nWrite the Spanish in international
+      Spanish. Let this inform vocabulary, grammar and idiom (e.g. the choice between
+      \xABvosotros\xBB and \xABustedes\xBB) the way it would in a typical published
+      book from that region \u2014 do not exaggerate the dialect or force regional
+      slang into sentences where it doesn't belong.\\n\\nIn some of your example sentences,
+      it would be a bonus if they contain useful or interesting facts.\\n\\nAfter
+      you have come up with the example sentences, look over your work and see if
+      you can make the original sentences more creative or interesting.\\n\\nRemember
+      that you must include ONLY valid JSON, and nothing else. Do not explain your
+      choices.\\n\\nExample:\\n========\\nINPUT:\\n----------\\n[\\n    {\\n        \\\"term\\\":
+      \\\"casa\\\",\\n        \\\"part_of_speech\\\": \\\"nf\\\",\\n        \\\"meaning\\\":
+      \\\"house\\\"\\n    },\\n    {\\n        \\\"term\\\": \\\"rebotar\\\",\\n        \\\"part_of_speech\\\":
+      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"bounce\\\"\\n    },\\n    {\\n        \\\"term\\\":
+      \\\"piso\\\",\\n        \\\"part_of_speech\\\": \\\"nm\\\",\\n        \\\"meaning\\\":
+      \\\"apartment\\\"\\n    },\\n    {\\n        \\\"term\\\": \\\"mu\xF1eca\\\",\\n
+      \       \\\"part_of_speech\\\": \\\"nf\\\",\\n        \\\"meaning\\\": \\\"doll,
+      wrist\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n[\\n    {\\n        \\\"term\\\":
+      \\\"casa\\\",\\n        \\\"meaning\\\": \\\"house\\\",\\n        \\\"examples\\\":
+      [\\n            {\\n                \\\"spanish\\\": \\\"La casa de mi abuela
+      est\xE1 en el campo.\\\",\\n                \\\"english\\\": \\\"My grandmother's
+      house is in the country.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"En la Edad Media, las casas se constru\xEDan a menudo con bahareque, que
+      consist\xEDa en revestir ramas y paja con arcilla, barro y esti\xE9rcol.\\\",\\n
+      \               \\\"english\\\": \\\"In the Middle Ages, houses were often made
+      of wattle and daub, which involved plastering branches and straw with clay,
+      mud and dung.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Voy a limpiar mi casa este fin de semana.\\\",\\n                \\\"english\\\":
+      \\\"I am going to clean my house this weekend.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"Me gusta pasar tiempo en casa de mis padres.\\\",\\n
+      \               \\\"english\\\": \\\"I like to spend time at my parents' house.\\\"\\n
+      \           },\\n        ]\\n    },\\n    {\\n        \\\"word\\\": \\\"piso\\\",\\n
+      \       \\\"meaning\\\": \\\"apartment\\\",\\n        \\\"examples\\\": [\\n
+      \           {\\n                \\\"spanish\\\": \\\"\u2014Vivo en un piso en
+      el centro de la ciudad \u2014dijo Mar\xEDa.\\\",\\n                \\\"english\\\":
+      \\\"\\\\\\\"I live in an apartment in the city center,\\\\\\\" said Mar\xEDa.\\\"\\n
+      \           },\\n            {\\n                \\\"spanish\\\": \\\"El piso
+      de mi hermano tiene tres dormitorios.\\\",\\n                \\\"english\\\":
+      \\\"My brother's apartment has three bedrooms.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"Necesito arreglar el fregadero del piso.\\\",\\n
+      \               \\\"english\\\": \\\"I need to fix the sink in my apartment.\\\"\\n
+      \           },\\n            {\\n                \\\"spanish\\\": \\\"El piso
+      de al lado est\xE1 alquilado.\\\",\\n                \\\"english\\\": \\\"The
+      apartment next door is rented.\\\"\\n            }\\n        ]\\n    },\\n    {\\n
+      \       \\\"term\\\": \\\"rebotar\\\",\\n        \\\"meaning\\\": \\\"bounce\\\",\\n
+      \       \\\"examples\\\": [\\n            {\\n                \\\"spanish\\\":
+      \\\"El bal\xF3n rebota contra el suelo.\\\",\\n                \\\"english\\\":
+      \\\"The ball is bouncing on the ground.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"\xA1Rebota m\xE1s alto!\\\",\\n                \\\"english\\\":
+      \\\"Bounce higher!\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Los delfines pueden \xABver\xBB rebotando ondas sonoras en su entorno.\\\"\\n
+      \               \\\"english\\\": \\\"Dolphins can 'see' by bouncing sound waves
+      off their surroundings.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Rebotaremos la luz en la luna.\\\",\\n                \\\"english\\\": \\\"We
+      will bounce the light off the moon.\\\"\\n            },\\n        ]\\n    }\\n
+      \   {\\n        \\\"term\\\": \\\"mu\xF1eca\\\",\\n        \\\"meaning\\\":
+      \\\"doll, wrist\\\",\\n        \\\"examples\\\": [\\n            {\\n                \\\"spanish\\\":
+      \\\"Le regalaron una mu\xF1eca preciosa por su cumplea\xF1os.\\\",\\n                \\\"english\\\":
+      \\\"They gave her a pretty doll for her birthday.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"Se cay\xF3 patinando y se rompi\xF3 la
+      mu\xF1eca.\\\",\\n                \\\"english\\\": \\\"She fell when she was
+      skating and broke her wrist.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+      \\\"Se puso una pulsera en la mu\xF1eca izquierda.\\\",\\n                \\\"english\\\":
+      \\\"She put the bracelet on her left wrist.\\\"\\n            },\\n            {\\n
+      \               \\\"spanish\\\": \\\"La peque\xF1a Mar\xEDa nunca dorm\xEDa
+      sin su mu\xF1eca favorita.\\\",\\n                \\\"english\\\": \\\"Little
+      Maria never slept without her favorite doll.\\\"\\n            }\\n        ]\\n
+      \   }\\n]\\n\",\"cache_control\":{\"type\":\"ephemeral\"}}]}"
+    headers:
+      accept:
+      - application/json
+      accept-encoding:
+      - gzip, deflate
+      anthropic-version:
+      - '2023-06-01'
+      connection:
+      - keep-alive
+      content-length:
+      - '7158'
+      content-type:
+      - application/json
+      host:
+      - api.anthropic.com
+      user-agent:
+      - AsyncAnthropic/Python 0.120.0
+      x-stainless-arch:
+      - x64
+      x-stainless-async:
+      - async:asyncio
+      x-stainless-lang:
+      - python
+      x-stainless-os:
+      - Linux
+      x-stainless-package-version:
+      - 0.120.0
+      x-stainless-read-timeout:
+      - '600'
+      x-stainless-retry-count:
+      - '0'
+      x-stainless-runtime:
+      - CPython
+      x-stainless-runtime-version:
+      - 3.12.12
+      x-stainless-timeout:
+      - '600'
+    method: POST
+    uri: https://api.anthropic.com/v1/messages
+  response:
+    body:
+      string: "{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011CftkvN178hR7rphX4bpZm\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"Et4DCscCCBIYAipAgBkkgBOn85TBKg8XDwIGu0c4RY6oZ1TrXrC49/hcQ5pxZoHkJsfmJfiBdOGQfY0SfLS912Tm4OWIZoeBbrRhPzIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQwYTk5M2IyZS1kNWZlLTRjYWItYjg0ZS0yMmEyY2JhNGVjNDKaAREKD2NsYXVkZS1zb25uZXQtNagB1aap1gbCAT0IBRAAGg8Bf6YC2ooDTzcFUtkEJq0gAjIEEnHPJToEnTi82EIEODMjikoEODMjilAAWgTZBeFWYAJoAXAB2gFgChZwcmVmaXhfYmVmb3JlX2Jsb2NrX3YxEiCUNtx0E7Z31deye0zUr9APZ7pawtlONp4RYFgf/UzNgCIAMiDCwBPIapyS4i+Wbz2GF3aPi3pEyQKtzAl7+h4JivtOH0gDEgz0ITTkJ/rGZxmc8CIaDJC54Ql+OiulJwKSkyIweMwr231q63voDKQ92jFL+vssVi324zTJ7jH1NOITHwRmxN1v0SsRBzwRQq7Ch4bzKkTfsI4lpuuh4nY01uWq9ZEjnS8eEKqbXL0ziqzkjCg1aqE0EakEdYBxb0ObhiB20+mJtKj5+JddblNljNDiiDKxnyq4ZxgB\"},{\"type\":\"text\",\"text\":\"```json\\n[\\n
+        \   {\\n        \\\"term\\\": \\\"gato\\\",\\n        \\\"meaning\\\": \\\"cat\\\",\\n
+        \       \\\"examples\\\": [\\n            {\\n                \\\"spanish\\\":
+        \\\"El gato dorm\xEDa acurrucado sobre el sof\xE1.\\\",\\n                \\\"english\\\":
+        \\\"The cat was sleeping curled up on the sofa.\\\"\\n            },\\n            {\\n
+        \               \\\"spanish\\\": \\\"\u2014Ten cuidado, ese gato ara\xF1a
+        si lo molestas \u2014me advirti\xF3 mi vecina.\\\",\\n                \\\"english\\\":
+        \\\"\\\\\\\"Be careful, that cat scratches if you bother it,\\\\\\\" my neighbor
+        warned me.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+        \\\"Los gatos dom\xE9sticos descienden de una especie salvaje que empez\xF3
+        a convivir con los humanos hace unos nueve mil a\xF1os en Oriente Pr\xF3ximo.\\\",\\n
+        \               \\\"english\\\": \\\"Domestic cats descend from a wild species
+        that began living alongside humans about nine thousand years ago in the Near
+        East.\\\"\\n            },\\n            {\\n                \\\"spanish\\\":
+        \\\"Si adoptas un gato, recuerda llevarlo al veterinario para sus vacunas.\\\",\\n
+        \               \\\"english\\\": \\\"If you adopt a cat, remember to take
+        it to the vet for its vaccinations.\\\"\\n            }\\n        ]\\n    }\\n]\\n```\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":76,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":2071,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":401,\"output_tokens_details\":{\"thinking_tokens\":23},\"service_tier\":\"standard\",\"inference_geo\":\"global\"},\"diagnostics\":null}"
+    headers:
+      anthropic-ratelimit-input-tokens-limit:
+      - '5000000'
+      anthropic-ratelimit-input-tokens-remaining:
+      - '5000000'
+      anthropic-ratelimit-input-tokens-reset:
+      - '2026-10-10T15:01:41Z'
+      anthropic-ratelimit-output-tokens-limit:
+      - '1000000'
+      anthropic-ratelimit-output-tokens-remaining:
+      - '1000000'
+      anthropic-ratelimit-output-tokens-reset:
+      - '2026-10-10T15:01:44Z'
+      anthropic-ratelimit-requests-limit:
+      - '5000'
+      anthropic-ratelimit-requests-remaining:
+      - '4999'
+      anthropic-ratelimit-requests-reset:
+      - '2026-10-10T15:01:40Z'
+      anthropic-ratelimit-tokens-limit:
+      - '6000000'
+      anthropic-ratelimit-tokens-remaining:
+      - '6000000'
+      anthropic-ratelimit-tokens-reset:
+      - '2026-10-10T15:01:41Z'
+      anthropic-workspace-id:
+      - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
+      cf-cache-status:
+      - DYNAMIC
+      connection:
+      - keep-alive
+      content-length:
+      - '2399'
+      content-security-policy:
+      - default-src 'none'; frame-ancestors 'none'
+      content-type:
+      - application/json
+      date:
+      - Sat, 10 Oct 2026 15:01:44 GMT
+      request-id:
+      - req_011CftkvMnhbGqXHTtRrRZb2
+      server:
+      - cloudflare
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains; preload
+      traceresponse:
+      - 00-77a9d63edbe6f4c6bcd00d2f9b1277bd-3f6c0139c38ffee7-01
+      transfer-encoding:
+      - chunked
+      vary:
+      - Accept-Encoding
+      x-robots-tag:
+      - none
+    status:
+      code: 200
+      message: OK
+version: 1

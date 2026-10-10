@@ -11,9 +11,9 @@ from collections.abc import Sequence
 from typing import Final
 
 import attrs
-import llm
 
-from . import config, prompts
+from . import caches, config, prompts
+from .backends import base, runner, selection
 
 CACHE_LOC: Final[pathlib.Path] = pathlib.Path(".cache")
 
@@ -53,24 +53,16 @@ class WordResponse:
         )
 
 
-async def process_input_with_llm(
-    prompt: str, model_service: str, model_name: str, conf_obj: config.Config
-) -> str:
-    """Processes input using the specified LLM model service."""
-    if model_service == "anthropic":
-        if not conf_obj.anthropic:
-            raise ValueError("Anthropic configuration is missing.")
-        model = llm.get_async_model(model_name)
-        model.key = conf_obj.anthropic.api_key
-    elif model_service == "tgw":
-        raise NotImplementedError("Getting around to it.")
-    else:
-        raise ValueError(f"Unsupported model service: {model_service}")
-
-    # Prepare and send the request
-    response = await model.prompt(prompt)
-
-    return await response.text()
+async def process_input_with_llm(prompt: str, query_runner: runner.QueryRunner) -> str:
+    """Send one prompt; this tool keeps its own cache of the responses."""
+    async with query_runner:
+        async for outcome in query_runner.run([base.Request(prompt)], skip_cache=True):
+            match outcome:
+                case runner.Success(response=response):
+                    return response["text"]
+                case runner.Failure(reason=reason):
+                    raise RuntimeError(f"The model did not answer: {reason}")
+    raise AssertionError("The runner produced no outcome.")
 
 
 def _get_response_dir() -> pathlib.Path:
@@ -161,21 +153,7 @@ async def main() -> None:
         default=pathlib.Path("input/words_from_org_mode.csv"),
         help="Path to an output CSV file",
     )
-    parser.add_argument(
-        "--model-service",
-        type=str,
-        default="anthropic",
-        help="Which model service to use. Options are:\n"
-        "    tgw: Text Generation Web\n"
-        "    anthropic: Anthropic",
-    )
-    parser.add_argument(
-        "--model-name",
-        type=str,
-        default=None,
-        help="The specific model to use. If unspecified, the default value "
-        "for the chosen model is selected.",
-    )
+    selection.add_arguments(parser)
     parser.add_argument(
         "--config",
         type=pathlib.Path,
@@ -205,14 +183,9 @@ async def main() -> None:
         csv_output: str = load_latest_cache()
     else:
         conf = config.Config.from_file(args.config)
-        if args.model_name is not None:
-            model_name = args.model_name
-        elif conf.anthropic.default_model is not None:
-            model_name = conf.anthropic.default_model
-        elif args.model_service == "anthropic":
-            model_name = "claude-3-5-sonnet-20241022"
-        else:
-            raise NotImplementedError("No model name")
+        # A single interactive request gains nothing from batching.
+        args.batch = False
+        _, query_runner = selection.make_runner(args, conf, caches.CacheTypes.RESPONSES)
 
         # Read piped input
         input_data = await asyncio.to_thread(lambda: sys.stdin.read().strip())
@@ -222,12 +195,7 @@ async def main() -> None:
         prompt = prompts.ORG_TO_CSV_PROMPT_TEMPLATE % {"org_text": input_data}
 
         # Process with the LLM
-        csv_output = await process_input_with_llm(
-            prompt=prompt,
-            model_service=args.model_service,
-            model_name=model_name,
-            conf_obj=conf,
-        )
+        csv_output = await process_input_with_llm(prompt, query_runner)
 
         cache_response(csv_output)
 
