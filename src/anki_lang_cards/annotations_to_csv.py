@@ -97,6 +97,13 @@ def dictionary_entry_to_rag_input(entry: dictionary_entries.DictionaryEntry) -> 
     return "\n".join(lines)
 
 
+def _highlight_text(highlight: str | HighlightWithNote) -> str:
+    """The highlighted text, which is what a `WordMap` is keyed by."""
+    if isinstance(highlight, HighlightWithNote):
+        return highlight.highlight
+    return highlight
+
+
 def lookup_words(
     engine: dictionary_entries.DictionaryEngine,
     combined_annotations: Sequence[CombinedBookAnnotations],
@@ -105,10 +112,8 @@ def lookup_words(
     for annotation in itertools.chain.from_iterable(
         book_annotation.annotations for book_annotation in combined_annotations
     ):
-        for word in annotation.highlights:
-            if hasattr(word, "highlight"):
-                word = word.highlight
-
+        for highlight in annotation.highlights:
+            word = _highlight_text(highlight)
             entry = engine.lookup(word)
             if entry:
                 output[word] = entry
@@ -354,10 +359,7 @@ def _prepare_prompt_inputs(
 
         rag_entries = {}
         for highlight in annotation.highlights:
-            if highlight not in word_map:
-                continue
-
-            for entry in word_map[highlight]:
+            for entry in word_map.get(_highlight_text(highlight), ()):
                 if entry.headword in rag_entries:
                     continue
 
