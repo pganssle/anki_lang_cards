@@ -43,7 +43,7 @@ def make_word(
     word: str,
     part_of_speech: str,
     meaning: str,
-    rank: int,
+    rank: int | None,
     sentences: Sequence[types.Sentence] = (),
 ) -> types.Word:
     return types.Word(
@@ -800,7 +800,7 @@ class TestSplits:
             triage.Disposition.SPLIT,
             replacements=[
                 make_word("llave", "nf", "key", 810),
-                make_word("llave (lucha)", "nf", "wrestling hold", 812),
+                make_word("llave (lucha)", "nf", "wrestling hold", None),
             ],
         )
 
@@ -839,3 +839,168 @@ class TestSplits:
         assert any(
             "split into 3 cards" in line for line in apply_merges.summarize(outcome)
         )
+
+
+class TestRankValidation:
+    """A merge or split may only keep ranks its own group had.
+
+    A rank decides which note an import overwrites, so a typo in one must not
+    be carried out: it would overwrite an unrelated note and list the group's
+    real notes for deletion.
+    """
+
+    @pytest.fixture
+    def deck(self) -> tuple[types.Word, types.Word, types.Word]:
+        return (
+            make_word("gato", "nm", "cat", 100),
+            make_word("gato", "nm", "tomcat", 200),
+            make_word("perro", "nm", "dog", 300),
+        )
+
+    def test_a_merge_onto_an_unrelated_rank_is_refused(
+        self, comparer, decisions, deck
+    ) -> None:
+        decide(
+            decisions,
+            deck[:2],
+            triage.Disposition.MERGE,
+            replacements=[make_word("gato", "nm", "cat, tomcat", 300)],
+        )
+
+        outcome = apply_merges.apply_decisions(deck, decisions, comparer)
+
+        assert outcome.merges == ()
+        assert set(outcome.words) == set(deck)
+        assert [set(c.words) for c in outcome.unresolved] == [set(deck[:2])]
+        assert apply_merges.superseded_notes(outcome, deck) == ()
+        to_import = apply_merges.words_to_import(outcome, deck[:2])
+        assert all(word.rank != 300 for word in to_import)
+
+    @pytest.mark.parametrize(
+        ("rank", "kept", "deleted"),
+        [
+            pytest.param(None, 100, [200], id="blank-keeps-the-lowest"),
+            pytest.param(100, 100, [200], id="lowest"),
+            pytest.param(200, 200, [100], id="explicit-higher"),
+        ],
+    )
+    def test_a_merge_may_keep_any_rank_from_its_group(
+        self, comparer, decisions, deck, rank, kept, deleted
+    ) -> None:
+        decide(
+            decisions,
+            deck[:2],
+            triage.Disposition.MERGE,
+            replacements=[make_word("gato", "nm", "cat, tomcat", rank)],
+        )
+
+        outcome = apply_merges.apply_decisions(deck, decisions, comparer)
+
+        (merge,) = outcome.merges
+        assert merge.result.rank == kept
+        superseded = apply_merges.superseded_notes(outcome, deck)
+        assert [w.rank for w in superseded] == deleted
+
+    @pytest.mark.parametrize(
+        "ranks",
+        [
+            pytest.param((100, 100), id="shared"),
+            pytest.param((100, 300), id="unrelated"),
+            pytest.param((None, 300), id="unrelated-beside-a-new-card"),
+        ],
+    )
+    def test_a_split_with_bad_ranks_is_refused(
+        self, comparer, decisions, deck, ranks
+    ) -> None:
+        decide(
+            decisions,
+            deck[:2],
+            triage.Disposition.SPLIT,
+            replacements=[
+                make_word("gato", "nm", "cat", ranks[0]),
+                make_word("gata", "nf", "she-cat", ranks[1]),
+            ],
+        )
+
+        outcome = apply_merges.apply_decisions(deck, decisions, comparer)
+
+        assert outcome.splits == ()
+        assert set(outcome.words) == set(deck)
+        assert [set(c.words) for c in outcome.unresolved] == [set(deck[:2])]
+
+    def test_split_cards_may_reassign_the_groups_ranks(
+        self, comparer, decisions, deck
+    ) -> None:
+        decide(
+            decisions,
+            deck[:2],
+            triage.Disposition.SPLIT,
+            replacements=[
+                make_word("gato", "nm", "cat", 200),
+                make_word("gata", "nf", "she-cat", 100),
+                make_word("gatito", "nm", "kitten", None),
+            ],
+        )
+
+        outcome = apply_merges.apply_decisions(deck, decisions, comparer)
+
+        (split,) = outcome.splits
+        assert [card.rank for card in split.cards] == [200, 100, None]
+        assert apply_merges.superseded_notes(outcome, deck) == ()
+
+
+@pytest.mark.parametrize(
+    ("disposition", "ranks", "expected"),
+    [
+        pytest.param(
+            triage.Disposition.MERGE,
+            (300,),
+            "the merged note's rank 300 is not in the group; use one of the "
+            "group's ranks (100, 200) or leave it blank",
+            id="merge-unrelated",
+        ),
+        pytest.param(triage.Disposition.MERGE, (200,), None, id="merge-higher"),
+        pytest.param(triage.Disposition.MERGE, (None,), None, id="merge-blank"),
+        pytest.param(
+            triage.Disposition.SPLIT,
+            (100, 100, 200, 200),
+            "split cards cannot share rank 100; give each card a different "
+            "rank, or leave extra cards blank",
+            id="split-shared",
+        ),
+        pytest.param(
+            triage.Disposition.SPLIT,
+            (100, 7),
+            "the card's rank 7 is not in the group; use one of the group's "
+            "ranks (100, 200) or leave it blank",
+            id="split-unrelated",
+        ),
+        pytest.param(triage.Disposition.SPLIT, (None, None), None, id="split-all-new"),
+        pytest.param(triage.Disposition.KEEP_SEPARATE, (7, 7), None, id="not-checked"),
+    ],
+)
+def test_rank_problem(
+    disposition: triage.Disposition,
+    ranks: Sequence[int | None],
+    expected: str | None,
+) -> None:
+    sources = (
+        make_word("gato", "nm", "cat", 200),
+        make_word("gato", "nm", "tomcat", 100),
+        make_word("gato", "nm", "cat", 100),
+    )
+    replacements = tuple(make_word("gato", "nm", "cat", rank) for rank in ranks)
+
+    assert apply_merges.rank_problem(disposition, sources, replacements) == expected
+
+
+def test_rank_problem_when_the_group_has_no_ranks() -> None:
+    sources = (make_word("gato", "nm", "cat", None),)
+    replacements = (make_word("gato", "nm", "cat", 5),)
+
+    assert apply_merges.rank_problem(
+        triage.Disposition.MERGE, sources, replacements
+    ) == (
+        "the merged note's rank 5 is not in the group; leave it blank, since "
+        "no note in the group has one"
+    )
