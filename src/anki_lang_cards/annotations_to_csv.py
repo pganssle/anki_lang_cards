@@ -8,7 +8,7 @@ import json
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Literal, TypeAlias, TypedDict, cast
+from typing import Any, Final, Literal, TypeAlias, TypedDict, cast
 
 import attrs
 import tqdm
@@ -413,13 +413,18 @@ def _generate_prompt(
     )
 
 
+# Big enough that the system prompt (about 1,300 tokens) is a small share of
+# each request rather than most of it.
+DEFAULT_PROMPT_TOKEN_BUDGET: Final[int] = 8192
+
+
 def _estimate_tokens(request: base.Request) -> float:
     return (len(request.system_prompt) + len(request.prompt)) / 4
 
 
 def generate_prompts(
     prompt_inputs: Sequence[PromptInput],
-    max_tokens: int = 2048,
+    max_tokens: int = DEFAULT_PROMPT_TOKEN_BUDGET,
     dialect: str = config.DEFAULT_DIALECT,
 ) -> Iterable[base.Request]:
     """Pack annotation entries into as few prompts as fit in ``max_tokens``.
@@ -579,10 +584,23 @@ async def main() -> None:
         "trial run over a subset before committing to a full one. The "
         "processed-pages output is not written for a limited run.",
     )
+    parser.add_argument(
+        "--prompt-token-budget",
+        type=int,
+        default=DEFAULT_PROMPT_TOKEN_BUDGET,
+        help="Pack annotation entries into prompts of at most roughly this "
+        "many input tokens (estimated as characters / 4, system prompt "
+        "included); an entry too big to share a prompt still gets one to "
+        "itself. Bigger prompts mean fewer requests and less repeated "
+        "instruction text, but more entries for the model to handle in "
+        "each response. Default: %(default)s.",
+    )
     args = parser.parse_args()
 
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be a positive integer")
+    if args.prompt_token_budget < 1:
+        parser.error("--prompt-token-budget must be a positive integer")
 
     if args.skip_response_cache and args.invalidate_response_cache:
         raise ValueError(
@@ -622,7 +640,13 @@ async def main() -> None:
     source_mapping = _prepare_source_mapping(prompt_inputs)
 
     existing: dict[Word, Word] = {}
-    requests = list(generate_prompts(prompt_inputs, dialect=conf.sentences.dialect))
+    requests = list(
+        generate_prompts(
+            prompt_inputs,
+            max_tokens=args.prompt_token_budget,
+            dialect=conf.sentences.dialect,
+        )
+    )
 
     def parse(request: base.Request, response: caches.ResponseData) -> Sequence[Word]:
         return parse_llm_response(
