@@ -196,8 +196,11 @@ def test_sentences_batched(
     _assert_sentences(words, recorded_backend.model_name)
     usage = _cached_usage(query_runner)
     assert len(usage) == len(WORDS)
-    assert all(entry["details"] and entry["details"]["batch"] for entry in usage)
+    # A backend may answer some requests outside the batch, e.g. to warm a
+    # prompt cache for the rest.
+    assert any(entry["details"] and entry["details"]["batch"] for entry in usage)
     assert query_runner.journal.pending() == {}
+    _assert_prompt_cache_used(query_runner, usage)
 
 
 @pytest.mark.vcr

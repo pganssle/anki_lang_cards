@@ -242,24 +242,106 @@ OTHER_REQUEST: Final = base.Request("another prompt", system_prompt="the system 
 
 def test_query_batch_submits_and_collects(capsys: pytest.CaptureFixture[str]) -> None:
     api = FakeAPI(polls_before_done=2)
+    requests = [base.Request("uno"), base.Request("dos", system_prompt="solo")]
 
-    results, submitted = _query_batch(_backend(api), [REQUEST, OTHER_REQUEST])
+    results, submitted = _query_batch(_backend(api), requests)
 
     (body,) = api.bodies("POST", "/v1/messages/batches")
     custom_ids = {item["custom_id"] for item in body["requests"]}
-    assert custom_ids == {REQUEST.key, OTHER_REQUEST.key}
-    for item in body["requests"]:
-        assert item["params"]["system"][0]["cache_control"] == {
-            "type": "ephemeral",
-            "ttl": "1h",
-        }
+    assert custom_ids == {request.key for request in requests}
     assert submitted == {JOB_ID: frozenset(custom_ids)}
     assert set(results.responses) == custom_ids
-    assert results.responses[REQUEST.key]["usage"]["details"]["batch"] is True
+    assert all(
+        response["usage"]["details"]["batch"] is True
+        for response in results.responses.values()
+    )
     assert results.failures == {}
     assert results.completed_jobs == {JOB_ID}
     assert len(api.bodies("GET", f"/v1/messages/batches/{JOB_ID}")) >= 3
     assert f"Batch job {JOB_ID}: 1 processing" in capsys.readouterr().out
+    # No system prompt is shared, so there is nothing to warm up.
+    assert api.bodies("POST", "/v1/messages") == []
+
+
+SHARED_REQUESTS: Final = (
+    base.Request("a", system_prompt="shared"),
+    base.Request("b", system_prompt="shared"),
+    base.Request("c", system_prompt="shared"),
+    base.Request("d", system_prompt="solo"),
+    base.Request("e"),
+)
+
+
+def test_query_batch_warms_the_prompt_cache() -> None:
+    """One request per shared system prompt goes ahead of the batch, writing
+    the hour-long cache entry the batched requests will read."""
+    api = FakeAPI()
+
+    results, submitted = _query_batch(_backend(api), SHARED_REQUESTS)
+
+    (warm_up,) = api.bodies("POST", "/v1/messages")
+    warm_key = min(request.key for request in SHARED_REQUESTS[:3])
+    (warm_request,) = [r for r in SHARED_REQUESTS if r.key == warm_key]
+    assert warm_up["messages"][0]["content"] == warm_request.prompt
+    assert warm_up["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
+    methods_and_paths = [(method, path) for method, path, _ in api.sent]
+    assert methods_and_paths.index(("POST", "/v1/messages")) < methods_and_paths.index(
+        ("POST", "/v1/messages/batches")
+    )
+
+    (body,) = api.bodies("POST", "/v1/messages/batches")
+    batched = {item["custom_id"] for item in body["requests"]}
+    assert batched == {request.key for request in SHARED_REQUESTS} - {warm_key}
+    for item in body["requests"]:
+        if "system" in item["params"]:
+            assert item["params"]["system"][0]["cache_control"]["ttl"] == "1h"
+    assert submitted == {JOB_ID: frozenset(batched)}
+    assert set(results.responses) == {request.key for request in SHARED_REQUESTS}
+    assert results.responses[warm_key]["usage"]["details"]["batch"] is False
+
+
+def test_query_batch_without_prompt_caching() -> None:
+    api = FakeAPI()
+
+    _query_batch(_backend(api, prompt_caching=False), SHARED_REQUESTS)
+
+    assert api.bodies("POST", "/v1/messages") == []
+    (body,) = api.bodies("POST", "/v1/messages/batches")
+    assert len(body["requests"]) == len(SHARED_REQUESTS)
+    assert all(
+        "cache_control" not in item["params"].get("system", [{}])[0]
+        for item in body["requests"]
+    )
+
+
+def test_query_batch_incomplete_warm_up() -> None:
+    """A cut-off warm-up response is a failure to retry; the batch still runs."""
+    api = FakeAPI(message=_message("[{", stop_reason="max_tokens"))
+
+    results, submitted = _query_batch(_backend(api), SHARED_REQUESTS[:2])
+
+    warm_key = min(request.key for request in SHARED_REQUESTS[:2])
+    assert "max_tokens" in results.failures[warm_key]
+    assert submitted == {
+        JOB_ID: frozenset({r.key for r in SHARED_REQUESTS[:2]} - {warm_key})
+    }
+
+
+def test_query_batch_all_resumed_needs_no_warm_up() -> None:
+    api = FakeAPI()
+    keys = frozenset(request.key for request in SHARED_REQUESTS[:2])
+    api.batch_results["msgbatch_old"] = [
+        {"custom_id": key, "result": {"type": "succeeded", "message": _message()}}
+        for key in keys
+    ]
+
+    results, submitted = _query_batch(
+        _backend(api), SHARED_REQUESTS[:2], resume={"msgbatch_old": keys}
+    )
+
+    assert api.bodies("POST", "/v1/messages") == []
+    assert submitted == {}
+    assert set(results.responses) == keys
 
 
 def test_query_batch_failures() -> None:

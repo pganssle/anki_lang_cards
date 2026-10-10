@@ -91,6 +91,14 @@ class AnthropicBackend:
                 jobs.append(job_id)
                 unsubmitted -= keys
 
+        responses: dict[str, caches.ResponseData] = {}
+        failures: dict[str, str] = {}
+        if self.prompt_caching:
+            for key in await self._warm_cache(
+                [by_key[key] for key in sorted(unsubmitted)], responses, failures
+            ):
+                unsubmitted.remove(key)
+
         if unsubmitted:
             job = await self._client.messages.batches.create(
                 requests=[
@@ -102,8 +110,6 @@ class AnthropicBackend:
             print(f"Submitted {len(unsubmitted)} requests as batch job {job.id}.")
             jobs.append(job.id)
 
-        responses: dict[str, caches.ResponseData] = {}
-        failures: dict[str, str] = {}
         for job_id in jobs:
             try:
                 await self._wait_for(job_id)
@@ -126,6 +132,49 @@ class AnthropicBackend:
         return base.BatchResults(
             responses=responses, failures=failures, completed_jobs=frozenset(jobs)
         )
+
+    async def _warm_cache(
+        self,
+        requests: Sequence[base.Request],
+        responses: dict[str, caches.ResponseData],
+        failures: dict[str, str],
+    ) -> Sequence[str]:
+        """Send one request per shared system prompt ahead of the batch.
+
+        Requests in a batch are processed concurrently, so without this most
+        of them miss the cache and pay to write it; at the hour-long cache
+        lifetime a write costs twice as much as uncached input. One ordinary
+        request writes the entry before the batch starts, so the batch can
+        read it. A system prompt only one request uses is left to the batch.
+
+        :return: The keys of the requests that were sent.
+        """
+        first_by_system_prompt: dict[str, base.Request] = {}
+        shared: set[str] = set()
+        for request in requests:
+            if not request.system_prompt:
+                continue
+            if request.system_prompt in first_by_system_prompt:
+                shared.add(request.system_prompt)
+            else:
+                first_by_system_prompt[request.system_prompt] = request
+
+        sent: list[str] = []
+        for system_prompt, request in first_by_system_prompt.items():
+            if system_prompt not in shared:
+                continue
+            print("Sending one request ahead of the batch to fill the prompt cache.")
+            # The batch parameters, so that it writes the same hour-long
+            # cache entry the batch will read.
+            message = await self._client.messages.create(
+                **self._params(request, batch=True)
+            )
+            try:
+                responses[request.key] = _response_data(message, batch=False)
+            except base.IncompleteResponseError as e:
+                failures[request.key] = str(e)
+            sent.append(request.key)
+        return sent
 
     async def _wait_for(self, job_id: str) -> None:
         interval = self.poll_interval
