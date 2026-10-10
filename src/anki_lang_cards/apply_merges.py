@@ -286,6 +286,47 @@ def propose_merge(words: Sequence[types.Word]) -> types.Word | None:
         return None
 
 
+def rank_problem(
+    disposition: triage.Disposition,
+    sources: Iterable[types.Word],
+    replacements: Sequence[types.Word],
+) -> str | None:
+    """What is wrong with the ranks a merge or split assigns, or None.
+
+    A rank is a note's identity on import: the row with rank 300 overwrites
+    note 300, whatever it says. A merge result or a split card may therefore
+    only keep a rank that one of its own sources had, or none at all — none
+    meaning the lowest for a merge and a new note for a split card. Anything
+    else is a typo that would silently overwrite an unrelated note. A split's
+    cards must also not share a rank, since two rows for one note leave only
+    one of them in the deck.
+
+    Other dispositions do not create notes and are not checked.
+    """
+    if disposition not in (triage.Disposition.MERGE, triage.Disposition.SPLIT):
+        return None
+    allowed = sorted({word.rank for word in sources if word.rank is not None})
+    fix = (
+        f"use one of the group's ranks ({', '.join(map(str, allowed))}) or "
+        "leave it blank"
+        if allowed
+        else "leave it blank, since no note in the group has one"
+    )
+    what = "merged note" if disposition is triage.Disposition.MERGE else "card"
+    for word in replacements:
+        if word.rank is not None and word.rank not in allowed:
+            return f"the {what}'s rank {word.rank} is not in the group; {fix}"
+    if disposition is triage.Disposition.SPLIT:
+        ranks = [card.rank for card in replacements if card.rank is not None]
+        repeated = sorted({rank for rank in ranks if ranks.count(rank) > 1})
+        if repeated:
+            return (
+                f"split cards cannot share rank {repeated[0]}; give each card "
+                "a different rank, or leave extra cards blank"
+            )
+    return None
+
+
 def apply_decisions(
     words: Iterable[types.Word],
     decisions: triage.DecisionCache,
@@ -305,6 +346,9 @@ def apply_decisions(
     thing they can say. Every other group goes to `resolver` to have its
     wording settled, and without one they are combined mechanically, which is
     only appropriate when nobody is going to read the result.
+
+    A merge or split whose ranks fail `rank_problem` is not carried out; the
+    group is reported as unresolved so the question is asked again.
     """
     by_rank = _decisions_by_rank(decisions)
     current, revised = _apply_revisions(tuple(words), decisions)
@@ -335,6 +379,19 @@ def apply_decisions(
 
             ranks = frozenset(w.rank for w in candidate.words if w.rank is not None)
             decision = by_rank.get(ranks) or decisions.get(candidate.words)
+
+            if (
+                decision is not None
+                and decision.replacements is not None
+                and rank_problem(
+                    decision.disposition, candidate.words, decision.replacements
+                )
+                is not None
+            ):
+                # Carrying this out would overwrite or lose a note, so the
+                # group goes back to be answered again rather than guessed at.
+                leftover.append(candidate)
+                continue
 
             if (
                 decision is not None

@@ -438,7 +438,8 @@ class MergedNoteEditor(Screen):
     one of them by number — "2" copies the focused field from note 2, and
     "2 meaning" names the field instead. Unlike the group editor, the rank is
     editable here; this is the one place an explicit rank choice overrides
-    "lowest wins".
+    "lowest wins". The choice is among the source notes' ranks, since any
+    other rank would overwrite an unrelated note on import.
     """
 
     BINDINGS = [
@@ -507,6 +508,13 @@ class MergedNoteEditor(Screen):
             # Rejecting the edit has to keep the editor alive; an uncaught
             # error here would take down the whole session.
             self.app.notify(f"{error}", severity="error", timeout=8)
+            return
+        problem = apply_merges.rank_problem(
+            triage.Disposition.MERGE, self.sources, (revised,)
+        )
+        if problem is not None:
+            self.app.notify(problem.capitalize(), severity="warning", timeout=8)
+            self.query_one("#rank", Input).focus()
             return
         self.dismiss(revised)
 
@@ -917,6 +925,10 @@ class SplitEditor(Screen):
                     f"Card {index + 1}: {error}", severity="error", timeout=8
                 )
                 return
+        problem = apply_merges.rank_problem(triage.Disposition.SPLIT, self.words, cards)
+        if problem is not None:
+            self.app.notify(problem.capitalize(), severity="warning", timeout=8)
+            return
         self.dismiss(tuple(cards))
 
     def action_cancel(self) -> None:

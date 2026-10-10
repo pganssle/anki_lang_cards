@@ -76,6 +76,9 @@ def _needs_answer(candidate: triage.Candidate, decisions: triage.DecisionCache) 
     cannot be found (see `migrate_cached_wordings`), what the card should say
     is still an open question — asked once, and recorded with its wording
     this time.
+
+    An answer whose ranks fail `apply_merges.rank_problem` is no answer:
+    carrying it out would overwrite or lose a note, so it is asked again.
     """
     if apply_merges._identical(candidate.words):
         return False
@@ -84,6 +87,16 @@ def _needs_answer(candidate: triage.Candidate, decisions: triage.DecisionCache) 
         ranks = frozenset(w.rank for w in candidate.words if w.rank is not None)
         decision = apply_merges._decisions_by_rank(decisions).get(ranks)
     if decision is None or decision.disposition is triage.Disposition.REVIEW:
+        return True
+    if (
+        decision.replacements is not None
+        and apply_merges.rank_problem(
+            decision.disposition, candidate.words, decision.replacements
+        )
+        is not None
+    ):
+        # `apply_decisions` refuses an answer whose ranks would overwrite or
+        # lose a note, so the group is still open.
         return True
     return (
         decision.disposition is triage.Disposition.MERGE
@@ -426,7 +439,9 @@ def read_decision_file(path: pathlib.Path) -> Sequence[triage.Candidate]:
     Problems are collected across the whole file rather than failing on the
     first, so one pass over the error list fixes everything. A merge answered
     without replacements is legal — it means "accept the proposal", and the
-    proposal is recomputed exactly as it was written.
+    proposal is recomputed exactly as it was written. A merged note or split
+    card may only keep a rank from its own group, since a rank decides which
+    note an import overwrites.
     """
     with path.open() as f:
         data = json.load(f)
@@ -486,6 +501,12 @@ def _finish_entry(
         allocation = entry.get("sentence_allocation")
         if allocation is not None:
             candidate = _apply_sentence_allocation(candidate, allocation, label)
+    if candidate.replacements is not None:
+        problem = apply_merges.rank_problem(
+            candidate.disposition, candidate.words, candidate.replacements
+        )
+        if problem is not None:
+            raise DecisionFileError([f"{label}: {problem}"])
     return candidate
 
 

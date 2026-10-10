@@ -82,6 +82,32 @@ class TestHeadless:
         (merged,) = result.outcome.words
         assert merged.meaning == "piece of clothing, garment"
 
+    def test_a_recorded_answer_with_a_bad_rank_is_asked_again(self, decisions) -> None:
+        deck = [
+            make_word("prenda", "nf", "piece of clothing", 3467),
+            make_word("perro", "nm", "dog", 5000),
+        ]
+        added = [make_word("prenda", "nf", "garment", 9200)]
+        decisions.remember(
+            triage.Candidate(
+                words=(deck[0], *added),
+                reason=triage.Reason.COMPATIBLE,
+                comparison=_comparison(),
+                disposition=triage.Disposition.MERGE,
+                replacements=(
+                    make_word("prenda", "nf", "piece of clothing, garment", 5000),
+                ),
+            )
+        )
+
+        result = resolve(
+            inputs=added, existing=deck, decisions=decisions, interactive=False
+        )
+
+        assert result.outcome.merges == ()
+        assert set(result.outcome.words) == {*deck, *added}
+        assert [set(c.words) for c in result.pending] == [{deck[0], *added}]
+
     def test_an_unanswered_question_interrupts(self, decisions) -> None:
         deck = [make_word("zanja", "nf", "trench", 1)]
         added = [make_word("zanja", "nf", "ditch", 2)]
@@ -523,6 +549,57 @@ class TestDecisionFile:
             dedup_flow.read_decision_file(path)
 
         assert "sentence_allocation[0]" in str(excinfo.value)
+
+    def test_ranks_outside_the_group_are_problems(self, tmp_path) -> None:
+        """Every bad rank is named, so one pass over the list fixes them all."""
+        path = tmp_path / "pending.json"
+        dedup_flow.write_pending_file(path, [self.pending_candidate()] * 4)
+        data = json.loads(path.read_text())
+        answers = [
+            ("merge", [make_word("zanja", "nf", "trench, ditch", 3)]),
+            ("split", [make_word("zanja", "nf", "trench", 1)] * 2),
+            (
+                "split",
+                [
+                    make_word("zanja", "nf", "trench", 1),
+                    make_word("zanja (obra)", "nf", "ditch", 9),
+                ],
+            ),
+            ("merge", [make_word("zanja", "nf", "trench, ditch", 2)]),
+        ]
+        for entry, (disposition, replacements) in zip(data, answers, strict=True):
+            entry["disposition"] = disposition
+            entry["replacements"] = triage.words_to_csv(replacements)
+        path.write_text(json.dumps(data))
+
+        with pytest.raises(dedup_flow.DecisionFileError) as excinfo:
+            dedup_flow.read_decision_file(path)
+
+        assert excinfo.value.problems == (
+            "candidate 0 (1 zanja (nf) trench): the merged note's rank 3 is "
+            "not in the group; use one of the group's ranks (1, 2) or leave "
+            "it blank",
+            "candidate 1 (1 zanja (nf) trench): split cards cannot share "
+            "rank 1; give each card a different rank, or leave extra cards "
+            "blank",
+            "candidate 2 (1 zanja (nf) trench): the card's rank 9 is not in "
+            "the group; use one of the group's ranks (1, 2) or leave it blank",
+        )
+
+    def test_an_edited_proposal_is_checked_too(self, tmp_path) -> None:
+        path = tmp_path / "pending.json"
+        dedup_flow.write_pending_file(path, [self.pending_candidate()])
+        data = json.loads(path.read_text())
+        data[0]["disposition"] = "merge"
+        data[0]["proposed"] = triage.words_to_csv(
+            [make_word("zanja", "nf", "trench, ditch", 300)]
+        )
+        path.write_text(json.dumps(data))
+
+        with pytest.raises(dedup_flow.DecisionFileError) as excinfo:
+            dedup_flow.read_decision_file(path)
+
+        assert "rank 300 is not in the group" in str(excinfo.value)
 
     def test_a_file_round_trip_matches_a_ui_session(self, decisions, tmp_path) -> None:
         """Answering by file and answering on screen record the same thing."""
