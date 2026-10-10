@@ -8,7 +8,8 @@ that have historically been mangled somewhere between the LLM and Anki
 (straight and Spanish quotation marks, escaped quotes, ampersands, inverted
 punctuation), and marker words in the fixtures trigger the misbehaviors the
 pipeline has to survive: fenced ```json responses, invalid JSON, unknown
-citation ids, and terms the model fails to echo back.
+citation ids, renamed terms, and entries the model leaves out or fails to
+tag with their id.
 """
 
 import csv
@@ -501,13 +502,40 @@ def test_main_merges_existing_deck_word(main_run: CliRun) -> None:
     assert "Los expertos dicen: «existente» es fundamental." in spanish
 
 
-def test_main_skips_mismatched_terms(main_run: CliRun) -> None:
-    """Terms the model renames or reports under a "word" key are skipped."""
-    assert "Term mismatch" in main_run.stdout
+def test_main_matches_renamed_terms_by_id(main_run: CliRun) -> None:
+    """A term the model renames is still matched to its word by id, and
+    written under the original headword."""
+    assert "Model reported 'renamedo/a' as 'renamedo'." in main_run.stdout
     words = _words_by_headword(main_run.output_csv)
-    assert "renamedo/a" not in words
     assert "renamedo" not in words
-    assert "wordkeyado" not in words
+    spanish = {sentence.spanish for sentence in words["renamedo/a"].sentences}
+    assert 'La palabra "renamedo/a" apareció en el libro.' in spanish
+
+
+def test_main_retries_entries_without_an_id(main_run: CliRun) -> None:
+    """An entry reported under a "word" key without its id cannot be matched,
+    so the prompt is retried rather than the word being dropped."""
+    assert "Response entry has no valid id" in main_run.stdout
+    assert "Retrying" in main_run.stdout
+    words = _words_by_headword(main_run.output_csv)
+    assert words["wordkeyado"].sentences
+
+
+def test_main_retries_a_dropped_word(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """A response that leaves a word out is retried, so the word is still
+    written."""
+    run = _run_main(
+        tmp_path_factory.mktemp("dropped-run"),
+        CARDS_DIR / "words_dropped.csv",
+        dictionary_paths,
+    )
+    assert "Response is missing entries for ['droppedito']" in run.stdout
+    assert "Retrying" in run.stdout
+    words = _words_by_headword(run.output_csv)
+    assert words["droppedito"].sentences
+    assert words["inocente"].sentences
 
 
 def test_main_output_roundtrips(main_run: CliRun) -> None:

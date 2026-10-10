@@ -1,22 +1,24 @@
 interactions:
 - request:
     body: "{\"max_tokens\":16000,\"messages\":[{\"role\":\"user\",\"content\":\"Prompt:\\n=======\\nINPUT:\\n----------\\n[\\n
-      \   {\\n        \\\"term\\\": \\\"correr\\\",\\n        \\\"part_of_speech\\\":
-      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"to run\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n\"}],\"model\":\"claude-sonnet-5\",\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"words\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"term\":{\"type\":\"string\"},\"examples\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"spanish\":{\"type\":\"string\"},\"english\":{\"type\":\"string\"}},\"required\":[\"spanish\",\"english\"],\"additionalProperties\":false}}},\"required\":[\"term\",\"examples\"],\"additionalProperties\":false}}},\"required\":[\"words\"],\"additionalProperties\":false}}},\"system\":[{\"type\":\"text\",\"text\":\"You
+      \   {\\n        \\\"id\\\": 0,\\n        \\\"term\\\": \\\"gato\\\",\\n        \\\"part_of_speech\\\":
+      \\\"nm\\\",\\n        \\\"meaning\\\": \\\"cat\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n\"}],\"model\":\"claude-sonnet-5\",\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"words\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"term\":{\"type\":\"string\"},\"examples\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"spanish\":{\"type\":\"string\"},\"english\":{\"type\":\"string\"}},\"required\":[\"spanish\",\"english\"],\"additionalProperties\":false}}},\"required\":[\"id\",\"term\",\"examples\"],\"additionalProperties\":false}}},\"required\":[\"words\"],\"additionalProperties\":false}}},\"system\":[{\"type\":\"text\",\"text\":\"You
       are an expert Spanish teacher and lexicographer, whose specialty is designing
       excellent example sentences that show off the range of uses of a given word.\\n\\nI
-      am going to give you valid JSON representing a list of mappings containing terms
-      (\\\"term\\\") in Spanish and their meaning in English (\\\"meaning\\\"). For
-      each term, I would like you to generate valid JSON containing 4 example sentences
-      in idiomatic Spanish that use the term accompanied by a translation from the
-      original Spanish into English; the example sentences should use the sense of
-      the term that has the meaning specified by the English meaning. If multiple
-      English meanings are provided, provide sentences that sample all the meanings.
-      When the word is a verb, select different moods and tenses in the different
-      sentences. The translations do not need to be word-for-word translations, it
-      is more important that they capture the general spirit of the original Spanish.\\n\\nIn
-      the output, DO NOT modify the value in \\\"term\\\", it is used to match the
-      answers to the inputs. If, for example, it is \\\"forastero/a\\\", do not use
+      am going to give you valid JSON representing a list of mappings containing an
+      identifier (\\\"id\\\"), terms (\\\"term\\\") in Spanish and their meaning in
+      English (\\\"meaning\\\"). For each term, I would like you to generate valid
+      JSON containing 4 example sentences in idiomatic Spanish that use the term accompanied
+      by a translation from the original Spanish into English; the example sentences
+      should use the sense of the term that has the meaning specified by the English
+      meaning. If multiple English meanings are provided, provide sentences that sample
+      all the meanings. When the word is a verb, select different moods and tenses
+      in the different sentences. The translations do not need to be word-for-word
+      translations, it is more important that they capture the general spirit of the
+      original Spanish.\\n\\nIn the output, copy each input's \\\"id\\\" unchanged
+      into its entry; it is used to match the answers to the inputs, since the same
+      term can appear more than once with different meanings. Do not modify the value
+      in \\\"term\\\" either. If, for example, it is \\\"forastero/a\\\", do not use
       \\\"forastero\\\" in the output. If there is a slash in the word, it usually
       is used to show different forms of the word, like \\\"at\xF3nito/a\\\" would
       expand to \\\"un hombre at\xF3nito\\\" or \\\"una mujer at\xF3nita\\\".\\n\\nPlease
@@ -37,18 +39,19 @@ interactions:
       you have come up with the example sentences, look over your work and see if
       you can make the original sentences more creative or interesting.\\n\\nRespond
       with a JSON object whose \\\"words\\\" list holds one entry per input term,
-      in the order the terms were given, each with the \\\"term\\\" exactly as given
-      and its \\\"examples\\\". Include ONLY the JSON, and nothing else: no markdown
-      code block, and no explanation of your choices.\\n\\nExample:\\n========\\nINPUT:\\n----------\\n[\\n
-      \   {\\n        \\\"term\\\": \\\"casa\\\",\\n        \\\"part_of_speech\\\":
-      \\\"nf\\\",\\n        \\\"meaning\\\": \\\"house\\\"\\n    },\\n    {\\n        \\\"term\\\":
-      \\\"rebotar\\\",\\n        \\\"part_of_speech\\\": \\\"vi\\\",\\n        \\\"meaning\\\":
-      \\\"bounce\\\"\\n    },\\n    {\\n        \\\"term\\\": \\\"piso\\\",\\n        \\\"part_of_speech\\\":
-      \\\"nm\\\",\\n        \\\"meaning\\\": \\\"apartment\\\"\\n    },\\n    {\\n
-      \       \\\"term\\\": \\\"mu\xF1eca\\\",\\n        \\\"part_of_speech\\\": \\\"nf\\\",\\n
-      \       \\\"meaning\\\": \\\"doll, wrist\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n{\\\"words\\\":
-      [\\n{\\\"term\\\": \\\"casa\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"La
-      casa de mi abuela est\xE1 en el campo.\\\", \\\"english\\\": \\\"My grandmother's
+      in the order the terms were given, each with the \\\"id\\\" and \\\"term\\\"
+      exactly as given and its \\\"examples\\\". Include ONLY the JSON, and nothing
+      else: no markdown code block, and no explanation of your choices.\\n\\nExample:\\n========\\nINPUT:\\n----------\\n[\\n
+      \   {\\n        \\\"id\\\": 0,\\n        \\\"term\\\": \\\"casa\\\",\\n        \\\"part_of_speech\\\":
+      \\\"nf\\\",\\n        \\\"meaning\\\": \\\"house\\\"\\n    },\\n    {\\n        \\\"id\\\":
+      1,\\n        \\\"term\\\": \\\"rebotar\\\",\\n        \\\"part_of_speech\\\":
+      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"bounce\\\"\\n    },\\n    {\\n        \\\"id\\\":
+      2,\\n        \\\"term\\\": \\\"piso\\\",\\n        \\\"part_of_speech\\\": \\\"nm\\\",\\n
+      \       \\\"meaning\\\": \\\"apartment\\\"\\n    },\\n    {\\n        \\\"id\\\":
+      3,\\n        \\\"term\\\": \\\"mu\xF1eca\\\",\\n        \\\"part_of_speech\\\":
+      \\\"nf\\\",\\n        \\\"meaning\\\": \\\"doll, wrist\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n{\\\"words\\\":
+      [\\n{\\\"id\\\": 0, \\\"term\\\": \\\"casa\\\", \\\"examples\\\": [{\\\"spanish\\\":
+      \\\"La casa de mi abuela est\xE1 en el campo.\\\", \\\"english\\\": \\\"My grandmother's
       house is in the country.\\\"}, {\\\"spanish\\\": \\\"En la Edad Media, las casas
       se constru\xEDan a menudo con bahareque, que consist\xEDa en revestir ramas
       y paja con arcilla, barro y esti\xE9rcol.\\\", \\\"english\\\": \\\"In the Middle
@@ -57,30 +60,31 @@ interactions:
       mi casa este fin de semana.\\\", \\\"english\\\": \\\"I am going to clean my
       house this weekend.\\\"}, {\\\"spanish\\\": \\\"Me gusta pasar tiempo en casa
       de mis padres.\\\", \\\"english\\\": \\\"I like to spend time at my parents'
-      house.\\\"}]},\\n{\\\"term\\\": \\\"rebotar\\\", \\\"examples\\\": [{\\\"spanish\\\":
-      \\\"El bal\xF3n rebota contra el suelo.\\\", \\\"english\\\": \\\"The ball is
-      bouncing on the ground.\\\"}, {\\\"spanish\\\": \\\"\xA1Rebota m\xE1s alto!\\\",
-      \\\"english\\\": \\\"Bounce higher!\\\"}, {\\\"spanish\\\": \\\"Los delfines
-      pueden \xABver\xBB rebotando ondas sonoras en su entorno.\\\", \\\"english\\\":
-      \\\"Dolphins can 'see' by bouncing sound waves off their surroundings.\\\"},
+      house.\\\"}]},\\n{\\\"id\\\": 1, \\\"term\\\": \\\"rebotar\\\", \\\"examples\\\":
+      [{\\\"spanish\\\": \\\"El bal\xF3n rebota contra el suelo.\\\", \\\"english\\\":
+      \\\"The ball is bouncing on the ground.\\\"}, {\\\"spanish\\\": \\\"\xA1Rebota
+      m\xE1s alto!\\\", \\\"english\\\": \\\"Bounce higher!\\\"}, {\\\"spanish\\\":
+      \\\"Los delfines pueden \xABver\xBB rebotando ondas sonoras en su entorno.\\\",
+      \\\"english\\\": \\\"Dolphins can 'see' by bouncing sound waves off their surroundings.\\\"},
       {\\\"spanish\\\": \\\"Rebotaremos la luz en la luna.\\\", \\\"english\\\": \\\"We
-      will bounce the light off the moon.\\\"}]},\\n{\\\"term\\\": \\\"piso\\\", \\\"examples\\\":
-      [{\\\"spanish\\\": \\\"\u2014Vivo en un piso en el centro de la ciudad \u2014dijo
-      Mar\xEDa.\\\", \\\"english\\\": \\\"\\\\\\\"I live in an apartment in the city
-      center,\\\\\\\" said Mar\xEDa.\\\"}, {\\\"spanish\\\": \\\"El piso de mi hermano
-      tiene tres dormitorios.\\\", \\\"english\\\": \\\"My brother's apartment has
-      three bedrooms.\\\"}, {\\\"spanish\\\": \\\"Necesito arreglar el fregadero del
-      piso.\\\", \\\"english\\\": \\\"I need to fix the sink in my apartment.\\\"},
-      {\\\"spanish\\\": \\\"El piso de al lado est\xE1 alquilado.\\\", \\\"english\\\":
-      \\\"The apartment next door is rented.\\\"}]},\\n{\\\"term\\\": \\\"mu\xF1eca\\\",
-      \\\"examples\\\": [{\\\"spanish\\\": \\\"Le regalaron una mu\xF1eca preciosa
-      por su cumplea\xF1os.\\\", \\\"english\\\": \\\"They gave her a pretty doll
-      for her birthday.\\\"}, {\\\"spanish\\\": \\\"Se cay\xF3 patinando y se rompi\xF3
-      la mu\xF1eca.\\\", \\\"english\\\": \\\"She fell when she was skating and broke
-      her wrist.\\\"}, {\\\"spanish\\\": \\\"Se puso una pulsera en la mu\xF1eca izquierda.\\\",
-      \\\"english\\\": \\\"She put the bracelet on her left wrist.\\\"}, {\\\"spanish\\\":
-      \\\"La peque\xF1a Mar\xEDa nunca dorm\xEDa sin su mu\xF1eca favorita.\\\", \\\"english\\\":
-      \\\"Little Maria never slept without her favorite doll.\\\"}]}\\n]}\\n\",\"cache_control\":{\"type\":\"ephemeral\"}}]}"
+      will bounce the light off the moon.\\\"}]},\\n{\\\"id\\\": 2, \\\"term\\\":
+      \\\"piso\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"\u2014Vivo en un piso
+      en el centro de la ciudad \u2014dijo Mar\xEDa.\\\", \\\"english\\\": \\\"\\\\\\\"I
+      live in an apartment in the city center,\\\\\\\" said Mar\xEDa.\\\"}, {\\\"spanish\\\":
+      \\\"El piso de mi hermano tiene tres dormitorios.\\\", \\\"english\\\": \\\"My
+      brother's apartment has three bedrooms.\\\"}, {\\\"spanish\\\": \\\"Necesito
+      arreglar el fregadero del piso.\\\", \\\"english\\\": \\\"I need to fix the
+      sink in my apartment.\\\"}, {\\\"spanish\\\": \\\"El piso de al lado est\xE1
+      alquilado.\\\", \\\"english\\\": \\\"The apartment next door is rented.\\\"}]},\\n{\\\"id\\\":
+      3, \\\"term\\\": \\\"mu\xF1eca\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"Le
+      regalaron una mu\xF1eca preciosa por su cumplea\xF1os.\\\", \\\"english\\\":
+      \\\"They gave her a pretty doll for her birthday.\\\"}, {\\\"spanish\\\": \\\"Se
+      cay\xF3 patinando y se rompi\xF3 la mu\xF1eca.\\\", \\\"english\\\": \\\"She
+      fell when she was skating and broke her wrist.\\\"}, {\\\"spanish\\\": \\\"Se
+      puso una pulsera en la mu\xF1eca izquierda.\\\", \\\"english\\\": \\\"She put
+      the bracelet on her left wrist.\\\"}, {\\\"spanish\\\": \\\"La peque\xF1a Mar\xEDa
+      nunca dorm\xEDa sin su mu\xF1eca favorita.\\\", \\\"english\\\": \\\"Little
+      Maria never slept without her favorite doll.\\\"}]}\\n]}\\n\",\"cache_control\":{\"type\":\"ephemeral\"}}]}"
     headers:
       accept:
       - application/json
@@ -91,13 +95,13 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '6544'
+      - '6876'
       content-type:
       - application/json
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.13.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -107,7 +111,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.13.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -122,42 +126,43 @@ interactions:
     uri: https://api.anthropic.com/v1/messages
   response:
     body:
-      string: "{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011CftpiMkcGSMbVkQbJU6S3\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"words\\\":
-        [{\\\"term\\\": \\\"correr\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"Todas
-        las ma\xF1anas, Luis corre cinco kil\xF3metros por el parque.\\\", \\\"english\\\":
-        \\\"Every morning, Luis runs five kilometers through the park.\\\"}, {\\\"spanish\\\":
-        \\\"Si no corremos ahora, perderemos el tren.\\\", \\\"english\\\": \\\"If
-        we don't run now, we'll miss the train.\\\"}, {\\\"spanish\\\": \\\"Cuando
-        era ni\xF1o, corr\xEDa descalzo por la playa durante horas.\\\", \\\"english\\\":
-        \\\"When I was a child, I used to run barefoot on the beach for hours.\\\"},
-        {\\\"spanish\\\": \\\"\u2014\xA1Corre, que se nos escapa el autob\xFAs! \u2014grit\xF3
-        Marta.\\\", \\\"english\\\": \\\"\\\\\\\"Run, the bus is getting away from
-        us!\\\\\\\" shouted Marta.\\\"}]}]}\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":76,\"cache_creation_input_tokens\":2300,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":2300,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":254,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"standard\",\"inference_geo\":\"global\"},\"diagnostics\":null}"
+      string: "{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011Cfu3EAMEaKA9J66wjHKd5\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"words\\\":
+        [{\\\"id\\\": 0, \\\"term\\\": \\\"gato\\\", \\\"examples\\\": [{\\\"spanish\\\":
+        \\\"El gato dorm\xEDa acurrucado sobre el alf\xE9izar de la ventana.\\\",
+        \\\"english\\\": \\\"The cat was sleeping curled up on the windowsill.\\\"},
+        {\\\"spanish\\\": \\\"Los antiguos egipcios veneraban al gato como un animal
+        sagrado.\\\", \\\"english\\\": \\\"The ancient Egyptians worshipped the cat
+        as a sacred animal.\\\"}, {\\\"spanish\\\": \\\"\u2014No le des de comer al
+        gato en la mesa \u2014me rega\xF1\xF3 mi madre.\\\", \\\"english\\\": \\\"\\\\\\\"Don't
+        feed the cat at the table,\\\\\\\" my mother scolded me.\\\"}, {\\\"spanish\\\":
+        \\\"Si adoptas un gato, recuerda que puede vivir m\xE1s de quince a\xF1os.\\\",
+        \\\"english\\\": \\\"If you adopt a cat, remember that it can live more than
+        fifteen years.\\\"}]}]}\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":84,\"cache_creation_input_tokens\":2425,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":2425,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":276,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"standard\",\"inference_geo\":\"global\"},\"diagnostics\":null}"
     headers:
       anthropic-ratelimit-input-tokens-limit:
       - '5000000'
       anthropic-ratelimit-input-tokens-remaining:
       - '4999000'
       anthropic-ratelimit-input-tokens-reset:
-      - '2026-10-10T15:51:26Z'
+      - '2026-10-10T18:35:32Z'
       anthropic-ratelimit-output-tokens-limit:
       - '1000000'
       anthropic-ratelimit-output-tokens-remaining:
       - '1000000'
       anthropic-ratelimit-output-tokens-reset:
-      - '2026-10-10T15:51:29Z'
+      - '2026-10-10T18:35:35Z'
       anthropic-ratelimit-requests-limit:
       - '5000'
       anthropic-ratelimit-requests-remaining:
       - '4999'
       anthropic-ratelimit-requests-reset:
-      - '2026-10-10T15:51:25Z'
+      - '2026-10-10T18:35:31Z'
       anthropic-ratelimit-tokens-limit:
       - '6000000'
       anthropic-ratelimit-tokens-remaining:
       - '5999000'
       anthropic-ratelimit-tokens-reset:
-      - '2026-10-10T15:51:26Z'
+      - '2026-10-10T18:35:32Z'
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
       cf-cache-status:
@@ -165,21 +170,21 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '1193'
+      - '1246'
       content-security-policy:
       - default-src 'none'; frame-ancestors 'none'
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 15:51:29 GMT
+      - Sat, 10 Oct 2026 18:35:35 GMT
       request-id:
-      - req_011CftpiLuktG1ezze1Xa1wu
+      - req_011Cfu3EA77NRR5vKzN6jiWb
       server:
       - cloudflare
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       traceresponse:
-      - 00-ea2ce6b74054c5938c03f0702ba10594-44f179f055e2e3ad-01
+      - 00-8feb8efa40cd8bc9bc34ee09b5bfa033-d8448bbd40f54e53-01
       transfer-encoding:
       - chunked
       vary:
@@ -191,22 +196,24 @@ interactions:
       message: OK
 - request:
     body: "{\"max_tokens\":16000,\"messages\":[{\"role\":\"user\",\"content\":\"Prompt:\\n=======\\nINPUT:\\n----------\\n[\\n
-      \   {\\n        \\\"term\\\": \\\"gato\\\",\\n        \\\"part_of_speech\\\":
-      \\\"nm\\\",\\n        \\\"meaning\\\": \\\"cat\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n\"}],\"model\":\"claude-sonnet-5\",\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"words\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"term\":{\"type\":\"string\"},\"examples\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"spanish\":{\"type\":\"string\"},\"english\":{\"type\":\"string\"}},\"required\":[\"spanish\",\"english\"],\"additionalProperties\":false}}},\"required\":[\"term\",\"examples\"],\"additionalProperties\":false}}},\"required\":[\"words\"],\"additionalProperties\":false}}},\"system\":[{\"type\":\"text\",\"text\":\"You
+      \   {\\n        \\\"id\\\": 0,\\n        \\\"term\\\": \\\"correr\\\",\\n        \\\"part_of_speech\\\":
+      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"to run\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n\"}],\"model\":\"claude-sonnet-5\",\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"words\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"term\":{\"type\":\"string\"},\"examples\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"spanish\":{\"type\":\"string\"},\"english\":{\"type\":\"string\"}},\"required\":[\"spanish\",\"english\"],\"additionalProperties\":false}}},\"required\":[\"id\",\"term\",\"examples\"],\"additionalProperties\":false}}},\"required\":[\"words\"],\"additionalProperties\":false}}},\"system\":[{\"type\":\"text\",\"text\":\"You
       are an expert Spanish teacher and lexicographer, whose specialty is designing
       excellent example sentences that show off the range of uses of a given word.\\n\\nI
-      am going to give you valid JSON representing a list of mappings containing terms
-      (\\\"term\\\") in Spanish and their meaning in English (\\\"meaning\\\"). For
-      each term, I would like you to generate valid JSON containing 4 example sentences
-      in idiomatic Spanish that use the term accompanied by a translation from the
-      original Spanish into English; the example sentences should use the sense of
-      the term that has the meaning specified by the English meaning. If multiple
-      English meanings are provided, provide sentences that sample all the meanings.
-      When the word is a verb, select different moods and tenses in the different
-      sentences. The translations do not need to be word-for-word translations, it
-      is more important that they capture the general spirit of the original Spanish.\\n\\nIn
-      the output, DO NOT modify the value in \\\"term\\\", it is used to match the
-      answers to the inputs. If, for example, it is \\\"forastero/a\\\", do not use
+      am going to give you valid JSON representing a list of mappings containing an
+      identifier (\\\"id\\\"), terms (\\\"term\\\") in Spanish and their meaning in
+      English (\\\"meaning\\\"). For each term, I would like you to generate valid
+      JSON containing 4 example sentences in idiomatic Spanish that use the term accompanied
+      by a translation from the original Spanish into English; the example sentences
+      should use the sense of the term that has the meaning specified by the English
+      meaning. If multiple English meanings are provided, provide sentences that sample
+      all the meanings. When the word is a verb, select different moods and tenses
+      in the different sentences. The translations do not need to be word-for-word
+      translations, it is more important that they capture the general spirit of the
+      original Spanish.\\n\\nIn the output, copy each input's \\\"id\\\" unchanged
+      into its entry; it is used to match the answers to the inputs, since the same
+      term can appear more than once with different meanings. Do not modify the value
+      in \\\"term\\\" either. If, for example, it is \\\"forastero/a\\\", do not use
       \\\"forastero\\\" in the output. If there is a slash in the word, it usually
       is used to show different forms of the word, like \\\"at\xF3nito/a\\\" would
       expand to \\\"un hombre at\xF3nito\\\" or \\\"una mujer at\xF3nita\\\".\\n\\nPlease
@@ -227,18 +234,19 @@ interactions:
       you have come up with the example sentences, look over your work and see if
       you can make the original sentences more creative or interesting.\\n\\nRespond
       with a JSON object whose \\\"words\\\" list holds one entry per input term,
-      in the order the terms were given, each with the \\\"term\\\" exactly as given
-      and its \\\"examples\\\". Include ONLY the JSON, and nothing else: no markdown
-      code block, and no explanation of your choices.\\n\\nExample:\\n========\\nINPUT:\\n----------\\n[\\n
-      \   {\\n        \\\"term\\\": \\\"casa\\\",\\n        \\\"part_of_speech\\\":
-      \\\"nf\\\",\\n        \\\"meaning\\\": \\\"house\\\"\\n    },\\n    {\\n        \\\"term\\\":
-      \\\"rebotar\\\",\\n        \\\"part_of_speech\\\": \\\"vi\\\",\\n        \\\"meaning\\\":
-      \\\"bounce\\\"\\n    },\\n    {\\n        \\\"term\\\": \\\"piso\\\",\\n        \\\"part_of_speech\\\":
-      \\\"nm\\\",\\n        \\\"meaning\\\": \\\"apartment\\\"\\n    },\\n    {\\n
-      \       \\\"term\\\": \\\"mu\xF1eca\\\",\\n        \\\"part_of_speech\\\": \\\"nf\\\",\\n
-      \       \\\"meaning\\\": \\\"doll, wrist\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n{\\\"words\\\":
-      [\\n{\\\"term\\\": \\\"casa\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"La
-      casa de mi abuela est\xE1 en el campo.\\\", \\\"english\\\": \\\"My grandmother's
+      in the order the terms were given, each with the \\\"id\\\" and \\\"term\\\"
+      exactly as given and its \\\"examples\\\". Include ONLY the JSON, and nothing
+      else: no markdown code block, and no explanation of your choices.\\n\\nExample:\\n========\\nINPUT:\\n----------\\n[\\n
+      \   {\\n        \\\"id\\\": 0,\\n        \\\"term\\\": \\\"casa\\\",\\n        \\\"part_of_speech\\\":
+      \\\"nf\\\",\\n        \\\"meaning\\\": \\\"house\\\"\\n    },\\n    {\\n        \\\"id\\\":
+      1,\\n        \\\"term\\\": \\\"rebotar\\\",\\n        \\\"part_of_speech\\\":
+      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"bounce\\\"\\n    },\\n    {\\n        \\\"id\\\":
+      2,\\n        \\\"term\\\": \\\"piso\\\",\\n        \\\"part_of_speech\\\": \\\"nm\\\",\\n
+      \       \\\"meaning\\\": \\\"apartment\\\"\\n    },\\n    {\\n        \\\"id\\\":
+      3,\\n        \\\"term\\\": \\\"mu\xF1eca\\\",\\n        \\\"part_of_speech\\\":
+      \\\"nf\\\",\\n        \\\"meaning\\\": \\\"doll, wrist\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n{\\\"words\\\":
+      [\\n{\\\"id\\\": 0, \\\"term\\\": \\\"casa\\\", \\\"examples\\\": [{\\\"spanish\\\":
+      \\\"La casa de mi abuela est\xE1 en el campo.\\\", \\\"english\\\": \\\"My grandmother's
       house is in the country.\\\"}, {\\\"spanish\\\": \\\"En la Edad Media, las casas
       se constru\xEDan a menudo con bahareque, que consist\xEDa en revestir ramas
       y paja con arcilla, barro y esti\xE9rcol.\\\", \\\"english\\\": \\\"In the Middle
@@ -247,30 +255,31 @@ interactions:
       mi casa este fin de semana.\\\", \\\"english\\\": \\\"I am going to clean my
       house this weekend.\\\"}, {\\\"spanish\\\": \\\"Me gusta pasar tiempo en casa
       de mis padres.\\\", \\\"english\\\": \\\"I like to spend time at my parents'
-      house.\\\"}]},\\n{\\\"term\\\": \\\"rebotar\\\", \\\"examples\\\": [{\\\"spanish\\\":
-      \\\"El bal\xF3n rebota contra el suelo.\\\", \\\"english\\\": \\\"The ball is
-      bouncing on the ground.\\\"}, {\\\"spanish\\\": \\\"\xA1Rebota m\xE1s alto!\\\",
-      \\\"english\\\": \\\"Bounce higher!\\\"}, {\\\"spanish\\\": \\\"Los delfines
-      pueden \xABver\xBB rebotando ondas sonoras en su entorno.\\\", \\\"english\\\":
-      \\\"Dolphins can 'see' by bouncing sound waves off their surroundings.\\\"},
+      house.\\\"}]},\\n{\\\"id\\\": 1, \\\"term\\\": \\\"rebotar\\\", \\\"examples\\\":
+      [{\\\"spanish\\\": \\\"El bal\xF3n rebota contra el suelo.\\\", \\\"english\\\":
+      \\\"The ball is bouncing on the ground.\\\"}, {\\\"spanish\\\": \\\"\xA1Rebota
+      m\xE1s alto!\\\", \\\"english\\\": \\\"Bounce higher!\\\"}, {\\\"spanish\\\":
+      \\\"Los delfines pueden \xABver\xBB rebotando ondas sonoras en su entorno.\\\",
+      \\\"english\\\": \\\"Dolphins can 'see' by bouncing sound waves off their surroundings.\\\"},
       {\\\"spanish\\\": \\\"Rebotaremos la luz en la luna.\\\", \\\"english\\\": \\\"We
-      will bounce the light off the moon.\\\"}]},\\n{\\\"term\\\": \\\"piso\\\", \\\"examples\\\":
-      [{\\\"spanish\\\": \\\"\u2014Vivo en un piso en el centro de la ciudad \u2014dijo
-      Mar\xEDa.\\\", \\\"english\\\": \\\"\\\\\\\"I live in an apartment in the city
-      center,\\\\\\\" said Mar\xEDa.\\\"}, {\\\"spanish\\\": \\\"El piso de mi hermano
-      tiene tres dormitorios.\\\", \\\"english\\\": \\\"My brother's apartment has
-      three bedrooms.\\\"}, {\\\"spanish\\\": \\\"Necesito arreglar el fregadero del
-      piso.\\\", \\\"english\\\": \\\"I need to fix the sink in my apartment.\\\"},
-      {\\\"spanish\\\": \\\"El piso de al lado est\xE1 alquilado.\\\", \\\"english\\\":
-      \\\"The apartment next door is rented.\\\"}]},\\n{\\\"term\\\": \\\"mu\xF1eca\\\",
-      \\\"examples\\\": [{\\\"spanish\\\": \\\"Le regalaron una mu\xF1eca preciosa
-      por su cumplea\xF1os.\\\", \\\"english\\\": \\\"They gave her a pretty doll
-      for her birthday.\\\"}, {\\\"spanish\\\": \\\"Se cay\xF3 patinando y se rompi\xF3
-      la mu\xF1eca.\\\", \\\"english\\\": \\\"She fell when she was skating and broke
-      her wrist.\\\"}, {\\\"spanish\\\": \\\"Se puso una pulsera en la mu\xF1eca izquierda.\\\",
-      \\\"english\\\": \\\"She put the bracelet on her left wrist.\\\"}, {\\\"spanish\\\":
-      \\\"La peque\xF1a Mar\xEDa nunca dorm\xEDa sin su mu\xF1eca favorita.\\\", \\\"english\\\":
-      \\\"Little Maria never slept without her favorite doll.\\\"}]}\\n]}\\n\",\"cache_control\":{\"type\":\"ephemeral\"}}]}"
+      will bounce the light off the moon.\\\"}]},\\n{\\\"id\\\": 2, \\\"term\\\":
+      \\\"piso\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"\u2014Vivo en un piso
+      en el centro de la ciudad \u2014dijo Mar\xEDa.\\\", \\\"english\\\": \\\"\\\\\\\"I
+      live in an apartment in the city center,\\\\\\\" said Mar\xEDa.\\\"}, {\\\"spanish\\\":
+      \\\"El piso de mi hermano tiene tres dormitorios.\\\", \\\"english\\\": \\\"My
+      brother's apartment has three bedrooms.\\\"}, {\\\"spanish\\\": \\\"Necesito
+      arreglar el fregadero del piso.\\\", \\\"english\\\": \\\"I need to fix the
+      sink in my apartment.\\\"}, {\\\"spanish\\\": \\\"El piso de al lado est\xE1
+      alquilado.\\\", \\\"english\\\": \\\"The apartment next door is rented.\\\"}]},\\n{\\\"id\\\":
+      3, \\\"term\\\": \\\"mu\xF1eca\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"Le
+      regalaron una mu\xF1eca preciosa por su cumplea\xF1os.\\\", \\\"english\\\":
+      \\\"They gave her a pretty doll for her birthday.\\\"}, {\\\"spanish\\\": \\\"Se
+      cay\xF3 patinando y se rompi\xF3 la mu\xF1eca.\\\", \\\"english\\\": \\\"She
+      fell when she was skating and broke her wrist.\\\"}, {\\\"spanish\\\": \\\"Se
+      puso una pulsera en la mu\xF1eca izquierda.\\\", \\\"english\\\": \\\"She put
+      the bracelet on her left wrist.\\\"}, {\\\"spanish\\\": \\\"La peque\xF1a Mar\xEDa
+      nunca dorm\xEDa sin su mu\xF1eca favorita.\\\", \\\"english\\\": \\\"Little
+      Maria never slept without her favorite doll.\\\"}]}\\n]}\\n\",\"cache_control\":{\"type\":\"ephemeral\"}}]}"
     headers:
       accept:
       - application/json
@@ -281,13 +290,13 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '6539'
+      - '6881'
       content-type:
       - application/json
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.13.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -297,7 +306,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.13.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -312,43 +321,43 @@ interactions:
     uri: https://api.anthropic.com/v1/messages
   response:
     body:
-      string: "{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011CftpiftmYLzE3jYXy3Wcd\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"words\\\":
-        [{\\\"term\\\": \\\"gato\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"Mi
-        gato duerme m\xE1s de doce horas al d\xEDa.\\\", \\\"english\\\": \\\"My cat
-        sleeps more than twelve hours a day.\\\"}, {\\\"spanish\\\": \\\"\u2014Ten
-        cuidado con el gato, que ara\xF1a si lo molestas \u2014me advirti\xF3 mi abuela.\\\",
-        \\\"english\\\": \\\"\\\\\\\"Be careful with the cat, it scratches if you
-        bother it,\\\\\\\" my grandmother warned me.\\\"}, {\\\"spanish\\\": \\\"Los
-        antiguos egipcios veneraban al gato como un animal sagrado.\\\", \\\"english\\\":
-        \\\"The ancient Egyptians worshipped the cat as a sacred animal.\\\"}, {\\\"spanish\\\":
-        \\\"Cuando era ni\xF1o, adoptamos un gato callejero que se qued\xF3 con nosotros
-        toda la vida.\\\", \\\"english\\\": \\\"When I was a child, we adopted a stray
-        cat that stayed with us for its whole life.\\\"}]}]}\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":76,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":2300,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":291,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"standard\",\"inference_geo\":\"global\"},\"diagnostics\":null}"
+      string: "{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011Cfu3EUdpZX4RybpUVGGVY\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"EvEDCscCCBIYAipA6b9FlPW3cMB/21gLhPUJ/VPRZaCpMw7Ul9wDZ7jclKw0dhzymdNdFdLXBFM0zHN2a3OQsYAbINl0mpgKi1j+pDIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQwYTk5M2IyZS1kNWZlLTRjYWItYjg0ZS0yMmEyY2JhNGVjNDKaAREKD2NsYXVkZS1zb25uZXQtNagB+Iqq1gbCAT0IBRAAGg8BE6sC2ooDTzcFryMEJq0gAjIEEnHPJToEgObcV0IEODMjikoEODMjilAAWgTZBeFWYAJoAXAB2gFgChZwcmVmaXhfYmVmb3JlX2Jsb2NrX3YxEiBkSskeTPW+6sJJYoo3zu8n+/5QfNs+4YVzT0FcfkFJ9yIAMiDCwBPIapyS4i+Wbz2GF3aPi3pEyQKtzAl7+h4JivtOH0gDEgxfSlkWLCSE904SBBkaDJdBWvxGgtoxGbN8ZyIwv1dEclMjEp/rHBumU7254pE6oXV9id6+vOfBcZM8a45yPXT6NHlzLr7A+6csvN6VKlc+poipo4ZMGjqACU/IwhiSkco5VCfl4iEIr4N5EXCUo+agNi5A9SBXgNNcaWf1r0x9OXvw/RtFNWiQdmOJdN3W9NG2yxXogcYcrY+Ck6CKy6X+igRoCYAYAQ==\"},{\"type\":\"text\",\"text\":\"{\\\"words\\\":
+        [{\\\"id\\\": 0, \\\"term\\\": \\\"correr\\\", \\\"examples\\\": [{\\\"spanish\\\":
+        \\\"Todas las ma\xF1anas, Pedro corre cinco kil\xF3metros por el parque.\\\",
+        \\\"english\\\": \\\"Every morning, Pedro runs five kilometers through the
+        park.\\\"}, {\\\"spanish\\\": \\\"Ayer corr\xED tan r\xE1pido que llegu\xE9
+        a casa en diez minutos.\\\", \\\"english\\\": \\\"Yesterday I ran so fast
+        that I got home in ten minutes.\\\"}, {\\\"spanish\\\": \\\"Si oyes la alarma,
+        corre hacia la salida m\xE1s cercana.\\\", \\\"english\\\": \\\"If you hear
+        the alarm, run towards the nearest exit.\\\"}, {\\\"spanish\\\": \\\"Para
+        cuando cumpla cuarenta a\xF1os, espero haber corrido ya varios maratones.\\\",
+        \\\"english\\\": \\\"By the time I turn forty, I hope I will have already
+        run several marathons.\\\"}]}]}\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":84,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":2425,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":305,\"output_tokens_details\":{\"thinking_tokens\":28},\"service_tier\":\"standard\",\"inference_geo\":\"global\"},\"diagnostics\":null}"
     headers:
       anthropic-ratelimit-input-tokens-limit:
       - '5000000'
       anthropic-ratelimit-input-tokens-remaining:
       - '5000000'
       anthropic-ratelimit-input-tokens-reset:
-      - '2026-10-10T15:51:30Z'
+      - '2026-10-10T18:35:36Z'
       anthropic-ratelimit-output-tokens-limit:
       - '1000000'
       anthropic-ratelimit-output-tokens-remaining:
       - '1000000'
       anthropic-ratelimit-output-tokens-reset:
-      - '2026-10-10T15:51:32Z'
+      - '2026-10-10T18:35:39Z'
       anthropic-ratelimit-requests-limit:
       - '5000'
       anthropic-ratelimit-requests-remaining:
       - '4999'
       anthropic-ratelimit-requests-reset:
-      - '2026-10-10T15:51:29Z'
+      - '2026-10-10T18:35:35Z'
       anthropic-ratelimit-tokens-limit:
       - '6000000'
       anthropic-ratelimit-tokens-remaining:
       - '6000000'
       anthropic-ratelimit-tokens-reset:
-      - '2026-10-10T15:51:30Z'
+      - '2026-10-10T18:35:36Z'
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
       cf-cache-status:
@@ -356,21 +365,21 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '1282'
+      - '1966'
       content-security-policy:
       - default-src 'none'; frame-ancestors 'none'
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 15:51:32 GMT
+      - Sat, 10 Oct 2026 18:35:39 GMT
       request-id:
-      - req_011CftpifedSa9d9ksD7nUri
+      - req_011Cfu3EURvsQvBLu2evGRwK
       server:
       - cloudflare
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       traceresponse:
-      - 00-ea5166253315c542191c7a9b1c1f4043-3bee90888b495a87-01
+      - 00-5d871bcfa18b26b8206a61de83714ce3-1e96ceab768f37ce-01
       transfer-encoding:
       - chunked
       vary:

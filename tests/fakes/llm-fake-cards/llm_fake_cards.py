@@ -15,10 +15,14 @@ so tests can exercise the error-handling paths:
 - ``badjson``: the first response to a given prompt is not JSON at all;
   subsequent identical prompts get a valid response.
 - ``badsource``: examples cite a ``source_id`` that does not exist.
-- ``renamed``: the term is reported without its ``/a`` suffix, so it cannot
-  be matched to the input word.
-- ``wordkey``: the response uses a ``"word"`` key instead of ``"term"``
-  (a mistake the real prompt's own examples used to contain).
+- ``renamed``: the term is reported without its ``/a`` suffix; the entry
+  still echoes the word's ``id``, so it can be matched to the input word.
+- ``wordkey``: the first response to a given prompt echoes the term under a
+  ``"word"`` key in place of the ``id`` (a mistake the real prompt's own
+  examples used to contain), so the entry cannot be matched; subsequent
+  identical prompts get a valid response.
+- ``dropped``: the first response to a given prompt leaves the entry out
+  entirely; subsequent identical prompts get a valid response.
 """
 
 import hashlib
@@ -32,8 +36,21 @@ MODEL_ID = "fake-cards"
 
 _INPUT_RE = re.compile(r"INPUT:\n-+\n(?P<json>.*)\n+OUTPUT:\n-+", re.DOTALL)
 
-# Prompts that have already been served an invalid response once.
-_invalid_served: set[str] = set()
+# (trigger, prompt hash) pairs that have already been served an invalid
+# response once.
+_invalid_served: set[tuple[str, str]] = set()
+
+
+def _first_invalid(trigger: str, prompt_text: str) -> bool:
+    """Whether this is the first time ``trigger`` misbehaves for the prompt."""
+    key = (
+        trigger,
+        hashlib.md5(prompt_text.encode("utf-8"), usedforsecurity=False).hexdigest(),
+    )
+    if key in _invalid_served:
+        return False
+    _invalid_served.add(key)
+    return True
 
 
 class _FakeOptions(pydantic.BaseModel):
@@ -116,12 +133,21 @@ def _respond_annotations(entries) -> list[dict]:
     return out
 
 
-def _respond_sentences(entries) -> list[dict]:
+def _respond_sentences(entries, prompt_text: str) -> list[dict]:
+    drop = any("dropped" in entry["term"] for entry in entries) and _first_invalid(
+        "dropped", prompt_text
+    )
+    misname = any("wordkey" in entry["term"] for entry in entries) and _first_invalid(
+        "wordkey", prompt_text
+    )
     out = []
     for entry in entries:
         term = entry["term"]
+        if drop and "dropped" in term:
+            continue
         reported_term = term.split("/")[0] if "renamed" in term else term
         item = {
+            "id": entry["id"],
             "term": reported_term,
             "meaning": entry["meaning"],
             "examples": [
@@ -143,7 +169,8 @@ def _respond_sentences(entries) -> list[dict]:
                 },
             ],
         }
-        if "wordkey" in term:
+        if misname and "wordkey" in term:
+            del item["id"]
             item["word"] = item.pop("term")
         out.append(item)
     return out
@@ -163,18 +190,15 @@ def _generate_response(prompt_text: str) -> str:
         else:
             flat_terms.append(entry["term"])
 
-    if any("badjson" in term for term in flat_terms):
-        key = hashlib.md5(
-            prompt_text.encode("utf-8"), usedforsecurity=False
-        ).hexdigest()
-        if key not in _invalid_served:
-            _invalid_served.add(key)
-            return "I'm sorry, I can't produce JSON today."
+    if any("badjson" in term for term in flat_terms) and _first_invalid(
+        "badjson", prompt_text
+    ):
+        return "I'm sorry, I can't produce JSON today."
 
     if entries and "highlights" in entries[0]:
         response = _respond_annotations(entries)
     else:
-        response = _respond_sentences(entries)
+        response = _respond_sentences(entries, prompt_text)
 
     text = json.dumps({"words": response}, ensure_ascii=False, indent=2)
     if any("fence" in term for term in flat_terms):
