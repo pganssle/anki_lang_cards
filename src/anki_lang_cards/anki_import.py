@@ -887,7 +887,7 @@ def _load_anki_word(row: Sequence[str]) -> types.Word:
         word=word,
         part_of_speech=part_of_speech,
         meaning=meaning,
-        article=None,
+        article=article or None,
         sentences=load_sentences(
             spanish_sentence or None,
             english_sentence or None,
