@@ -18,7 +18,7 @@ import struct
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
-from typing import Final, NamedTuple
+from typing import Any, Final, NamedTuple
 
 import attrs
 import pytest
@@ -738,6 +738,86 @@ def test_main_exits_3_on_an_unanswered_duplicate(
     pending = json.loads((workdir / "output" / "merge_candidates.json").read_text())
     assert len(pending) == 1
     assert "existente" in pending[0]["words"]
+
+
+def _answer_pending(workdir: pathlib.Path, **answer: Any) -> pathlib.Path:
+    """Answer every pending group the same way, as a harness would."""
+    pending_path = workdir / "output" / "merge_candidates.json"
+    pending = json.loads(pending_path.read_text())
+    for entry in pending:
+        entry.update(answer)
+    pending_path.write_text(json.dumps(pending, ensure_ascii=False))
+    return pending_path
+
+
+def test_main_folds_in_an_answered_decision_file(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """The headless loop: exit 3, answer the pending file, re-run with it."""
+    workdir = tmp_path_factory.mktemp("decision-file")
+    inputs = _conflicting_inputs(workdir)
+    first = _run_main_raw(workdir, inputs, dictionary_paths, ("--no-ui",))
+    assert first.returncode == 3, first.stderr
+    assert "--decision-file output/merge_candidates.json" in first.stdout
+
+    pending_path = _answer_pending(workdir, disposition="merge")
+    second = _run_main_raw(
+        workdir,
+        inputs,
+        dictionary_paths,
+        ("--no-ui", "--decision-file", str(pending_path)),
+    )
+
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert "Folded in 1 new answers" in second.stdout
+    words = types.Word.words_from_csv(workdir / "output" / "output.csv")
+    assert [word.word for word in words].count("existente") == 1
+
+    # The answer is in the cache now, so later runs need no file at all.
+    third = _run_main_raw(workdir, inputs, dictionary_paths, ("--no-ui",))
+    assert third.returncode == 0, third.stdout + third.stderr
+
+
+def test_main_leaves_review_groups_pending(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """A group left as "review" is not an answer: the run stops again."""
+    workdir = tmp_path_factory.mktemp("still-undecided")
+    inputs = _conflicting_inputs(workdir)
+    _run_main_raw(workdir, inputs, dictionary_paths, ("--no-ui",))
+
+    pending_path = _answer_pending(workdir, disposition="review")
+    result = _run_main_raw(
+        workdir,
+        inputs,
+        dictionary_paths,
+        ("--no-ui", "--decision-file", str(pending_path)),
+    )
+
+    assert result.returncode == 3, result.stdout + result.stderr
+    assert "Folded in 0 new answers" in result.stdout
+    assert len(json.loads(pending_path.read_text())) == 1
+
+
+def test_main_rejects_a_broken_decision_file(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """Every problem in the file is named, and nothing is recorded."""
+    workdir = tmp_path_factory.mktemp("broken-decision-file")
+    inputs = _conflicting_inputs(workdir)
+    _run_main_raw(workdir, inputs, dictionary_paths, ("--no-ui",))
+
+    pending_path = _answer_pending(workdir, disposition="split")
+    result = _run_main_raw(
+        workdir,
+        inputs,
+        dictionary_paths,
+        ("--no-ui", "--decision-file", str(pending_path)),
+    )
+
+    assert result.returncode == 2
+    assert "a split needs at least two replacement rows" in result.stderr
+    assert not (workdir / ".cache" / "merges" / "decisions.json").exists()
 
 
 def test_main_replays_a_recorded_answer_headlessly(

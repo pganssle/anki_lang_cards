@@ -84,8 +84,9 @@ usage: __main__.py [-h] [--inputs INPUTS] [--output OUTPUT] [--model-name MODEL_
                    [--start-rank-at START_RANK_AT] [--max-retries MAX_RETRIES] [--max-sentences MAX_SENTENCES]
                    [--exported-deck EXPORTED_DECK] [--diff-output DIFF_OUTPUT]
                    [--conflict-cache-path CONFLICT_CACHE_PATH] [--decision-cache DECISION_CACHE]
-                   [--note-cache NOTE_CACHE] [--pending-file PENDING_FILE] [--superseded-output SUPERSEDED_OUTPUT]
-                   [--no-ui] [--deck-name DECK_NAME] [--csv-header] [--limit LIMIT]
+                   [--note-cache NOTE_CACHE] [--pending-file PENDING_FILE] [--decision-file DECISION_FILE]
+                   [--superseded-output SUPERSEDED_OUTPUT] [--no-ui] [--deck-name DECK_NAME] [--csv-header]
+                   [--limit LIMIT]
 
 Anki Language Card Creator
 
@@ -114,6 +115,10 @@ options:
                         Fetched Anki notes, reused while their mod times are unchanged.
   --pending-file PENDING_FILE
                         Where unanswered duplicate groups are written when no UI can ask about them (exit code 3).
+  --decision-file DECISION_FILE
+                        An answered pending file (see --pending-file) to fold into the decision cache before
+                        duplicates are resolved. Groups still marked "review" stay unanswered and are written back to
+                        the pending file.
   --superseded-output SUPERSEDED_OUTPUT
                         Where to list existing notes a merge replaced, which importing cannot delete; written only
                         when there are any.

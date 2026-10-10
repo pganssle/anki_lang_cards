@@ -208,6 +208,14 @@ with an existing card, a terminal UI pops up to let you resolve the merge;
 those decisions are cached in `.cache/merges/merged.json`, so a re-run
 doesn't ask again (`--conflict-cache-behavior` controls this).
 
+Without a terminal UI (or with `--no-ui`), the run instead writes the
+unanswered groups to `output/merge_candidates.json` and exits with status 3.
+Answer them by editing that file — set each entry's `"disposition"` to
+`merge`, `keep-separate` or `split` (a merge with no `"replacements"`
+accepts the proposed note), or leave it as `review` to decide later — and
+re-run with `--decision-file output/merge_candidates.json`. Answers go into
+the same decision cache as the UI's, so they are never asked again.
+
 Two files come out:
 
 - `output/output.csv` — everything;
