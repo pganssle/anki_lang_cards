@@ -1,4 +1,10 @@
-"""Choosing a backend and its features from the config and command line."""
+"""Model selection: which backend serves a run, and with which features.
+
+The pipelines' command-line tools share the options defined here and call
+:func:`make_runner` to get a query runner for whatever the arguments and
+config select. Backends are found through the :mod:`.backends` registry, so
+nothing here knows about any particular one.
+"""
 
 import argparse
 import sys
@@ -7,18 +13,8 @@ from typing import Final
 
 import attrs
 
-from .. import caches, config
-from . import anthropic_sdk, base, llm_fallback, runner, tgw
-
-DEDICATED_BACKENDS: Final[Mapping[str, type[base.Backend]]] = {
-    "anthropic": anthropic_sdk.AnthropicBackend,
-    "tgw": tgw.TGWBackend,
-}
-"""Backends that claim model specs starting with ``<service>/``."""
-
-FALLBACK_BACKEND: Final[type[base.Backend]] = llm_fallback.LLMBackend
-
-SERVICES: Final[Sequence[str]] = (*DEDICATED_BACKENDS, FALLBACK_BACKEND.service)
+from . import backends, caches, config, runner
+from .backends import base
 
 _FEATURE_DESCRIPTIONS: Final[Mapping[base.Feature, str]] = {
     base.Feature.BATCH: "Batching",
@@ -39,6 +35,14 @@ class ModelNotConfiguredError(SelectionError):
     """No model was named on the command line or in the config."""
 
 
+class UnknownServiceError(SelectionError):
+    """No backend is registered under the requested service name."""
+
+
+class BackendConfigurationError(SelectionError):
+    """The selected backend needs something the config file lacks."""
+
+
 class FeatureUnavailableError(SelectionError):
     """A feature the user required is unsupported, and they declined to go on."""
 
@@ -54,22 +58,32 @@ class ResolvedModel:
 
     @property
     def backend_class(self) -> type[base.Backend]:
-        return DEDICATED_BACKENDS.get(self.service, FALLBACK_BACKEND)
+        return backends.load(self.service)
+
+
+def _load(service: str) -> type[base.Backend]:
+    try:
+        return backends.load(service)
+    except backends.UnknownBackendError as e:
+        raise UnknownServiceError(str(e)) from e
 
 
 def resolve(spec: str, service: str | None = None) -> ResolvedModel:
     """Work out which backend serves a model spec.
 
+    A spec written ``<service>/<model>`` goes to that service's backend if
+    the backend claims its prefix; anything else goes to the fallback.
+
     :param service: Force a particular backend, e.g. ``"llm"`` to reach a
         Claude model through the ``llm`` library rather than the SDK.
+    :raises UnknownServiceError: If ``service`` names no backend.
     """
     if service is None:
         prefix, slash, _ = spec.partition("/")
-        service = prefix if slash and prefix in DEDICATED_BACKENDS else "llm"
-    elif service not in SERVICES:
-        raise ValueError(f"Unknown model service {service!r}; choose from {SERVICES}")
+        claimed = slash and prefix in backends.names() and _load(prefix).claims_prefix
+        service = prefix if claimed else backends.FALLBACK
 
-    if service in DEDICATED_BACKENDS:
+    if _load(service).claims_prefix:
         model_name = spec.removeprefix(f"{service}/")
     else:
         model_name = spec
@@ -135,15 +149,15 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         "--model",
         type=str,
         default=None,
-        help="The model to use, e.g. 'anthropic/claude-sonnet-5'. Models "
-        "prefixed with 'anthropic/' or 'tgw/' use a dedicated backend; "
-        "anything else goes through the `llm` library and its plugins. "
+        help="The model to use, e.g. 'anthropic/claude-sonnet-5'. A model "
+        "prefixed with a backend's name goes to that backend if it takes "
+        f"prefixes; anything else goes to the {backends.FALLBACK!r} backend. "
         "Defaults to [models] default_model from the config; one of the two "
         "is required.",
     )
     group.add_argument(
         "--model-service",
-        choices=SERVICES,
+        choices=backends.names(),
         default=None,
         help="Force a backend instead of choosing one from the model name.",
     )
@@ -206,8 +220,8 @@ def make_runner(
 ) -> tuple[ResolvedModel, runner.QueryRunner]:
     """Build the runner for the model the CLI arguments and config select.
 
-    :raises ModelNotConfiguredError: See :func:`model_spec`.
-    :raises FeatureUnavailableError: See :func:`choose_features`.
+    :raises SelectionError: If the arguments and config do not settle on a
+        usable model and backend.
     """
     resolved = resolve(model_spec(args, conf), args.model_service)
     backend_class = resolved.backend_class
@@ -226,7 +240,10 @@ def make_runner(
         ),
         confirm=confirm,
     )
-    backend = _make_backend(resolved, conf, features)
+    try:
+        backend = backend_class.from_config(resolved.model_name, conf, features)
+    except base.ConfigurationError as e:
+        raise BackendConfigurationError(str(e)) from e
     query_cacher = caches.QueryCacher(
         cache_type=cache_type,
         model_name=resolved.spec,
@@ -238,39 +255,3 @@ def make_runner(
         batch=base.Feature.BATCH in features,
         max_concurrency=args.max_simultaneous_queries,
     )
-
-
-def _make_backend(
-    resolved: ResolvedModel,
-    conf: config.Config,
-    features: frozenset[base.Feature],
-) -> base.Backend:
-    match resolved.service:
-        case "anthropic":
-            anthropic_conf = conf.anthropic or config.AnthropicConfig()
-            return anthropic_sdk.AnthropicBackend(
-                resolved.model_name,
-                api_key=anthropic_conf.api_key,
-                base_url=anthropic_conf.base_url,
-                max_tokens=anthropic_conf.max_tokens
-                or anthropic_sdk.DEFAULT_MAX_TOKENS,
-                effort=anthropic_conf.effort,
-                prompt_caching=base.Feature.PROMPT_CACHING in features,
-            )
-        case "tgw":
-            if conf.tgw is None:
-                raise ValueError(
-                    "A tgw model was selected, but there is no [tgw] config."
-                )
-            return tgw.TGWBackend(
-                resolved.model_name,
-                api_base_url=conf.tgw.api_base_url,
-                max_connections=conf.tgw.max_connections,
-                request_timeout=conf.tgw.request_timeout,
-                max_tokens=conf.tgw.max_tokens,
-            )
-        case _:
-            keys = {}
-            if conf.anthropic is not None and conf.anthropic.api_key is not None:
-                keys["anthropic"] = conf.anthropic.api_key
-            return llm_fallback.LLMBackend(resolved.model_name, keys=keys)

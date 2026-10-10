@@ -1,13 +1,58 @@
-"""Running many requests against a backend through the response cache."""
+"""The query runner, which answers requests through the response cache.
+
+Cache misses go to a backend, either as one batch job or as concurrent
+requests. Backends only appear here through the protocols in
+:mod:`.backends.base`.
+"""
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Sequence
+import json
+import pathlib
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from typing import Self, cast
 
 import attrs
 
-from .. import caches
-from . import base
+from . import caches
+from .backends import base
+
+
+@attrs.frozen
+class BatchJournal:
+    """On-disk record of submitted batch jobs whose results are uncollected.
+
+    One small JSON file per job lives in ``directory``. A file is written
+    when a job is submitted and removed once its responses are in the
+    response cache, so a run that dies in between can pick the job back up
+    instead of paying for the same requests twice.
+    """
+
+    directory: pathlib.Path
+
+    def pending(self) -> Mapping[str, frozenset[str]]:
+        """Map each uncollected job's ID to its request keys."""
+        if not self.directory.exists():
+            return {}
+        out: dict[str, frozenset[str]] = {}
+        for path in sorted(self.directory.glob("*.json")):
+            record = json.loads(path.read_text(encoding="utf-8"))
+            out[record["job_id"]] = frozenset(record["request_keys"])
+        return out
+
+    def record(self, job_id: str, request_keys: frozenset[str]) -> None:
+        self.directory.mkdir(parents=True, exist_ok=True)
+        self._path(job_id).write_text(
+            json.dumps(
+                {"job_id": job_id, "request_keys": sorted(request_keys)}, indent=2
+            ),
+            encoding="utf-8",
+        )
+
+    def discard(self, job_id: str) -> None:
+        self._path(job_id).unlink(missing_ok=True)
+
+    def _path(self, job_id: str) -> pathlib.Path:
+        return self.directory / f"{job_id}.json"
 
 
 @attrs.frozen
@@ -48,8 +93,8 @@ class QueryRunner:
         self.max_concurrency = max_concurrency
 
     @property
-    def journal(self) -> base.BatchJournal:
-        return base.BatchJournal(self.cacher.cache_dir / "batch-jobs")
+    def journal(self) -> BatchJournal:
+        return BatchJournal(self.cacher.cache_dir / "batch-jobs")
 
     async def __aenter__(self) -> Self:
         await self.backend.__aenter__()

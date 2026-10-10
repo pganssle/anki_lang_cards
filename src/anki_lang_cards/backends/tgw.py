@@ -1,4 +1,8 @@
-"""Models served by Text Generation WebUI's OpenAI-style completions API."""
+"""Backend for models served by Text Generation WebUI.
+
+It talks to TGW's OpenAI-style completions API. Model specs written
+``tgw/<model>`` go here.
+"""
 
 import urllib.parse
 from collections.abc import Mapping
@@ -8,7 +12,7 @@ import aiohttp
 import backoff
 
 from .. import _types as types
-from .. import caches
+from .. import caches, config
 from . import base
 
 
@@ -21,6 +25,7 @@ def _backoff_logger(details: Mapping[str, Any]) -> None:
 
 class TGWBackend:
     service: ClassVar[str] = "tgw"
+    claims_prefix: ClassVar[bool] = True
     features: ClassVar[frozenset[base.Feature]] = frozenset()
     default_words_per_prompt: ClassVar[int] = 2
 
@@ -40,6 +45,25 @@ class TGWBackend:
             "max_tokens": max_tokens,
             "request_timeout": request_timeout,
         }
+
+    @classmethod
+    def from_config(
+        cls,
+        model_name: str,
+        conf: config.Config,
+        features: frozenset[base.Feature],
+    ) -> Self:
+        if conf.tgw is None:
+            raise base.ConfigurationError(
+                "A tgw model was selected, but there is no [tgw] config."
+            )
+        return cls(
+            model_name,
+            api_base_url=conf.tgw.api_base_url,
+            max_connections=conf.tgw.max_connections,
+            request_timeout=conf.tgw.request_timeout,
+            max_tokens=conf.tgw.max_tokens,
+        )
 
     async def __aenter__(self) -> Self:
         self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1200))

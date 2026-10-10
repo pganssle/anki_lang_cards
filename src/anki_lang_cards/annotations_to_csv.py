@@ -13,7 +13,15 @@ from typing import Any, Literal, TypeAlias, TypedDict, cast
 import attrs
 import tqdm
 
-from . import _types, caches, config, dictionary_entries, prompts
+from . import (
+    _types,
+    caches,
+    config,
+    dictionary_entries,
+    model_selection,
+    prompts,
+    runner,
+)
 from ._types import (
     BookCitation,
     CombinedAnnotation,
@@ -22,7 +30,7 @@ from ._types import (
     Sentence,
     Word,
 )
-from .backends import base, runner, selection
+from .backends import base
 
 WordMap: TypeAlias = Mapping[str, Sequence[dictionary_entries.DictionaryEntry]]
 
@@ -521,7 +529,7 @@ async def main() -> None:
         default=Path("/usr/share/hunspell/es_ES.dic"),
         help="Path to the hunspell dictionary for headword stemming",
     )
-    selection.add_arguments(parser)
+    model_selection.add_arguments(parser)
     parser.add_argument(
         "--max-retries",
         type=int,
@@ -591,10 +599,10 @@ async def main() -> None:
 
     conf = config.Config.from_file(args.config)
     try:
-        model, query_runner = selection.make_runner(
+        model, query_runner = model_selection.make_runner(
             args, conf, caches.CacheTypes.ANNOTATIONS
         )
-    except selection.SelectionError as e:
+    except model_selection.SelectionError as e:
         parser.exit(2, f"error: {e}\n")
 
     dictionaries: Sequence[Path] = args.dictionary

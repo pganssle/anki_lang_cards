@@ -1,14 +1,12 @@
-"""The interface every model backend implements."""
+"""The interface model backends implement, and the requests they answer."""
 
 import enum
-import json
-import pathlib
 from collections.abc import Mapping, Sequence
 from typing import ClassVar, Protocol, Self
 
 import attrs
 
-from .. import caches
+from .. import caches, config
 
 
 class Feature(enum.StrEnum):
@@ -34,6 +32,10 @@ class Request:
         return caches.prompt_hash(self.prompt, self.system_prompt)
 
 
+class ConfigurationError(ValueError):
+    """The config file lacks something a backend needs."""
+
+
 class IncompleteResponseError(ValueError):
     """The model stopped before finishing, e.g. on its output token limit.
 
@@ -48,6 +50,13 @@ class Backend(Protocol):
     service: ClassVar[str]
     """The name used to select this backend and to key its response cache."""
 
+    claims_prefix: ClassVar[bool]
+    """Whether model specs written ``<service>/<model>`` go to this backend.
+
+    A backend that routes to many providers itself, like the ``llm``
+    fallback, leaves this off: its model names already contain slashes.
+    """
+
     features: ClassVar[frozenset[Feature]]
 
     default_words_per_prompt: ClassVar[int]
@@ -58,6 +67,18 @@ class Backend(Protocol):
 
     max_concurrency: int | None
     """A cap on simultaneous requests the endpoint can take, if it has one."""
+
+    @classmethod
+    def from_config(
+        cls, model_name: str, conf: config.Config, features: frozenset[Feature]
+    ) -> Self:
+        """Build the backend for a model from the config file's settings.
+
+        :param features: The optional features to use; a subset of
+            :attr:`features`.
+        :raises ConfigurationError: If the config lacks something required.
+        """
+        ...
 
     async def __aenter__(self) -> Self: ...
 
@@ -112,41 +133,3 @@ class BatchBackend(Backend, Protocol):
             soon as it is submitted, so it can be resumed if this run dies.
         """
         ...
-
-
-@attrs.frozen
-class BatchJournal:
-    """On-disk record of submitted batch jobs whose results are uncollected.
-
-    One small JSON file per job lives in ``directory``. A file is written
-    when a job is submitted and removed once its responses are in the
-    response cache, so a run that dies in between can pick the job back up
-    instead of paying for the same requests twice.
-    """
-
-    directory: pathlib.Path
-
-    def pending(self) -> Mapping[str, frozenset[str]]:
-        """Map each uncollected job's ID to its request keys."""
-        if not self.directory.exists():
-            return {}
-        out: dict[str, frozenset[str]] = {}
-        for path in sorted(self.directory.glob("*.json")):
-            record = json.loads(path.read_text(encoding="utf-8"))
-            out[record["job_id"]] = frozenset(record["request_keys"])
-        return out
-
-    def record(self, job_id: str, request_keys: frozenset[str]) -> None:
-        self.directory.mkdir(parents=True, exist_ok=True)
-        self._path(job_id).write_text(
-            json.dumps(
-                {"job_id": job_id, "request_keys": sorted(request_keys)}, indent=2
-            ),
-            encoding="utf-8",
-        )
-
-    def discard(self, job_id: str) -> None:
-        self._path(job_id).unlink(missing_ok=True)
-
-    def _path(self, job_id: str) -> pathlib.Path:
-        return self.directory / f"{job_id}.json"

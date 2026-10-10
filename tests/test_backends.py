@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import importlib.metadata
 import pathlib
 from collections.abc import Callable, Mapping, Sequence
 from typing import ClassVar, Self
@@ -9,8 +10,8 @@ from typing import ClassVar, Self
 import attrs
 import pytest
 
-from anki_lang_cards import caches, config
-from anki_lang_cards.backends import base, runner, selection, tgw
+from anki_lang_cards import backends, caches, config, model_selection, runner
+from anki_lang_cards.backends import base, llm_fallback, tgw
 
 #####
 # Resolving model specs
@@ -31,7 +32,7 @@ from anki_lang_cards.backends import base, runner, selection, tgw
 def test_resolve(
     spec: str, service: str | None, expected_service: str, expected_model: str
 ) -> None:
-    resolved = selection.resolve(spec, service)
+    resolved = model_selection.resolve(spec, service)
 
     assert resolved.spec == spec
     assert resolved.service == expected_service
@@ -40,8 +41,8 @@ def test_resolve(
 
 
 def test_resolve_unknown_service() -> None:
-    with pytest.raises(ValueError, match="Unknown model service"):
-        selection.resolve("gpt-5", "openai")
+    with pytest.raises(model_selection.UnknownServiceError, match="choose from"):
+        model_selection.resolve("gpt-5", "openai")
 
 
 #####
@@ -70,8 +71,8 @@ def test_choose_features_without_asking(
     available: frozenset[base.Feature],
     expected: frozenset[base.Feature],
 ) -> None:
-    chosen = selection.choose_features(
-        [selection.FeatureRequest(BATCH, requested, "--batch")],
+    chosen = model_selection.choose_features(
+        [model_selection.FeatureRequest(BATCH, requested, "--batch")],
         available,
         backend_description="the test backend",
         confirm=_never_asked,
@@ -86,10 +87,10 @@ def test_required_feature_unavailable_accepted() -> None:
         questions.append(question)
         return True
 
-    chosen = selection.choose_features(
+    chosen = model_selection.choose_features(
         [
-            selection.FeatureRequest(BATCH, True, "batch = true in [models]"),
-            selection.FeatureRequest(CACHING, None),
+            model_selection.FeatureRequest(BATCH, True, "batch = true in [models]"),
+            model_selection.FeatureRequest(CACHING, None),
         ],
         frozenset({CACHING}),
         backend_description="the test backend",
@@ -109,9 +110,9 @@ def test_required_feature_unavailable_accepted() -> None:
 def test_required_feature_unavailable_declined(
     feature: base.Feature, flag: str
 ) -> None:
-    with pytest.raises(selection.FeatureUnavailableError, match=flag):
-        selection.choose_features(
-            [selection.FeatureRequest(feature, True, "a flag")],
+    with pytest.raises(model_selection.FeatureUnavailableError, match=flag):
+        model_selection.choose_features(
+            [model_selection.FeatureRequest(feature, True, "a flag")],
             frozenset(),
             backend_description="the test backend",
             confirm=lambda question: False,
@@ -122,7 +123,7 @@ def test_confirm_without_terminal_declines(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr("sys.stdin.isatty", lambda: False)
     monkeypatch.setattr("builtins.input", _never_asked)
 
-    assert not selection.confirm_on_terminal("Continue?")
+    assert not model_selection.confirm_on_terminal("Continue?")
 
 
 @pytest.mark.parametrize(
@@ -135,7 +136,7 @@ def test_confirm_on_terminal(
     monkeypatch.setattr("sys.stdin.isatty", lambda: True)
     monkeypatch.setattr("builtins.input", lambda prompt: answer)
 
-    assert selection.confirm_on_terminal("Continue?") is expected
+    assert model_selection.confirm_on_terminal("Continue?") is expected
 
 
 #####
@@ -144,7 +145,7 @@ def test_confirm_on_terminal(
 
 def _parse(*argv: str) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    selection.add_arguments(parser)
+    model_selection.add_arguments(parser)
     return parser.parse_args(argv)
 
 
@@ -191,14 +192,14 @@ TGW_CONFIG = config.TGWConfig(api_base_url="http://localhost:5000/v1/")
 def test_model_spec_precedence(
     argv: Sequence[str], conf: config.Config, expected: str
 ) -> None:
-    assert selection.model_spec(_parse(*argv), conf) == expected
+    assert model_selection.model_spec(_parse(*argv), conf) == expected
 
 
 @pytest.mark.parametrize("argv", [(), ("--model-service", "tgw")])
 def test_model_spec_requires_a_model(argv: Sequence[str]) -> None:
     """There is no built-in default model, for any backend."""
-    with pytest.raises(selection.ModelNotConfiguredError, match="default_model"):
-        selection.model_spec(_parse(*argv), _config(tgw_config=TGW_CONFIG))
+    with pytest.raises(model_selection.ModelNotConfiguredError, match="default_model"):
+        model_selection.model_spec(_parse(*argv), _config(tgw_config=TGW_CONFIG))
 
 
 @pytest.mark.parametrize(
@@ -225,7 +226,7 @@ def test_make_runner_anthropic_features(
         anthropic=config.AnthropicConfig(api_key="key"),
     )
 
-    resolved, query_runner = selection.make_runner(
+    resolved, query_runner = model_selection.make_runner(
         _parse(*argv), conf, caches.CacheTypes.SENTENCES, confirm=_never_asked
     )
 
@@ -243,7 +244,7 @@ def test_make_runner_anthropic_features(
 
 def test_make_runner_without_batching_by_default() -> None:
     """An unrequested feature the backend lacks is silently left off."""
-    resolved, query_runner = selection.make_runner(
+    resolved, query_runner = model_selection.make_runner(
         _parse("--model", "tgw/llama.gguf"),
         _config(tgw_config=TGW_CONFIG),
         caches.CacheTypes.SENTENCES,
@@ -265,20 +266,20 @@ def test_make_runner_required_batching_unavailable(accept: bool) -> None:
         return accept
 
     if accept:
-        _, query_runner = selection.make_runner(
+        _, query_runner = model_selection.make_runner(
             args, conf, caches.CacheTypes.SENTENCES, confirm=confirm
         )
         assert not query_runner.batch
     else:
-        with pytest.raises(selection.FeatureUnavailableError, match="--no-batch"):
-            selection.make_runner(
+        with pytest.raises(model_selection.FeatureUnavailableError, match="--no-batch"):
+            model_selection.make_runner(
                 args, conf, caches.CacheTypes.SENTENCES, confirm=confirm
             )
 
 
 def test_make_runner_tgw_without_config() -> None:
-    with pytest.raises(ValueError, match=r"\[tgw\]"):
-        selection.make_runner(
+    with pytest.raises(model_selection.BackendConfigurationError, match=r"\[tgw\]"):
+        model_selection.make_runner(
             _parse("--model", "tgw/llama.gguf"),
             _config(),
             caches.CacheTypes.SENTENCES,
@@ -619,12 +620,12 @@ def test_retries_respect_skip_cache(tmp_path: pathlib.Path) -> None:
 
 
 def test_journal_roundtrip(tmp_path: pathlib.Path) -> None:
-    journal = base.BatchJournal(tmp_path / "jobs")
+    journal = runner.BatchJournal(tmp_path / "jobs")
     assert journal.pending() == {}
 
     journal.record("job-a", frozenset({"k1", "k2"}))
     journal.record("job-b", frozenset({"k3"}))
-    assert base.BatchJournal(tmp_path / "jobs").pending() == {
+    assert runner.BatchJournal(tmp_path / "jobs").pending() == {
         "job-a": frozenset({"k1", "k2"}),
         "job-b": frozenset({"k3"}),
     }
@@ -641,3 +642,116 @@ def test_request_key_matches_cache_filename(tmp_path: pathlib.Path) -> None:
     assert cacher.llm_cache_file_loc(request.prompt, request.system_prompt) == (
         cacher.cache_dir / f"{request.key}.json"
     )
+
+
+#####
+# The backend registry
+
+
+@pytest.mark.parametrize(
+    ("name", "claims_prefix"), [("anthropic", True), ("tgw", True), ("llm", False)]
+)
+def test_built_in_backends(name: str, claims_prefix: bool) -> None:
+    backend = backends.load(name)
+
+    assert backend.service == name
+    assert backend.claims_prefix is claims_prefix
+    assert name in backends.names()
+
+
+def test_unknown_backend() -> None:
+    with pytest.raises(backends.UnknownBackendError, match="choose from anthropic"):
+        backends.load("openai")
+
+
+class PluginBackend(FakeBackend):
+    """A backend another package might register."""
+
+    service: ClassVar[str] = "plugin"
+    claims_prefix: ClassVar[bool] = True
+
+    @classmethod
+    def from_config(
+        cls, model_name: str, conf: config.Config, features: frozenset[base.Feature]
+    ) -> Self:
+        backend = cls()
+        backend.model_name = model_name
+        return backend
+
+
+@pytest.fixture
+def plugin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Register PluginBackend, and a plugin trying to replace a built-in."""
+    entry_points = (
+        importlib.metadata.EntryPoint(
+            "plugin", f"{__name__}:PluginBackend", backends.ENTRY_POINT_GROUP
+        ),
+        importlib.metadata.EntryPoint(
+            "anthropic", f"{__name__}:PluginBackend", backends.ENTRY_POINT_GROUP
+        ),
+    )
+
+    def fake_entry_points(*, group: str) -> Sequence[importlib.metadata.EntryPoint]:
+        return entry_points if group == backends.ENTRY_POINT_GROUP else ()
+
+    monkeypatch.setattr(importlib.metadata, "entry_points", fake_entry_points)
+
+
+@pytest.mark.usefixtures("plugin")
+def test_plugin_backends_are_found() -> None:
+    assert backends.names() == ("anthropic", "tgw", "llm", "plugin")
+    assert backends.load("plugin") is PluginBackend
+    # A plugin cannot replace a built-in backend.
+    assert backends.load("anthropic").__name__ == "AnthropicBackend"
+
+    resolved = model_selection.resolve("plugin/some-model")
+
+    assert resolved.service == "plugin"
+    assert resolved.model_name == "some-model"
+
+
+@pytest.mark.usefixtures("plugin")
+def test_make_runner_with_a_plugin_backend() -> None:
+    _, query_runner = model_selection.make_runner(
+        _parse("--model", "plugin/some-model"),
+        _config(),
+        caches.CacheTypes.SENTENCES,
+        confirm=_never_asked,
+    )
+
+    assert isinstance(query_runner.backend, PluginBackend)
+    assert query_runner.backend.model_name == "some-model"
+
+
+def test_anthropic_from_config() -> None:
+    conf = _config(
+        anthropic=config.AnthropicConfig(
+            api_key="key", effort="low", max_tokens=1234, base_url="http://x"
+        )
+    )
+
+    backend = backends.load("anthropic").from_config(
+        "claude-sonnet-5", conf, frozenset()
+    )
+
+    assert backend.query_params() == {
+        "max_tokens": 1234,
+        "effort": "low",
+        "prompt_caching": False,
+    }
+
+
+def test_llm_from_config_passes_the_anthropic_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Model:
+        needs_key = "anthropic"
+        key: str | None = None
+
+    model = Model()
+    monkeypatch.setattr(llm_fallback.llm, "get_async_model", lambda name: model)
+    conf = _config(anthropic=config.AnthropicConfig(api_key="secret"))
+
+    backends.load("llm").from_config("anthropic/claude-sonnet-5", conf, frozenset())
+
+    assert model.key == "secret"

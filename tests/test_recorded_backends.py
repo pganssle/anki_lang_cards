@@ -22,8 +22,8 @@ import attrs
 import pytest
 
 from anki_lang_cards import _types as types
-from anki_lang_cards import annotations_to_csv, caches, config, prompts, query
-from anki_lang_cards.backends import anthropic_sdk, base, runner
+from anki_lang_cards import annotations_to_csv, caches, config, prompts, query, runner
+from anki_lang_cards.backends import anthropic_sdk, base
 
 REPO_CONFIG: Final = pathlib.Path(__file__).parent.parent / "config.toml"
 

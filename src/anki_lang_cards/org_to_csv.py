@@ -12,8 +12,8 @@ from typing import Final
 
 import attrs
 
-from . import caches, config, prompts
-from .backends import base, runner, selection
+from . import caches, config, model_selection, prompts, runner
+from .backends import base
 
 CACHE_LOC: Final[pathlib.Path] = pathlib.Path(".cache")
 
@@ -153,7 +153,7 @@ async def main() -> None:
         default=pathlib.Path("input/words_from_org_mode.csv"),
         help="Path to an output CSV file",
     )
-    selection.add_arguments(parser)
+    model_selection.add_arguments(parser)
     parser.add_argument(
         "--config",
         type=pathlib.Path,
@@ -186,10 +186,10 @@ async def main() -> None:
         # A single interactive request gains nothing from batching.
         args.batch = False
         try:
-            _, query_runner = selection.make_runner(
+            _, query_runner = model_selection.make_runner(
                 args, conf, caches.CacheTypes.RESPONSES
             )
-        except selection.SelectionError as e:
+        except model_selection.SelectionError as e:
             parser.exit(2, f"error: {e}\n")
 
         # Read piped input

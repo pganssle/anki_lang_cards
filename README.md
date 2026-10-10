@@ -127,9 +127,9 @@ options:
 
 model selection:
   --model-name MODEL_NAME, --model MODEL_NAME
-                        The model to use, e.g. 'anthropic/claude-sonnet-5'. Models prefixed with 'anthropic/' or
-                        'tgw/' use a dedicated backend; anything else goes through the `llm` library and its plugins.
-                        Defaults to [models] default_model from the config, or anthropic/claude-sonnet-5.
+                        The model to use, e.g. 'anthropic/claude-sonnet-5'. A model prefixed with a backend's name
+                        goes to that backend if it takes prefixes; anything else goes to the 'llm' backend. Defaults
+                        to [models] default_model from the config; one of the two is required.
   --model-service {anthropic,tgw,llm}
                         Force a backend instead of choosing one from the model name.
   --batch, --no-batch   Send requests as a discounted batch job, which can take a while to come back. On by default
@@ -257,9 +257,9 @@ options:
 
 model selection:
   --model-name MODEL_NAME, --model MODEL_NAME
-                        The model to use, e.g. 'anthropic/claude-sonnet-5'. Models prefixed with 'anthropic/' or
-                        'tgw/' use a dedicated backend; anything else goes through the `llm` library and its plugins.
-                        Defaults to [models] default_model from the config, or anthropic/claude-sonnet-5.
+                        The model to use, e.g. 'anthropic/claude-sonnet-5'. A model prefixed with a backend's name
+                        goes to that backend if it takes prefixes; anything else goes to the 'llm' backend. Defaults
+                        to [models] default_model from the config; one of the two is required.
   --model-service {anthropic,tgw,llm}
                         Force a backend instead of choosing one from the model name.
   --batch, --no-batch   Send requests as a discounted batch job, which can take a while to come back. On by default

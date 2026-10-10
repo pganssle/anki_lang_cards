@@ -1,4 +1,8 @@
-"""Claude models through the Anthropic SDK, with batching and prompt caching."""
+"""Backend for Claude models through the Anthropic SDK.
+
+It supports batching and prompt caching. Model specs written
+``anthropic/<model>`` go here.
+"""
 
 import asyncio
 from collections.abc import Mapping, Sequence
@@ -6,18 +10,19 @@ from typing import Any, ClassVar, Final, Self
 
 import anthropic
 
-from .. import caches
+from .. import caches, config
 from . import base
 
+# Room for adaptive thinking as well as the response, since thinking counts
+# against max_tokens.
 DEFAULT_MAX_TOKENS: Final[int] = 16_000
-"""Room for adaptive thinking as well as the response; thinking counts
-against ``max_tokens``."""
 
 _INCOMPLETE_STOP_REASONS: Final = frozenset({"max_tokens", "refusal"})
 
 
 class AnthropicBackend:
     service: ClassVar[str] = "anthropic"
+    claims_prefix: ClassVar[bool] = True
     features: ClassVar[frozenset[base.Feature]] = frozenset(
         {base.Feature.BATCH, base.Feature.PROMPT_CACHING}
     )
@@ -54,6 +59,23 @@ class AnthropicBackend:
         self.max_poll_interval = max_poll_interval
         self._client = anthropic.AsyncAnthropic(
             api_key=api_key, base_url=base_url, http_client=http_client
+        )
+
+    @classmethod
+    def from_config(
+        cls,
+        model_name: str,
+        conf: config.Config,
+        features: frozenset[base.Feature],
+    ) -> Self:
+        anthropic_conf = conf.anthropic or config.AnthropicConfig()
+        return cls(
+            model_name,
+            api_key=anthropic_conf.api_key,
+            base_url=anthropic_conf.base_url,
+            max_tokens=anthropic_conf.max_tokens or DEFAULT_MAX_TOKENS,
+            effort=anthropic_conf.effort,
+            prompt_caching=base.Feature.PROMPT_CACHING in features,
         )
 
     async def __aenter__(self) -> Self:

@@ -18,11 +18,11 @@ from . import (
     config,
     conflict_resolver,
     dedup_flow,
+    model_selection,
     prompts,
     query,
     triage,
 )
-from .backends import selection
 
 try:
     import textual  # noqa: F401
@@ -170,7 +170,7 @@ async def main():
         default="output/output.csv",
         help="Path to an output CSV file",
     )
-    selection.add_arguments(parser)
+    model_selection.add_arguments(parser)
     parser.add_argument(
         "--config",
         type=pathlib.Path,
@@ -335,10 +335,10 @@ async def main():
     # Settle the model before any slow work, so that a missing feature the
     # user asked for stops the run straight away.
     try:
-        _, query_runner = selection.make_runner(
+        _, query_runner = model_selection.make_runner(
             args, conf_obj, caches.CacheTypes.SENTENCES
         )
-    except selection.SelectionError as e:
+    except model_selection.SelectionError as e:
         parser.exit(2, f"error: {e}\n")
 
     # Words from the input CSV

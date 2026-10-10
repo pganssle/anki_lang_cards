@@ -1,16 +1,21 @@
-"""Any model the ``llm`` library can reach through its installed plugins."""
+"""Backend for any model the ``llm`` library can reach through its plugins.
+
+Model specs that no other backend claims come here, so ``llm`` model names
+(``gpt-5``, ``anthropic/claude-sonnet-5``, ...) work unchanged.
+"""
 
 from collections.abc import Mapping
 from typing import ClassVar, Self
 
 import llm
 
-from .. import caches
+from .. import caches, config
 from . import base
 
 
 class LLMBackend:
     service: ClassVar[str] = "llm"
+    claims_prefix: ClassVar[bool] = False
     features: ClassVar[frozenset[base.Feature]] = frozenset()
     default_words_per_prompt: ClassVar[int] = 15
 
@@ -26,6 +31,18 @@ class LLMBackend:
         needs_key = getattr(self._model, "needs_key", None)
         if keys and needs_key is not None and needs_key in keys:
             self._model.key = keys[needs_key]
+
+    @classmethod
+    def from_config(
+        cls,
+        model_name: str,
+        conf: config.Config,
+        features: frozenset[base.Feature],
+    ) -> Self:
+        keys = {}
+        if conf.anthropic is not None and conf.anthropic.api_key is not None:
+            keys["anthropic"] = conf.anthropic.api_key
+        return cls(model_name, keys=keys)
 
     async def __aenter__(self) -> Self:
         return self
