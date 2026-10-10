@@ -37,6 +37,22 @@ ANKI_NOTETYPE_FIELDS: Final[Sequence[str]] = (
     "model_used",
 )
 
+# Fields the pipeline never fills in: Word.to_csv_line always writes "" for
+# them, but they hold user data in the deck. Anki's importer overwrites
+# every mapped field of a note it updates, so these get placeholder names
+# in the #columns: directive that match no field, leaving the deck's values
+# alone.
+_ANKI_UNMANAGED_FIELDS: Final[frozenset[str]] = frozenset({"Freq", "Image", "Note"})
+
+# The #columns: directive for importable CSVs, in to_csv_line order.
+ANKI_IMPORT_COLUMNS: Final[Sequence[str]] = (
+    *(
+        f"unused {name}" if name in _ANKI_UNMANAGED_FIELDS else name
+        for name in ANKI_NOTETYPE_FIELDS
+    ),
+    "unused tags",
+)
+
 
 def json_for_anki_field(obj: Any) -> str:
     """Serialize ``obj`` as JSON suitable for storage in an Anki note field.
@@ -398,6 +414,10 @@ class Word:
         with "allow HTML" disabled makes Anki HTML-escape every field
         (``'`` becomes ``&#x27;``, ``"`` becomes ``&quot;``, ...), mangling
         both the JSON-bearing fields and the visible text.
+
+        The always-empty Freq, Image, Note and tags columns map onto nothing
+        (see ``ANKI_IMPORT_COLUMNS``), so updating an existing note keeps its
+        values for them rather than blanking them.
         """
         directives = [
             "#separator:Comma",
@@ -405,8 +425,14 @@ class Word:
         ]
         if deck_name is not None:
             directives.append(f"#deck:{deck_name}")
-        directives.append("#columns:" + ",".join((*ANKI_NOTETYPE_FIELDS, "tags")))
-        directives.append(f"#tags column:{len(ANKI_NOTETYPE_FIELDS) + 1}")
+        directives.append("#columns:" + ",".join(ANKI_IMPORT_COLUMNS))
+        # Without a #tags column: directive, Anki takes the last column as
+        # tags because the file has more columns than the notetype has
+        # fields, and "#tags column:0" does not override that guess. Either
+        # way the empty column would wipe the tags of every updated note.
+        # Pointing the importer one past the last column leaves tags unset,
+        # which keeps an existing note's tags (checked against anki 26.9.3).
+        directives.append(f"#tags column:{len(ANKI_IMPORT_COLUMNS) + 1}")
         return tuple(directives)
 
     @classmethod
