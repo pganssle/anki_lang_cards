@@ -490,6 +490,84 @@ class TestDecisionCache:
         assert decision.replacements is not None
         assert {w.word for w in decision.replacements} == {"segundo/a", "segundo"}
 
+    @staticmethod
+    def remember(
+        cache: triage.DecisionCache,
+        words: Sequence[types.Word],
+        disposition: triage.Disposition,
+    ) -> None:
+        cache.remember(
+            triage.Candidate(
+                words=tuple(words),
+                reason=triage.Reason.COMPATIBLE,
+                comparison=definition_similarity.Comparison(0.0, frozenset()),
+                disposition=disposition,
+            )
+        )
+
+    def test_keys_differing_only_in_case_are_one_group(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        cache = triage.DecisionCache(tmp_path / "decisions.json")
+        bench = make_word("banco", "nm", "bench", rank=9)
+        self.remember(
+            cache,
+            (make_word("Banco", "nm", "bank", rank=5), bench),
+            triage.Disposition.KEEP_SEPARATE,
+        )
+        self.remember(
+            cache,
+            (make_word("banco", "nm", "Bank ", rank=5), bench),
+            triage.Disposition.MERGE,
+        )
+        cache.save()
+
+        assert len(cache) == 1
+        reloaded = triage.DecisionCache(cache.cache_path)
+        decision = reloaded.get((make_word("banco", "nm", "bank", rank=5), bench))
+        assert decision is not None
+        assert decision.disposition is triage.Disposition.MERGE
+
+    def test_keys_that_sort_as_ties_are_both_saved(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """These keys differ only in gender, which Word ordering ignores, so
+        they tie when sorted even though neither equals the other."""
+        cache = triage.DecisionCache(tmp_path / "decisions.json")
+        other = make_word("cura", "n", "priest", rank=1)
+        self.remember(
+            cache,
+            (make_word("cura", "nm", "cure", rank=2), other),
+            triage.Disposition.KEEP_SEPARATE,
+        )
+        self.remember(
+            cache,
+            (make_word("cura", "nf", "cure", rank=2), other),
+            triage.Disposition.MERGE,
+        )
+        cache.save()
+
+        assert len(triage.DecisionCache(cache.cache_path)) == 2
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        (("banco", "nm", "bank"), ("Banco", "nm", "bank")),
+        (("banco", "nm", "bank"), (" banco ", "nm", "BANK")),
+        (("cura", "n", "priest"), ("cura", "nm", "priest")),
+        (("ir", "v", "to go"), ("ir", "vi", "to go")),
+        (("Ñandú", "nm", "rhea"), ("ñandú", "nm", "Rhea")),
+    ],
+)
+def test_equal_words_hash_equal(
+    first: tuple[str, str, str], second: tuple[str, str, str]
+) -> None:
+    a, b = make_word(*first), make_word(*second)
+    assert a == b
+    assert hash(a) == hash(b)
+    assert len({a, b}) == 1
+
 
 class TestSplit:
     """A group can become several new cards instead of one or none."""

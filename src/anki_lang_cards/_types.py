@@ -305,7 +305,15 @@ class Word:
         )
 
     def __hash__(self):
-        return hash((self.word, self.part_of_speech.base_pos))
+        # Must agree with __eq__: equal words hash equal only if this hashes
+        # the same normalized fields that __eq__ compares.
+        return hash(
+            (
+                _normalize_str(self.word),
+                _normalize_str(self.meaning),
+                self.part_of_speech.base_pos,
+            )
+        )
 
     def update(self, other: Self) -> None:
         """Update the current word with the contents of `other`."""

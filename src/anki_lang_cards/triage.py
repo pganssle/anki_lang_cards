@@ -22,6 +22,7 @@ import enum
 import io
 import itertools
 import json
+import operator
 import pathlib
 from collections.abc import Collection, Iterable, Mapping, Sequence, Set
 from typing import Any, Final, Self
@@ -282,9 +283,18 @@ class DecisionCache:
     def save(self) -> None:
         if not self.cache_path.parent.exists():
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        # Sort on the CSV text so the order is total: sorting the items
+        # directly falls through to comparing Decisions when two keys tie.
+        entries = sorted(
+            (
+                (words_to_csv(words), decision)
+                for words, decision in self._decisions.items()
+            ),
+            key=operator.itemgetter(0),
+        )
         payload = [
-            {"words": words_to_csv(words), **decision.to_dict()}
-            for words, decision in sorted(self._decisions.items())
+            {"words": csv_words, **decision.to_dict()}
+            for csv_words, decision in entries
         ]
         self.cache_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False))
 
