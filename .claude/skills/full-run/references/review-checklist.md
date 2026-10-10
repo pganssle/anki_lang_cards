@@ -69,6 +69,25 @@ trap.
 If you are not sure of a meaning, do not guess a correction: flag it in your
 notes for the user, saying what you suspect.
 
+## Problems the owner has flagged by hand
+
+These came up again and again in the cards the owner red-flagged, and no
+script can catch them:
+
+- **Sentences using a sense the definition lacks.** `acceder`,
+  `comprometer`, `marcador` (also "marker"), `llevarse` (also "to get along
+  with"), `carril` (also "track"): the extra sentences show a second sense
+  the definition never mentions. Extend the definition, or move the sentence
+  to a card for that sense.
+- **Definitions that are wrong or off.** `techo` is "ceiling" more than
+  "roof"; `hurón` is "ferret"; "no pares de…" was translated as "stop".
+- **Part of speech and number.** `escrito/a` used as a noun in its sentence;
+  `guacho/a` adjective or noun; `albores` and `cagarrinas`, used only in the
+  plural.
+- **Idioms filed under the literal word.** "Sarna con gusto no pica" doesn't
+  use the literal meaning of `sarna`; "el toque de queda" is "curfew", which
+  `toque` alone doesn't teach. Flag these for a phrase card.
+
 ## Whether it should be a card at all
 
 Drop rows that teach nothing useful, with the reason: words invented by one
