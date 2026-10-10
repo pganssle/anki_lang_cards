@@ -477,6 +477,99 @@ def test_runner_incomplete_response_not_cached(
     assert query_runner.cacher.load_from_cache("uno", system_prompt="sys") is None
 
 
+class StatusCodeError(Exception):
+    """Reports its HTTP status the way the Anthropic SDK does."""
+
+    def __init__(self, status_code: int):
+        super().__init__(f"HTTP {status_code}")
+        self.status_code = status_code
+
+
+class StatusError(Exception):
+    """Reports its HTTP status the way aiohttp does."""
+
+    def __init__(self, status: int):
+        super().__init__(f"HTTP {status}")
+        self.status = status
+
+
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        (StatusCodeError(400), "StatusCodeError: HTTP 400"),
+        (StatusError(429), "StatusError: HTTP 429"),
+        (StatusCodeError(500), "StatusCodeError: HTTP 500"),
+        (RuntimeError("plugin broke"), "RuntimeError: plugin broke"),
+        (ValueError("bad input"), "ValueError: bad input"),
+    ],
+)
+def test_runner_request_error_fails_only_that_request(
+    tmp_path: pathlib.Path, error: Exception, reason: str
+) -> None:
+    """One request's error leaves the others to complete and be cached."""
+    backend = FakeBackend({"uno": [error]})
+    query_runner = runner.QueryRunner(backend, _cacher(tmp_path))
+
+    outcomes = _run(query_runner, REQUESTS)
+
+    assert outcomes["uno"] == runner.Failure(REQUESTS[0], reason)
+    assert _texts(outcomes) == {"dos": "answer to dos"}
+    assert query_runner.cacher.load_from_cache("uno", system_prompt="sys") is None
+    cached = query_runner.cacher.load_from_cache("dos", system_prompt="sys")
+    assert cached is not None
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        StatusCodeError(401),
+        StatusCodeError(403),
+        StatusError(401),
+        base.ConfigurationError("no API key"),
+        TypeError("bug"),
+        AttributeError("bug"),
+    ],
+)
+def test_runner_run_wide_error_aborts(tmp_path: pathlib.Path, error: Exception) -> None:
+    """Errors every request would hit stop the run instead of failing each."""
+    backend = FakeBackend({"uno": [error]})
+    query_runner = runner.QueryRunner(backend, _cacher(tmp_path))
+
+    with pytest.raises(type(error)):
+        _run(query_runner, REQUESTS)
+
+
+@pytest.mark.parametrize(
+    ("status", "aborts"),
+    [("401", False), (None, False), (401.0, False), (401, True)],
+)
+def test_aborts_run_needs_an_integer_status(status: object, aborts: bool) -> None:
+    error = RuntimeError("odd")
+    error.status = status  # type: ignore[attr-defined]
+    assert runner.aborts_run(error) is aborts
+
+
+def test_runner_retries_request_errors(tmp_path: pathlib.Path) -> None:
+    """A request error is retried like incomplete output."""
+    backend = FakeBackend({"uno": [StatusCodeError(500), "1"]})
+    query_runner = runner.QueryRunner(backend, _cacher(tmp_path))
+
+    async def collect() -> Mapping[str, str]:
+        async with query_runner:
+            return {
+                request.prompt: parsed
+                async for request, parsed in runner.run_with_retries(
+                    query_runner,
+                    REQUESTS,
+                    lambda _, response: response["text"],
+                    max_retries=1,
+                    describe=lambda request: request.prompt,
+                )
+            }
+
+    assert asyncio.run(collect()) == {"uno": "1", "dos": "answer to dos"}
+
+
 def test_runner_batch_failures(tmp_path: pathlib.Path) -> None:
     backend = FakeBackend(batch_failures={"uno": "errored: overloaded"})
     query_runner = runner.QueryRunner(backend, _cacher(tmp_path), batch=True)
