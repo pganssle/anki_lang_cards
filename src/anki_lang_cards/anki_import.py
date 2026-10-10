@@ -626,7 +626,9 @@ class AnkiConnectClient:
             return sentences
 
         rank_str = get_field_value("Rank")
-        spanish_sentence = get_field_value("Spanish")
+        # AnkiConnect returns "" for an empty field, not None; an empty
+        # Spanish field means the note has no first sentence.
+        spanish_sentence = get_field_value("Spanish") or None
         english_sentence = get_field_value("English")
         example_sentences = parse_sentences()
 
