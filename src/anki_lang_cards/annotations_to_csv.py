@@ -39,7 +39,6 @@ WordMap: TypeAlias = Mapping[str, Sequence[dictionary_entries.DictionaryEntry]]
 class AnnotationEntry(TypedDict):
     highlights: Sequence[str | HighlightWithNote]
     context: str
-    source_id: int
 
 
 @attrs.frozen
@@ -47,6 +46,20 @@ class PromptInput:
     rag_entries: Mapping[str, str]
     annotation_entry: AnnotationEntry
     source: BookCitation
+
+
+@attrs.frozen
+class AnnotationPrompt:
+    """A request for a batch of annotations, and the sources it cites.
+
+    The prompt numbers its sources from 1 in the order the entries appear, so
+    the prompt for a set of annotations doesn't depend on the rest of the run
+    and stays a response cache hit when other annotations come or go.
+    """
+
+    request: base.Request
+    sources: Mapping[int, BookCitation]
+    """The citation behind each ``source_id`` in the prompt."""
 
 
 def _format_definition_list(
@@ -349,7 +362,6 @@ def _prepare_prompt_inputs(
         annotation_entry = {
             "highlights": highlights,
             "context": annotation.context,
-            "source_id": citation.id,
         }
 
         rag_entries = {}
@@ -386,9 +398,15 @@ def prepare_prompt_inputs(
 
 def _generate_prompt(
     prompt_inputs: Sequence[PromptInput], dialect: str = config.DEFAULT_DIALECT
-) -> base.Request:
+) -> AnnotationPrompt:
+    sources = dict(
+        enumerate((prompt_input.source for prompt_input in prompt_inputs), 1)
+    )
     annotation_input = json.dumps(
-        [prompt_input.annotation_entry for prompt_input in prompt_inputs],
+        [
+            {**prompt_input.annotation_entry, "source_id": source_id}
+            for source_id, prompt_input in enumerate(prompt_inputs, 1)
+        ],
         indent=2,
         ensure_ascii=False,
         default=_types._cattrs_converter().unstructure,
@@ -402,7 +420,7 @@ def _generate_prompt(
             seen_headwords.add(headword)
             all_rag_entries.append(rag_entry)
 
-    return base.Request(
+    request = base.Request(
         json_schema=prompts.BOOK_ANNOTATION_RESPONSE_SCHEMA,
         system_prompt=prompts.BOOK_ANNOTATION_SYSTEM_PROMPT % {"dialect": dialect},
         prompt=prompts.BOOK_ANNOTATION_PROMPT_TEMPLATE
@@ -411,9 +429,11 @@ def _generate_prompt(
             "rag_entries": "\n\n".join(all_rag_entries),
         },
     )
+    return AnnotationPrompt(request=request, sources=sources)
 
 
-def _estimate_tokens(request: base.Request) -> float:
+def _estimate_tokens(prompt: AnnotationPrompt) -> float:
+    request = prompt.request
     return (len(request.system_prompt) + len(request.prompt)) / 4
 
 
@@ -421,7 +441,7 @@ def generate_prompts(
     prompt_inputs: Sequence[PromptInput],
     max_tokens: int = 2048,
     dialect: str = config.DEFAULT_DIALECT,
-) -> Iterable[base.Request]:
+) -> Iterable[AnnotationPrompt]:
     """Pack annotation entries into as few prompts as fit in ``max_tokens``.
 
     An entry too big to share a prompt with anything gets one to itself.
@@ -440,14 +460,6 @@ def generate_prompts(
         stack.append(prompt_input)
 
     yield _generate_prompt(stack, dialect=dialect)
-
-
-def _prepare_source_mapping(
-    prompt_inputs: Sequence[PromptInput],
-) -> Mapping[int, BookCitation]:
-    return {
-        prompt_input.source.id: prompt_input.source for prompt_input in prompt_inputs
-    }
 
 
 def _sentence_to_citation(
@@ -619,14 +631,23 @@ async def main() -> None:
     if limited:
         print(f"Limiting to the first {args.limit} of {len(prompt_inputs)} entries.")
         prompt_inputs = prompt_inputs[: args.limit]
-    source_mapping = _prepare_source_mapping(prompt_inputs)
 
     existing: dict[Word, Word] = {}
-    requests = list(generate_prompts(prompt_inputs, dialect=conf.sentences.dialect))
+    annotation_prompts = list(
+        generate_prompts(prompt_inputs, dialect=conf.sentences.dialect)
+    )
+    requests = [prompt.request for prompt in annotation_prompts]
+    # The same annotation text in two books makes two identical requests,
+    # which share a response; its sentences cite the later book.
+    sources_by_request = {
+        prompt.request: prompt.sources for prompt in annotation_prompts
+    }
 
     def parse(request: base.Request, response: caches.ResponseData) -> Sequence[Word]:
         return parse_llm_response(
-            response["text"], model_used=model.spec, source_mapping=source_mapping
+            response["text"],
+            model_used=model.spec,
+            source_mapping=sources_by_request[request],
         )
 
     mode = (

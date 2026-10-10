@@ -207,21 +207,19 @@ def test_sentences_batched(
 def test_book_annotations(
     recorded_backend: RecordedBackend, live_api: bool, tmp_path: pathlib.Path
 ) -> None:
-    # Citation IDs otherwise come from a process-wide counter, and the ID is
-    # part of the recorded request.
     citation = types.BookCitation(
-        title="Libro de Pruebas", authors=("Autora de Ejemplo",), pages=(12,), id=3
+        title="Libro de Pruebas", authors=("Autora de Ejemplo",), pages=(12,)
     )
     prompt_input = annotations_to_csv.PromptInput(
         rag_entries={"gato": "gato (n)\n  0. cat\n  1. jack (for a car)"},
         annotation_entry={
             "highlights": ["gatos"],
             "context": "Los gatos dormían al sol mientras los niños jugaban.",
-            "source_id": citation.id,
         },
         source=citation,
     )
-    (request,) = annotations_to_csv.generate_prompts([prompt_input])
+    (prompt,) = annotations_to_csv.generate_prompts([prompt_input])
+    request = prompt.request
     query_runner = _make_runner(
         recorded_backend,
         live_api,
@@ -236,7 +234,7 @@ def test_book_annotations(
         return annotations_to_csv.parse_llm_response(
             response["text"],
             model_used=recorded_backend.spec,
-            source_mapping={citation.id: citation},
+            source_mapping=prompt.sources,
         )
 
     async def annotate() -> Sequence[types.Word]:
