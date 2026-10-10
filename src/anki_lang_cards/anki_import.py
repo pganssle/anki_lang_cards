@@ -396,7 +396,7 @@ class AnkiConnectClient:
         data = {
             "action": "unsuspend",
             "version": AC_VERSION,
-            "params": {"cards": [card_ids]},
+            "params": {"cards": list(card_ids)},
         }
         result = await self._post(data=data)
         return self._unwrap_result(result)
