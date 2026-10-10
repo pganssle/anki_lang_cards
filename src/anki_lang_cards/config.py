@@ -56,6 +56,7 @@ class ModelsConfig:
     default_model: str | None = None
     batch: bool | None = None
     prompt_caching: bool | None = None
+    structured_output: bool | None = None
 
     @classmethod
     def from_values(cls, vals: Mapping[str, Any]) -> Self:

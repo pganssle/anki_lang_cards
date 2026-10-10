@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator, Iterable, Mapping, Sequence
 from typing import Any, Protocol
 
 from . import _types as types
-from . import caches, runner
+from . import caches, prompts, runner
 from .backends import base
 
 
@@ -36,7 +36,9 @@ async def generate_sentences(
     requests: dict[base.Request, tuple[types.Word, ...]] = {}
     for word_subset in itertools.batched(words, words_per_prompt):
         request = base.Request(
-            prompt=prompt.make_prompt(word_subset), system_prompt=prompt.system_prompt
+            prompt=prompt.make_prompt(word_subset),
+            system_prompt=prompt.system_prompt,
+            json_schema=prompts.MULTI_SENTENCE_RESPONSE_SCHEMA,
         )
         requests[request] = word_subset
 
@@ -65,17 +67,38 @@ async def generate_sentences(
             yield word
 
 
+def decode_words(text: str) -> Sequence[Mapping[str, Any]]:
+    """Decode a ``{"words": [...]}`` response into its list of entries.
+
+    Responses from backends that cannot enforce the schema may also come
+    wrapped in a markdown code block or as a bare list, which is accepted.
+
+    :raises ValueError: If the response does not have that shape.
+    """
+    text = text.strip()
+    if text.startswith("```"):
+        print("Removing ```json wrapper")
+        text = text.removeprefix("```json").removeprefix("```").removesuffix("```")
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        print(f"Failed to decode text:\n{text}")
+        raise
+    words = data["words"] if isinstance(data, dict) and "words" in data else data
+    if not isinstance(words, list) or not all(
+        isinstance(entry, dict)
+        and isinstance(entry.get("examples"), list)
+        and all(isinstance(example, dict) for example in entry["examples"])
+        for entry in words
+    ):
+        raise ValueError(f"Response is not a list of words with examples:\n{text}")
+    return words
+
+
 def _parse_response(
     request: base.Request, response: caches.ResponseData
 ) -> Sequence[Mapping[str, Any]]:
-    response_content = (
-        response["text"].removeprefix("```json").removeprefix("```").removesuffix("```")
-    )
-    try:
-        return json.loads(response_content)
-    except json.decoder.JSONDecodeError:
-        print(f"Failed to decode text:\n{response_content}")
-        raise
+    return decode_words(response["text"])
 
 
 class SentencePromptHandler(PromptHandler):

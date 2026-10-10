@@ -20,6 +20,7 @@ from . import (
     dictionary_entries,
     model_selection,
     prompts,
+    query,
     runner,
 )
 from ._types import (
@@ -402,6 +403,7 @@ def _generate_prompt(
             all_rag_entries.append(rag_entry)
 
     return base.Request(
+        json_schema=prompts.BOOK_ANNOTATION_RESPONSE_SCHEMA,
         system_prompt=prompts.BOOK_ANNOTATION_SYSTEM_PROMPT % {"dialect": dialect},
         prompt=prompts.BOOK_ANNOTATION_PROMPT_TEMPLATE
         % {
@@ -463,32 +465,23 @@ def _sentence_to_citation(
 def parse_llm_response(
     response_text: str, model_used: str, source_mapping: Mapping[int, BookCitation]
 ) -> Sequence[Word]:
-    if response_text.startswith("```json"):
-        print("Removing ```json wrapper")
-    response_text = (
-        response_text.strip()
-        .removeprefix("```json")
-        .removeprefix("```")
-        .removesuffix("```")
-        .strip()
-    )
-    response_data = json.loads(response_text)
     output: list[Word] = []
-    for highlight in response_data:
-        headword = highlight["headword"]
-        meaning = highlight["meaning"]
-        part_of_speech = highlight["part_of_speech"]
-        article = highlight.get("article", None) or None
-
-        example_sentences = list(highlight["examples"])
-        sentences = [
-            Sentence(
-                spanish=sentence["spanish"],
-                english=sentence["english"],
-                source=_sentence_to_citation(sentence, source_mapping),
-            )
-            for sentence in example_sentences
-        ]
+    for highlight in query.decode_words(response_text):
+        try:
+            headword = highlight["headword"]
+            meaning = highlight["meaning"]
+            part_of_speech = highlight["part_of_speech"]
+            article = highlight.get("article", None) or None
+            sentences = [
+                Sentence(
+                    spanish=sentence["spanish"],
+                    english=sentence["english"],
+                    source=_sentence_to_citation(sentence, source_mapping),
+                )
+                for sentence in highlight["examples"]
+            ]
+        except KeyError as e:
+            raise ValueError(f"Response entry is missing {e}: {highlight}") from e
 
         output.append(
             Word(

@@ -671,6 +671,10 @@ class PluginBackend(FakeBackend):
     claims_prefix: ClassVar[bool] = True
 
     @classmethod
+    def supported_features(cls, model_name: str) -> frozenset[base.Feature]:
+        return cls.features
+
+    @classmethod
     def from_config(
         cls, model_name: str, conf: config.Config, features: frozenset[base.Feature]
     ) -> Self:
@@ -738,6 +742,7 @@ def test_anthropic_from_config() -> None:
         "max_tokens": 1234,
         "effort": "low",
         "prompt_caching": False,
+        "structured_output": False,
     }
 
 
@@ -746,6 +751,7 @@ def test_llm_from_config_passes_the_anthropic_key(
 ) -> None:
     class Model:
         needs_key = "anthropic"
+        supports_schema = False
         key: str | None = None
 
     model = Model()
@@ -755,3 +761,64 @@ def test_llm_from_config_passes_the_anthropic_key(
     backends.load("llm").from_config("anthropic/claude-sonnet-5", conf, frozenset())
 
     assert model.key == "secret"
+
+
+#####
+# Structured output
+
+
+@pytest.mark.parametrize(
+    ("argv", "models", "expected"),
+    [
+        ((), config.ModelsConfig(), True),
+        (("--no-structured-output",), config.ModelsConfig(), False),
+        ((), config.ModelsConfig(structured_output=False), False),
+    ],
+)
+def test_make_runner_anthropic_structured_output(
+    argv: Sequence[str], models: config.ModelsConfig, expected: bool
+) -> None:
+    conf = _config(
+        models=attrs.evolve(models, default_model="anthropic/claude-sonnet-5"),
+        anthropic=config.AnthropicConfig(api_key="key"),
+    )
+
+    _, query_runner = model_selection.make_runner(
+        _parse(*argv), conf, caches.CacheTypes.SENTENCES, confirm=_never_asked
+    )
+
+    assert query_runner.backend.structured_output is expected  # type: ignore[attr-defined]
+
+
+def test_llm_structured_output_follows_the_model() -> None:
+    """Whether the llm fallback can enforce a schema depends on the model."""
+    assert base.Feature.STRUCTURED_OUTPUT in (
+        llm_fallback.LLMBackend.supported_features("anthropic/claude-sonnet-5")
+    )
+    backend = llm_fallback.LLMBackend("anthropic/claude-sonnet-5")
+    assert backend.structured_output
+    assert backend.query_params() == {"structured_output": True}
+    assert not llm_fallback.LLMBackend(
+        "anthropic/claude-sonnet-5", structured_output=False
+    ).structured_output
+
+
+def test_required_structured_output_unavailable() -> None:
+    pytest.importorskip("llm_fake_cards")
+    questions: list[str] = []
+
+    def accept(question: str) -> bool:
+        questions.append(question)
+        return True
+
+    _, query_runner = model_selection.make_runner(
+        _parse("--model", "fake-cards", "--structured-output"),
+        _config(),
+        caches.CacheTypes.SENTENCES,
+        confirm=accept,
+    )
+
+    (question,) = questions
+    assert "Structured output was requested (--structured-output)" in question
+    assert query_runner.backend.features == frozenset()
+    assert not query_runner.backend.structured_output  # type: ignore[attr-defined]

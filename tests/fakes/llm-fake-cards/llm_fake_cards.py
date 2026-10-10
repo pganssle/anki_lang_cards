@@ -18,7 +18,7 @@ so tests can exercise the error-handling paths:
 - ``renamed``: the term is reported without its ``/a`` suffix, so it cannot
   be matched to the input word.
 - ``wordkey``: the response uses a ``"word"`` key instead of ``"term"``
-  (a mistake the real prompt's own examples contain).
+  (a mistake the real prompt's own examples used to contain).
 """
 
 import hashlib
@@ -176,7 +176,7 @@ def _generate_response(prompt_text: str) -> str:
     else:
         response = _respond_sentences(entries)
 
-    text = json.dumps(response, ensure_ascii=False, indent=2)
+    text = json.dumps({"words": response}, ensure_ascii=False, indent=2)
     if any("fence" in term for term in flat_terms):
         text = f"```json\n{text}\n```"
     return text

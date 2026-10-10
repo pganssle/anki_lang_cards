@@ -24,7 +24,11 @@ class AnthropicBackend:
     service: ClassVar[str] = "anthropic"
     claims_prefix: ClassVar[bool] = True
     features: ClassVar[frozenset[base.Feature]] = frozenset(
-        {base.Feature.BATCH, base.Feature.PROMPT_CACHING}
+        {
+            base.Feature.BATCH,
+            base.Feature.PROMPT_CACHING,
+            base.Feature.STRUCTURED_OUTPUT,
+        }
     )
     default_words_per_prompt: ClassVar[int] = 15
 
@@ -37,6 +41,7 @@ class AnthropicBackend:
         max_tokens: int = DEFAULT_MAX_TOKENS,
         effort: str | None = None,
         prompt_caching: bool = True,
+        structured_output: bool = True,
         poll_interval: float = 10.0,
         max_poll_interval: float = 60.0,
         http_client: anthropic.DefaultAsyncHttpxClient | None = None,
@@ -55,11 +60,16 @@ class AnthropicBackend:
         self.max_tokens = max_tokens
         self.effort = effort
         self.prompt_caching = prompt_caching
+        self.structured_output = structured_output
         self.poll_interval = poll_interval
         self.max_poll_interval = max_poll_interval
         self._client = anthropic.AsyncAnthropic(
             api_key=api_key, base_url=base_url, http_client=http_client
         )
+
+    @classmethod
+    def supported_features(cls, model_name: str) -> frozenset[base.Feature]:
+        return cls.features
 
     @classmethod
     def from_config(
@@ -76,6 +86,7 @@ class AnthropicBackend:
             max_tokens=anthropic_conf.max_tokens or DEFAULT_MAX_TOKENS,
             effort=anthropic_conf.effort,
             prompt_caching=base.Feature.PROMPT_CACHING in features,
+            structured_output=base.Feature.STRUCTURED_OUTPUT in features,
         )
 
     async def __aenter__(self) -> Self:
@@ -89,6 +100,7 @@ class AnthropicBackend:
             "max_tokens": self.max_tokens,
             "effort": self.effort,
             "prompt_caching": self.prompt_caching,
+            "structured_output": self.structured_output,
         }
 
     async def query(self, request: base.Request) -> caches.ResponseData:
@@ -232,8 +244,16 @@ class AnthropicBackend:
                     else {"type": "ephemeral"}
                 )
             params["system"] = [system_block]
+        output_config: dict[str, Any] = {}
         if self.effort is not None:
-            params["output_config"] = {"effort": self.effort}
+            output_config["effort"] = self.effort
+        if self.structured_output and request.json_schema is not None:
+            output_config["format"] = {
+                "type": "json_schema",
+                "schema": request.json_schema,
+            }
+        if output_config:
+            params["output_config"] = output_config
         return params
 
 

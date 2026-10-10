@@ -29,6 +29,10 @@ class TGWBackend:
     features: ClassVar[frozenset[base.Feature]] = frozenset()
     default_words_per_prompt: ClassVar[int] = 2
 
+    @classmethod
+    def supported_features(cls, model_name: str) -> frozenset[base.Feature]:
+        return cls.features
+
     def __init__(
         self,
         model_name: str,
