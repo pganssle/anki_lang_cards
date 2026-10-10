@@ -118,6 +118,25 @@ def test_sentence_prompt_example_is_a_valid_response() -> None:
         "piso",
         "muñeca",
     ]
+    assert [entry["id"] for entry in entries] == [0, 1, 2, 3]
     for entry in entries:
-        assert set(entry) == {"term", "examples"}
+        assert set(entry) == {"id", "term", "examples"}
         assert len(entry["examples"]) == 4
+
+
+def test_sentence_prompt_example_input_ids_match_output() -> None:
+    """The example's input numbers its terms the way make_prompt does, and
+    the example output echoes the same ids."""
+    system_prompt = prompts.MULTI_SENTENCE_SYSTEM_PROMPT % {
+        "dialect": config.DEFAULT_DIALECT
+    }
+    example_input = system_prompt.split("INPUT:\n----------\n")[-1].split(
+        "\n\nOUTPUT:"
+    )[0]
+    example_output = system_prompt.split("OUTPUT:\n--------------\n")[-1]
+
+    inputs = json.loads(example_input)
+    assert [entry["id"] for entry in inputs] == list(range(len(inputs)))
+    assert [(entry["id"], entry["term"]) for entry in inputs] == [
+        (entry["id"], entry["term"]) for entry in query.decode_words(example_output)
+    ]
