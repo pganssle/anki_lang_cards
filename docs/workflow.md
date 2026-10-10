@@ -46,6 +46,12 @@ python -m anki_lang_cards --inputs output/words_from_annotations.csv
 
 Everything below is the detail on each of those steps.
 
+To have an agent harness such as Claude Code do the whole run, including the
+by-hand review of the word CSV and the diff, ask it to "do a full run": the
+project's `full-run` skill (`.claude/skills/full-run/`) drives these steps,
+reviews the output with the harness model, and stops before the Anki import
+with a report of what it changed and what needs your decision.
+
 ## Prerequisites
 
 Most of this only needs to be done once:
