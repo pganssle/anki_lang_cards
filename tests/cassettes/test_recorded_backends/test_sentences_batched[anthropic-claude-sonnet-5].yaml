@@ -1,8 +1,7 @@
 interactions:
 - request:
-    body: "{\"max_tokens\":16000,\"messages\":[{\"role\":\"user\",\"content\":\"Prompt:\\n=======\\nINPUT:\\n----------\\n[\\n
-      \   {\\n        \\\"term\\\": \\\"correr\\\",\\n        \\\"part_of_speech\\\":
-      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"to run\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n\"}],\"model\":\"claude-sonnet-5\",\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"words\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"term\":{\"type\":\"string\"},\"examples\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"spanish\":{\"type\":\"string\"},\"english\":{\"type\":\"string\"}},\"required\":[\"spanish\",\"english\"],\"additionalProperties\":false}}},\"required\":[\"term\",\"examples\"],\"additionalProperties\":false}}},\"required\":[\"words\"],\"additionalProperties\":false}}},\"system\":[{\"type\":\"text\",\"text\":\"You
+    body: "{\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":\"Prompt
+      cache warm-up for batch 7c5e96f12b8183834e8400500e411270.\"}],\"model\":\"claude-sonnet-5\",\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"words\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"term\":{\"type\":\"string\"},\"examples\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"spanish\":{\"type\":\"string\"},\"english\":{\"type\":\"string\"}},\"required\":[\"spanish\",\"english\"],\"additionalProperties\":false}}},\"required\":[\"term\",\"examples\"],\"additionalProperties\":false}}},\"required\":[\"words\"],\"additionalProperties\":false}}},\"system\":[{\"type\":\"text\",\"text\":\"You
       are an expert Spanish teacher and lexicographer, whose specialty is designing
       excellent example sentences that show off the range of uses of a given word.\\n\\nI
       am going to give you valid JSON representing a list of mappings containing terms
@@ -91,13 +90,13 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '6555'
+      - '6429'
       content-type:
       - application/json
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.15.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -107,7 +106,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.15.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -115,49 +114,39 @@ interactions:
       x-stainless-runtime:
       - CPython
       x-stainless-runtime-version:
-      - 3.12.12
+      - 3.13.5
       x-stainless-timeout:
       - '600'
     method: POST
     uri: https://api.anthropic.com/v1/messages
   response:
     body:
-      string: "{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011CftqSRWVq1fwAa22j3ioz\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"Eu4DCscCCBIYAipAPil0SYWd2x+UYXCKawo3vf6kHhpDBnBOIBnskGsG5xkDtOtebpyD6Iskp4o0VrPQ/Kk2UXltunmWn7kLHQfEjDIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQwYTk5M2IyZS1kNWZlLTRjYWItYjg0ZS0yMmEyY2JhNGVjNDKaAREKD2NsYXVkZS1zb25uZXQtNagBucKp1gbCAT0IBRAAGg8BuSQC2ooDTzcF7IsEJq0gAjIEEnHPJToEc0C5BEIEODMjikoEODMjilAAWgTZBeFWYAJoAXAB2gFgChZwcmVmaXhfYmVmb3JlX2Jsb2NrX3YxEiAH3++h4UerkggJNzhdeq9vrEkDxw3spzX9zDEtxo0sQSIAMiDCwBPIapyS4i+Wbz2GF3aPi3pEyQKtzAl7+h4JivtOH0gDEgxMiDk+NTb18oH3tjUaDMOJ352hdrY9yzKyQiIw3zzMM056ryYtSoxOd1rwVQLRku0CfT0t6MW22e2SPGs517qh+khfMHuBdSiFNBj5KlSoqmIZ4ftDgj0yzKBhlZSUtKfOIJUcfD49HfY0dMz1mHVmR+dTU/Kr+ESPJ+Zbri0p3yaBGV6le+LWbUONhRgcCsWDQAOsXNFpQiveouzM5lVDCGgYAQ==\"},{\"type\":\"text\",\"text\":\"{\\\"words\\\":
-        [{\\\"term\\\": \\\"correr\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"Todas
-        las ma\xF1anas corro cinco kil\xF3metros por el parque.\\\", \\\"english\\\":
-        \\\"Every morning I run five kilometers through the park.\\\"}, {\\\"spanish\\\":
-        \\\"Cuando era ni\xF1o, corr\xEDa descalzo por la playa.\\\", \\\"english\\\":
-        \\\"When I was a child, I used to run barefoot on the beach.\\\"}, {\\\"spanish\\\":
-        \\\"Si corres m\xE1s r\xE1pido, llegar\xE1s a tiempo al tren.\\\", \\\"english\\\":
-        \\\"If you run faster, you'll make it to the train on time.\\\"}, {\\\"spanish\\\":
-        \\\"\u2014\xA1Corre, que se va el autob\xFAs! \u2014grit\xF3 mi madre desde
-        la puerta.\\\", \\\"english\\\": \\\"\\\\\\\"Run, the bus is leaving!\\\\\\\"
-        my mother shouted from the doorway.\\\"}]}]}\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":76,\"cache_creation_input_tokens\":2300,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":2300},\"output_tokens\":278,\"output_tokens_details\":{\"thinking_tokens\":26},\"service_tier\":\"standard\",\"inference_geo\":\"global\"},\"diagnostics\":null}"
+      string: '{"model":"claude-sonnet-5","id":"msg_011Cg8RdSjyFsRcWn2wD1mgi","type":"message","role":"assistant","content":[],"container":null,"stop_reason":"max_tokens","stop_sequence":null,"stop_details":null,"usage":{"input_tokens":36,"cache_creation_input_tokens":2300,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":2300},"output_tokens":1,"output_tokens_details":{"thinking_tokens":0},"service_tier":"standard","inference_geo":"global","speed":"standard"},"diagnostics":null}'
     headers:
       anthropic-ratelimit-input-tokens-limit:
       - '5000000'
       anthropic-ratelimit-input-tokens-remaining:
       - '4999000'
       anthropic-ratelimit-input-tokens-reset:
-      - '2026-10-10T16:00:56Z'
+      - '2026-10-17T20:17:01Z'
       anthropic-ratelimit-output-tokens-limit:
       - '1000000'
       anthropic-ratelimit-output-tokens-remaining:
       - '1000000'
       anthropic-ratelimit-output-tokens-reset:
-      - '2026-10-10T16:00:59Z'
+      - '2026-10-17T20:17:01Z'
       anthropic-ratelimit-requests-limit:
       - '5000'
       anthropic-ratelimit-requests-remaining:
       - '4999'
       anthropic-ratelimit-requests-reset:
-      - '2026-10-10T16:00:55Z'
+      - '2026-10-17T20:17:00Z'
       anthropic-ratelimit-tokens-limit:
       - '6000000'
       anthropic-ratelimit-tokens-remaining:
       - '5999000'
       anthropic-ratelimit-tokens-reset:
-      - '2026-10-10T16:00:56Z'
+      - '2026-10-17T20:17:01Z'
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
       cf-cache-status:
@@ -165,21 +154,21 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '1918'
+      - '523'
       content-security-policy:
       - default-src 'none'; frame-ancestors 'none'
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:00:59 GMT
+      - Sat, 17 Oct 2026 20:17:01 GMT
       request-id:
-      - req_011CftqSQeu2RVhzH3qdR9wS
+      - req_011Cg8RdRssyyc5WpGZK8Jxd
       server:
       - cloudflare
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       traceresponse:
-      - 00-d10727f8390b4c950a4c6ea6ad964f85-ab5f5c7bb6fb2aa7-01
+      - 00-0840f53dda7058e81dcad2b5a9950b24-612a31388c84d8b3-01
       transfer-encoding:
       - chunked
       vary:
@@ -190,7 +179,87 @@ interactions:
       code: 200
       message: OK
 - request:
-    body: "{\"requests\":[{\"custom_id\":\"a552d8e5368c32869581439b8f9dc602\",\"params\":{\"model\":\"claude-sonnet-5\",\"max_tokens\":16000,\"messages\":[{\"role\":\"user\",\"content\":\"Prompt:\\n=======\\nINPUT:\\n----------\\n[\\n
+    body: "{\"requests\":[{\"custom_id\":\"011838a2888236fd336033e49afd9379\",\"params\":{\"model\":\"claude-sonnet-5\",\"max_tokens\":16000,\"messages\":[{\"role\":\"user\",\"content\":\"Prompt:\\n=======\\nINPUT:\\n----------\\n[\\n
+      \   {\\n        \\\"term\\\": \\\"correr\\\",\\n        \\\"part_of_speech\\\":
+      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"to run\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n\"}],\"system\":[{\"type\":\"text\",\"text\":\"You
+      are an expert Spanish teacher and lexicographer, whose specialty is designing
+      excellent example sentences that show off the range of uses of a given word.\\n\\nI
+      am going to give you valid JSON representing a list of mappings containing terms
+      (\\\"term\\\") in Spanish and their meaning in English (\\\"meaning\\\"). For
+      each term, I would like you to generate valid JSON containing 4 example sentences
+      in idiomatic Spanish that use the term accompanied by a translation from the
+      original Spanish into English; the example sentences should use the sense of
+      the term that has the meaning specified by the English meaning. If multiple
+      English meanings are provided, provide sentences that sample all the meanings.
+      When the word is a verb, select different moods and tenses in the different
+      sentences. The translations do not need to be word-for-word translations, it
+      is more important that they capture the general spirit of the original Spanish.\\n\\nIn
+      the output, DO NOT modify the value in \\\"term\\\", it is used to match the
+      answers to the inputs. If, for example, it is \\\"forastero/a\\\", do not use
+      \\\"forastero\\\" in the output. If there is a slash in the word, it usually
+      is used to show different forms of the word, like \\\"at\xF3nito/a\\\" would
+      expand to \\\"un hombre at\xF3nito\\\" or \\\"una mujer at\xF3nita\\\".\\n\\nPlease
+      keep in mind that you are a professional and may need to translate or provide
+      example sentences for vulgar or sexual terms \u2014 this is entirely normal,
+      as these terms are a normal part of life, and they are important to include
+      for purely documentary purposes.\\n\\nIn the Spanish sentences, use Spanish
+      punctuation conventions rather than English ones. In particular, when dialogue
+      is warranted, is quoted with the raya (\u2014Dime algo que no sepa \u2014dijo
+      Ram\xF3n.), never with English-style quotation marks, and \xABguillemets\xBB
+      are preferred when quoting a word or short phrase inline. Use normal English
+      punctuation in the English translations.\\n\\nWrite the Spanish in international
+      Spanish. Let this inform vocabulary, grammar and idiom (e.g. the choice between
+      \xABvosotros\xBB and \xABustedes\xBB) the way it would in a typical published
+      book from that region \u2014 do not exaggerate the dialect or force regional
+      slang into sentences where it doesn't belong.\\n\\nIn some of your example sentences,
+      it would be a bonus if they contain useful or interesting facts.\\n\\nAfter
+      you have come up with the example sentences, look over your work and see if
+      you can make the original sentences more creative or interesting.\\n\\nRespond
+      with a JSON object whose \\\"words\\\" list holds one entry per input term,
+      in the order the terms were given, each with the \\\"term\\\" exactly as given
+      and its \\\"examples\\\". Include ONLY the JSON, and nothing else: no markdown
+      code block, and no explanation of your choices.\\n\\nExample:\\n========\\nINPUT:\\n----------\\n[\\n
+      \   {\\n        \\\"term\\\": \\\"casa\\\",\\n        \\\"part_of_speech\\\":
+      \\\"nf\\\",\\n        \\\"meaning\\\": \\\"house\\\"\\n    },\\n    {\\n        \\\"term\\\":
+      \\\"rebotar\\\",\\n        \\\"part_of_speech\\\": \\\"vi\\\",\\n        \\\"meaning\\\":
+      \\\"bounce\\\"\\n    },\\n    {\\n        \\\"term\\\": \\\"piso\\\",\\n        \\\"part_of_speech\\\":
+      \\\"nm\\\",\\n        \\\"meaning\\\": \\\"apartment\\\"\\n    },\\n    {\\n
+      \       \\\"term\\\": \\\"mu\xF1eca\\\",\\n        \\\"part_of_speech\\\": \\\"nf\\\",\\n
+      \       \\\"meaning\\\": \\\"doll, wrist\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n{\\\"words\\\":
+      [\\n{\\\"term\\\": \\\"casa\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"La
+      casa de mi abuela est\xE1 en el campo.\\\", \\\"english\\\": \\\"My grandmother's
+      house is in the country.\\\"}, {\\\"spanish\\\": \\\"En la Edad Media, las casas
+      se constru\xEDan a menudo con bahareque, que consist\xEDa en revestir ramas
+      y paja con arcilla, barro y esti\xE9rcol.\\\", \\\"english\\\": \\\"In the Middle
+      Ages, houses were often made of wattle and daub, which involved plastering branches
+      and straw with clay, mud and dung.\\\"}, {\\\"spanish\\\": \\\"Voy a limpiar
+      mi casa este fin de semana.\\\", \\\"english\\\": \\\"I am going to clean my
+      house this weekend.\\\"}, {\\\"spanish\\\": \\\"Me gusta pasar tiempo en casa
+      de mis padres.\\\", \\\"english\\\": \\\"I like to spend time at my parents'
+      house.\\\"}]},\\n{\\\"term\\\": \\\"rebotar\\\", \\\"examples\\\": [{\\\"spanish\\\":
+      \\\"El bal\xF3n rebota contra el suelo.\\\", \\\"english\\\": \\\"The ball is
+      bouncing on the ground.\\\"}, {\\\"spanish\\\": \\\"\xA1Rebota m\xE1s alto!\\\",
+      \\\"english\\\": \\\"Bounce higher!\\\"}, {\\\"spanish\\\": \\\"Los delfines
+      pueden \xABver\xBB rebotando ondas sonoras en su entorno.\\\", \\\"english\\\":
+      \\\"Dolphins can 'see' by bouncing sound waves off their surroundings.\\\"},
+      {\\\"spanish\\\": \\\"Rebotaremos la luz en la luna.\\\", \\\"english\\\": \\\"We
+      will bounce the light off the moon.\\\"}]},\\n{\\\"term\\\": \\\"piso\\\", \\\"examples\\\":
+      [{\\\"spanish\\\": \\\"\u2014Vivo en un piso en el centro de la ciudad \u2014dijo
+      Mar\xEDa.\\\", \\\"english\\\": \\\"\\\\\\\"I live in an apartment in the city
+      center,\\\\\\\" said Mar\xEDa.\\\"}, {\\\"spanish\\\": \\\"El piso de mi hermano
+      tiene tres dormitorios.\\\", \\\"english\\\": \\\"My brother's apartment has
+      three bedrooms.\\\"}, {\\\"spanish\\\": \\\"Necesito arreglar el fregadero del
+      piso.\\\", \\\"english\\\": \\\"I need to fix the sink in my apartment.\\\"},
+      {\\\"spanish\\\": \\\"El piso de al lado est\xE1 alquilado.\\\", \\\"english\\\":
+      \\\"The apartment next door is rented.\\\"}]},\\n{\\\"term\\\": \\\"mu\xF1eca\\\",
+      \\\"examples\\\": [{\\\"spanish\\\": \\\"Le regalaron una mu\xF1eca preciosa
+      por su cumplea\xF1os.\\\", \\\"english\\\": \\\"They gave her a pretty doll
+      for her birthday.\\\"}, {\\\"spanish\\\": \\\"Se cay\xF3 patinando y se rompi\xF3
+      la mu\xF1eca.\\\", \\\"english\\\": \\\"She fell when she was skating and broke
+      her wrist.\\\"}, {\\\"spanish\\\": \\\"Se puso una pulsera en la mu\xF1eca izquierda.\\\",
+      \\\"english\\\": \\\"She put the bracelet on her left wrist.\\\"}, {\\\"spanish\\\":
+      \\\"La peque\xF1a Mar\xEDa nunca dorm\xEDa sin su mu\xF1eca favorita.\\\", \\\"english\\\":
+      \\\"Little Maria never slept without her favorite doll.\\\"}]}\\n]}\\n\",\"cache_control\":{\"type\":\"ephemeral\",\"ttl\":\"1h\"}}],\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"words\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"term\":{\"type\":\"string\"},\"examples\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"spanish\":{\"type\":\"string\"},\"english\":{\"type\":\"string\"}},\"required\":[\"spanish\",\"english\"],\"additionalProperties\":false}}},\"required\":[\"term\",\"examples\"],\"additionalProperties\":false}}},\"required\":[\"words\"],\"additionalProperties\":false}}}}},{\"custom_id\":\"a552d8e5368c32869581439b8f9dc602\",\"params\":{\"model\":\"claude-sonnet-5\",\"max_tokens\":16000,\"messages\":[{\"role\":\"user\",\"content\":\"Prompt:\\n=======\\nINPUT:\\n----------\\n[\\n
       \   {\\n        \\\"term\\\": \\\"gato\\\",\\n        \\\"part_of_speech\\\":
       \\\"nm\\\",\\n        \\\"meaning\\\": \\\"cat\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n\"}],\"system\":[{\"type\":\"text\",\"text\":\"You
       are an expert Spanish teacher and lexicographer, whose specialty is designing
@@ -281,13 +350,13 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '6623'
+      - '13237'
       content-type:
       - application/json
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.15.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -297,7 +366,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.15.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -305,19 +374,19 @@ interactions:
       x-stainless-runtime:
       - CPython
       x-stainless-runtime-version:
-      - 3.12.12
+      - 3.13.5
       x-stainless-timeout:
       - NOT_GIVEN
     method: POST
     uri: https://api.anthropic.com/v1/messages/batches
   response:
     body:
-      string: '{"id":"msgbatch_01US2s6kcwQQGhj8vFQRmihn","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":1,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T16:00:59.580915+00:00","expires_at":"2026-10-11T16:00:59.580915+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+      string: '{"id":"msgbatch_0187C99EBfC2xBdnvAFqbkSW","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":2,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-17T20:17:01.951398+00:00","expires_at":"2026-10-18T20:17:01.951398+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
     headers:
       anthropic-ratelimit-batch-requests-limit:
       - '300000'
       anthropic-ratelimit-batch-requests-remaining:
-      - '299999'
+      - '299998'
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
       cf-cache-status:
@@ -331,13 +400,11 @@ interactions:
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:00:59 GMT
+      - Sat, 17 Oct 2026 20:17:01 GMT
       request-id:
-      - req_011CftqSgRvQG1YyKXvuLCeQ
+      - req_011Cg8RdWvjpJjntjMtG1dao
       server:
       - cloudflare
-      server-timing:
-      - x-originResponse;dur=320
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:
@@ -363,7 +430,7 @@ interactions:
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.15.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -373,7 +440,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.15.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -381,14 +448,14 @@ interactions:
       x-stainless-runtime:
       - CPython
       x-stainless-runtime-version:
-      - 3.12.12
+      - 3.13.5
       x-stainless-timeout:
       - NOT_GIVEN
     method: GET
-    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_0187C99EBfC2xBdnvAFqbkSW
   response:
     body:
-      string: '{"id":"msgbatch_01US2s6kcwQQGhj8vFQRmihn","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":1,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T16:00:59.580915+00:00","expires_at":"2026-10-11T16:00:59.580915+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+      string: '{"id":"msgbatch_0187C99EBfC2xBdnvAFqbkSW","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":2,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-17T20:17:01.951398+00:00","expires_at":"2026-10-18T20:17:01.951398+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
     headers:
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
@@ -403,15 +470,15 @@ interactions:
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:00:59 GMT
+      - Sat, 17 Oct 2026 20:17:02 GMT
       request-id:
-      - req_011CftqSi3APpd1uryMCMrSh
+      - req_011Cg8RdZ7TFWe2KoYy16DJt
       retry-after:
       - '10'
       server:
       - cloudflare
       server-timing:
-      - x-originResponse;dur=122
+      - x-originResponse;dur=172
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:
@@ -437,7 +504,7 @@ interactions:
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.15.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -447,7 +514,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.15.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -455,14 +522,14 @@ interactions:
       x-stainless-runtime:
       - CPython
       x-stainless-runtime-version:
-      - 3.12.12
+      - 3.13.5
       x-stainless-timeout:
       - NOT_GIVEN
     method: GET
-    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_0187C99EBfC2xBdnvAFqbkSW
   response:
     body:
-      string: '{"id":"msgbatch_01US2s6kcwQQGhj8vFQRmihn","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":1,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T16:00:59.580915+00:00","expires_at":"2026-10-11T16:00:59.580915+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+      string: '{"id":"msgbatch_0187C99EBfC2xBdnvAFqbkSW","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":2,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-17T20:17:01.951398+00:00","expires_at":"2026-10-18T20:17:01.951398+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
     headers:
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
@@ -477,15 +544,13 @@ interactions:
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:01:09 GMT
+      - Sat, 17 Oct 2026 20:17:12 GMT
       request-id:
-      - req_011CftqTTf1Fc5n3wJ1vGi5n
+      - req_011Cg8ReJuDUG4i6YpDUBWKx
       retry-after:
       - '10'
       server:
       - cloudflare
-      server-timing:
-      - x-originResponse;dur=104
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:
@@ -511,7 +576,7 @@ interactions:
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.15.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -521,7 +586,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.15.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -529,14 +594,14 @@ interactions:
       x-stainless-runtime:
       - CPython
       x-stainless-runtime-version:
-      - 3.12.12
+      - 3.13.5
       x-stainless-timeout:
       - NOT_GIVEN
     method: GET
-    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_0187C99EBfC2xBdnvAFqbkSW
   response:
     body:
-      string: '{"id":"msgbatch_01US2s6kcwQQGhj8vFQRmihn","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":1,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T16:00:59.580915+00:00","expires_at":"2026-10-11T16:00:59.580915+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+      string: '{"id":"msgbatch_0187C99EBfC2xBdnvAFqbkSW","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":2,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-17T20:17:01.951398+00:00","expires_at":"2026-10-18T20:17:01.951398+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
     headers:
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
@@ -551,15 +616,15 @@ interactions:
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:01:30 GMT
+      - Sat, 17 Oct 2026 20:17:32 GMT
       request-id:
-      - req_011CftqUx5KUoQmjBz9X8q3q
+      - req_011Cg8RfoQzBwCZQmx9MfcTM
       retry-after:
       - '10'
       server:
       - cloudflare
       server-timing:
-      - x-originResponse;dur=142
+      - x-originResponse;dur=134
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:
@@ -585,7 +650,7 @@ interactions:
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.15.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -595,7 +660,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.15.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -603,14 +668,14 @@ interactions:
       x-stainless-runtime:
       - CPython
       x-stainless-runtime-version:
-      - 3.12.12
+      - 3.13.5
       x-stainless-timeout:
       - NOT_GIVEN
     method: GET
-    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_0187C99EBfC2xBdnvAFqbkSW
   response:
     body:
-      string: '{"id":"msgbatch_01US2s6kcwQQGhj8vFQRmihn","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":1,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T16:00:59.580915+00:00","expires_at":"2026-10-11T16:00:59.580915+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+      string: '{"id":"msgbatch_0187C99EBfC2xBdnvAFqbkSW","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":2,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-17T20:17:01.951398+00:00","expires_at":"2026-10-18T20:17:01.951398+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
     headers:
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
@@ -625,15 +690,13 @@ interactions:
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:02:10 GMT
+      - Sat, 17 Oct 2026 20:18:13 GMT
       request-id:
-      - req_011CftqXvMU5eVHGdhw1xfi6
+      - req_011Cg8Rimf9fwEfvoCE1Gswv
       retry-after:
       - '10'
       server:
       - cloudflare
-      server-timing:
-      - x-originResponse;dur=116
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:
@@ -659,7 +722,7 @@ interactions:
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.15.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -669,7 +732,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.15.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -677,14 +740,14 @@ interactions:
       x-stainless-runtime:
       - CPython
       x-stainless-runtime-version:
-      - 3.12.12
+      - 3.13.5
       x-stainless-timeout:
       - NOT_GIVEN
     method: GET
-    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_0187C99EBfC2xBdnvAFqbkSW
   response:
     body:
-      string: '{"id":"msgbatch_01US2s6kcwQQGhj8vFQRmihn","type":"message_batch","processing_status":"ended","request_counts":{"processing":0,"succeeded":1,"errored":0,"canceled":0,"expired":0},"ended_at":"2026-10-10T16:02:19.973874+00:00","created_at":"2026-10-10T16:00:59.580915+00:00","expires_at":"2026-10-11T16:00:59.580915+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":"https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn/results"}'
+      string: '{"id":"msgbatch_0187C99EBfC2xBdnvAFqbkSW","type":"message_batch","processing_status":"ended","request_counts":{"processing":0,"succeeded":2,"errored":0,"canceled":0,"expired":0},"ended_at":"2026-10-17T20:18:57.958611+00:00","created_at":"2026-10-17T20:17:01.951398+00:00","expires_at":"2026-10-18T20:17:01.951398+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":"https://api.anthropic.com/v1/messages/batches/msgbatch_0187C99EBfC2xBdnvAFqbkSW/results"}'
     headers:
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
@@ -699,13 +762,11 @@ interactions:
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:03:10 GMT
+      - Sat, 17 Oct 2026 20:19:13 GMT
       request-id:
-      - req_011CftqcN1gG3rZDuQ5G6Upn
+      - req_011Cg8RoDFtMET5JMhfnZUaF
       server:
       - cloudflare
-      server-timing:
-      - x-originResponse;dur=156
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:
@@ -731,7 +792,7 @@ interactions:
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.15.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -741,7 +802,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.15.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -749,14 +810,14 @@ interactions:
       x-stainless-runtime:
       - CPython
       x-stainless-runtime-version:
-      - 3.12.12
+      - 3.13.5
       x-stainless-timeout:
       - NOT_GIVEN
     method: GET
-    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_0187C99EBfC2xBdnvAFqbkSW
   response:
     body:
-      string: '{"id":"msgbatch_01US2s6kcwQQGhj8vFQRmihn","type":"message_batch","processing_status":"ended","request_counts":{"processing":0,"succeeded":1,"errored":0,"canceled":0,"expired":0},"ended_at":"2026-10-10T16:02:19.973874+00:00","created_at":"2026-10-10T16:00:59.580915+00:00","expires_at":"2026-10-11T16:00:59.580915+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":"https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn/results"}'
+      string: '{"id":"msgbatch_0187C99EBfC2xBdnvAFqbkSW","type":"message_batch","processing_status":"ended","request_counts":{"processing":0,"succeeded":2,"errored":0,"canceled":0,"expired":0},"ended_at":"2026-10-17T20:18:57.958611+00:00","created_at":"2026-10-17T20:17:01.951398+00:00","expires_at":"2026-10-18T20:17:01.951398+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":"https://api.anthropic.com/v1/messages/batches/msgbatch_0187C99EBfC2xBdnvAFqbkSW/results"}'
     headers:
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
@@ -771,13 +832,13 @@ interactions:
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:03:10 GMT
+      - Sat, 17 Oct 2026 20:19:13 GMT
       request-id:
-      - req_011CftqcNmKcf4MfaKvatwLH
+      - req_011Cg8RoDrbxW5nicidUP5YA
       server:
       - cloudflare
       server-timing:
-      - x-originResponse;dur=125
+      - x-originResponse;dur=108
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:
@@ -803,7 +864,7 @@ interactions:
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.15.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -813,7 +874,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.15.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -821,24 +882,37 @@ interactions:
       x-stainless-runtime:
       - CPython
       x-stainless-runtime-version:
-      - 3.12.12
+      - 3.13.5
       x-stainless-timeout:
       - NOT_GIVEN
     method: GET
-    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn/results
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_0187C99EBfC2xBdnvAFqbkSW/results
   response:
     body:
-      string: "{\"custom_id\":\"a552d8e5368c32869581439b8f9dc602\",\"result\":{\"type\":\"succeeded\",\"message\":{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011CftqTrRDzKAEkrpaHaWBb\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"words\\\":
-        [{\\\"term\\\": \\\"gato\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"Mi
-        gato duerme m\xE1s de doce horas al d\xEDa.\\\", \\\"english\\\": \\\"My cat
-        sleeps more than twelve hours a day.\\\"}, {\\\"spanish\\\": \\\"\u2014No
-        encuentro al gato por ninguna parte \u2014dijo Luc\xEDa, preocupada.\\\",
-        \\\"english\\\": \\\"\\\\\\\"I can't find the cat anywhere,\\\\\\\" said Luc\xEDa,
-        worried.\\\"}, {\\\"spanish\\\": \\\"Si tuviera un jard\xEDn m\xE1s grande,
-        adoptar\xEDa otro gato.\\\", \\\"english\\\": \\\"If I had a bigger garden,
-        I would adopt another cat.\\\"}, {\\\"spanish\\\": \\\"Los antiguos egipcios
-        veneraban al gato como un animal sagrado.\\\", \\\"english\\\": \\\"The ancient
-        Egyptians worshipped the cat as a sacred animal.\\\"}]}]}\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":76,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":2300,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":261,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"batch\",\"inference_geo\":\"global\"},\"diagnostics\":null}}}\n"
+      string: "{\"custom_id\":\"011838a2888236fd336033e49afd9379\",\"result\":{\"type\":\"succeeded\",\"message\":{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011Cg8RfTrFWtteWVkNqZHWC\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"EqsECscCCBIYAipAoxip6yWC3HHjAGBKJSguGccgw6EP9rQ893HI8lcGWmW6qVxyFr2VcyR/zAeZzMZO8tB58tO1EeCZFGbmOtrCxDIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQwYTk5M2IyZS1kNWZlLTRjYWItYjg0ZS0yMmEyY2JhNGVjNDKaAREKD2NsYXVkZS1zb25uZXQtNagB2a/P1gbCAT0IBRAAGg8BuSQC2ooDTzcF7IsEJq0gAjIEEnHPJToEc0C5BEIEODMjikoEODMjilAAWgTZBeFWYAJoAXAB2gFgChZwcmVmaXhfYmVmb3JlX2Jsb2NrX3YxEiAH3++h4UerkggJNzhdeq9vrEkDxw3spzX9zDEtxo0sQSIAMiDCwBPIapyS4i+Wbz2GF3aPi3pEyQKtzAl7+h4JivtOH0gDEgwucFPjY/LohNFI7L8aDH6F9KKZlQySu5owUyIwcd1Od/p1SQ3dj3SgaSUkIgJryHS5sj6YvkkZrWIKhW07Xp5ILu7cOYoZv5R17/o3KpABMODNr6OBu4yf2LlP4o2rMgJL/6YClCg3KhUHk8S1a8P1HnCe0y2gOCEyWSxn++boUVMlW42fWfh9sJ+VKLxofWqFTP6MHZNEckYFMPFm3kp3WZ+DQTmnFfYhq5zpiGt6jKXGCcxU3PldfHZYLIpPgG+xFcVUDzfcmL6zOAaioy2mTFG3/KWJMpBL1TdBaYNMGAE=\"},{\"type\":\"text\",\"text\":\"{\\\"words\\\":
+        [{\\\"term\\\": \\\"correr\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"Todas
+        las ma\xF1anas, Pedro corre cinco kil\xF3metros por el parque antes de ir
+        a trabajar.\\\", \\\"english\\\": \\\"Every morning, Pedro runs five kilometers
+        through the park before going to work.\\\"}, {\\\"spanish\\\": \\\"Si corrieras
+        un poco m\xE1s r\xE1pido, llegar\xEDas a tiempo para coger el autob\xFAs.\\\",
+        \\\"english\\\": \\\"If you ran a little faster, you'd get there in time to
+        catch the bus.\\\"}, {\\\"spanish\\\": \\\"El a\xF1o pasado corri\xF3 la marat\xF3n
+        de Nueva York en poco m\xE1s de tres horas.\\\", \\\"english\\\": \\\"Last
+        year he ran the New York marathon in a little over three hours.\\\"}, {\\\"spanish\\\":
+        \\\"\u2014\xA1Corre, que se cierra la puerta! \u2014grit\xF3 Marta al ver
+        que el tren ya se mov\xEDa.\\\", \\\"english\\\": \\\"\\\\\\\"Run, the door
+        is closing!\\\\\\\" shouted Marta as she saw the train already moving.\\\"}]}]}\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":76,\"cache_creation_input_tokens\":2300,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":2300},\"output_tokens\":358,\"output_tokens_details\":{\"thinking_tokens\":48},\"service_tier\":\"batch\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"diagnostics\":null}}}\n{\"custom_id\":\"a552d8e5368c32869581439b8f9dc602\",\"result\":{\"type\":\"succeeded\",\"message\":{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011Cg8RfUYvLAey1wuFciEyz\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"EucDCscCCBIYAipAX3chpYEDiabxPr1FRoXZFoCPXUdVtRYpyKUTIKDXeiyQLftCY/TY9LrsIBotdMMrpoWfRdxvrBLIpIyVZZpBbjIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQwYTk5M2IyZS1kNWZlLTRjYWItYjg0ZS0yMmEyY2JhNGVjNDKaAREKD2NsYXVkZS1zb25uZXQtNagB2a/P1gbCAT0IBRAAGg8BuSQC2ooDTzcFUtkEJq0gAjIEEnHPJToEc0C5BEIEODMjikoEODMjilAAWgTZBeFWYAJoAXAB2gFgChZwcmVmaXhfYmVmb3JlX2Jsb2NrX3YxEiAztlqBMggOrJZlrwfQ4xrj9Y7iZffV8rO9tx35phlYqiIAMiDCwBPIapyS4i+Wbz2GF3aPi3pEyQKtzAl7+h4JivtOH0gDEgx1BpnL3jaDfuVh28caDCp1SNpfHzzEg7qKxCIwsEuX5sEIxk45m987aBnqlSNmnOVgB1DRo1Uot2nxiFrEegA5oW2+S03pdJjLOGJ9Kk0dcGsmf9KDL796Hzs0Lupfoup8hEUC8viWcWfNRx9/CSwgff735hgHVk8RSQMlAy1vTTikNkqWEjKivh3Ia4TqSDl78zZ6a1jgWAgIxxgB\"},{\"type\":\"text\",\"text\":\"{\\\"words\\\":
+        [{\\\"term\\\": \\\"gato\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"El
+        gato dorm\xEDa acurrucado sobre el sof\xE1.\\\", \\\"english\\\": \\\"The
+        cat was sleeping curled up on the sofa.\\\"}, {\\\"spanish\\\": \\\"Dicen
+        que los gatos tienen siete vidas, aunque en realidad solo tienen una, muy
+        resistente.\\\", \\\"english\\\": \\\"They say cats have seven lives, although
+        in reality they only have one, a very resilient one.\\\"}, {\\\"spanish\\\":
+        \\\"\u2014No despiertes al gato, que est\xE1 de mal humor \u2014me advirti\xF3
+        mi abuela.\\\", \\\"english\\\": \\\"\\\\\\\"Don't wake up the cat, he's in
+        a bad mood,\\\\\\\" my grandmother warned me.\\\"}, {\\\"spanish\\\": \\\"Mi
+        vecina tiene un gato negro que cruza la calle todas las ma\xF1anas.\\\", \\\"english\\\":
+        \\\"My neighbor has a black cat that crosses the street every morning.\\\"}]}]}\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":76,\"cache_creation_input_tokens\":2300,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":2300},\"output_tokens\":316,\"output_tokens_details\":{\"thinking_tokens\":26},\"service_tier\":\"batch\",\"inference_geo\":\"global\",\"speed\":\"standard\"},\"diagnostics\":null}}}\n"
     headers:
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
@@ -847,19 +921,19 @@ interactions:
       connection:
       - keep-alive
       content-disposition:
-      - attachment; filename*=utf-8''msgbatch_01US2s6kcwQQGhj8vFQRmihn_results.jsonl
+      - attachment; filename*=utf-8''msgbatch_0187C99EBfC2xBdnvAFqbkSW_results.jsonl
       content-security-policy:
       - default-src 'none'; frame-ancestors 'none'
       content-type:
       - application/x-jsonl
       date:
-      - Sat, 10 Oct 2026 16:03:11 GMT
+      - Sat, 17 Oct 2026 20:19:13 GMT
       request-id:
-      - req_011CftqcPVyVHxM6JwvgeZJv
+      - req_011Cg8RoEWnpGmJVBmqAEBEJ
       server:
       - cloudflare
       server-timing:
-      - x-originResponse;dur=257
+      - x-originResponse;dur=320
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:

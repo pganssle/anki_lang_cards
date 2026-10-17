@@ -5,6 +5,7 @@ It supports batching and prompt caching. Model specs written
 """
 
 import asyncio
+import hashlib
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar, Final, Self
 
@@ -18,6 +19,10 @@ from . import base
 DEFAULT_MAX_TOKENS: Final[int] = 16_000
 
 _INCOMPLETE_STOP_REASONS: Final = frozenset({"max_tokens", "refusal"})
+
+# The API rejects max_tokens=0 together with structured outputs, so a warm-up
+# costs one output token.
+WARM_UP_MAX_TOKENS: Final[int] = 1
 
 
 class AnthropicBackend:
@@ -107,6 +112,7 @@ class AnthropicBackend:
         message = await self._client.messages.create(
             **self._params(request, batch=False)
         )
+        _require_complete(message)
         return _response_data(message, batch=False)
 
     async def query_batch(
@@ -125,14 +131,14 @@ class AnthropicBackend:
                 jobs.append(job_id)
                 unsubmitted -= keys
 
+        warm_ups: Mapping[base.Request, caches.ResponseData] = {}
+        if self.prompt_caching:
+            warm_ups = await self._warm_cache(
+                [by_key[key] for key in sorted(unsubmitted)]
+            )
+
         responses: dict[str, caches.ResponseData] = {}
         failures: dict[str, str] = {}
-        if self.prompt_caching:
-            for key in await self._warm_cache(
-                [by_key[key] for key in sorted(unsubmitted)], responses, failures
-            ):
-                unsubmitted.remove(key)
-
         if unsubmitted:
             job = await self._client.messages.batches.create(
                 requests=[
@@ -164,51 +170,53 @@ class AnthropicBackend:
             failures[key] = "no result came back from the batch job"
 
         return base.BatchResults(
-            responses=responses, failures=failures, completed_jobs=frozenset(jobs)
+            responses=responses,
+            failures=failures,
+            completed_jobs=frozenset(jobs),
+            warm_ups=warm_ups,
         )
 
     async def _warm_cache(
-        self,
-        requests: Sequence[base.Request],
-        responses: dict[str, caches.ResponseData],
-        failures: dict[str, str],
-    ) -> Sequence[str]:
-        """Send one request per shared system prompt ahead of the batch.
+        self, requests: Sequence[base.Request]
+    ) -> Mapping[base.Request, caches.ResponseData]:
+        """Write each shared system prompt to the prompt cache ahead of the batch.
 
         Requests in a batch are processed concurrently, so without this most
         of them miss the cache and pay to write it; at the hour-long cache
-        lifetime a write costs twice as much as uncached input. One ordinary
-        request writes the entry before the batch starts, so the batch can
-        read it. A system prompt only one request uses is left to the batch.
+        lifetime a write costs twice as much as uncached input. A throwaway
+        request with the same system prompt and settings but a one-token
+        output limit writes the entry before the batch starts, for the cost
+        of the write alone, so that the batched requests can read it. The
+        API only promises best-effort cache hits within a batch, though, and
+        in recordings the batch has missed the entry as often as not. A
+        system prompt only one request uses is left to the batch.
 
-        :return: The keys of the requests that were sent.
+        Nothing is journaled against a crash between here and submitting the
+        batch: the next run's warm-up finds the entry this one wrote and
+        pays a cache read for it, a tenth of the price of uncached input.
+
+        :return: The warm-up requests as sent, with their responses.
         """
-        first_by_system_prompt: dict[str, base.Request] = {}
-        shared: set[str] = set()
+        by_system_prompt: dict[str, list[base.Request]] = {}
         for request in requests:
-            if not request.system_prompt:
-                continue
-            if request.system_prompt in first_by_system_prompt:
-                shared.add(request.system_prompt)
-            else:
-                first_by_system_prompt[request.system_prompt] = request
+            if request.system_prompt:
+                by_system_prompt.setdefault(request.system_prompt, []).append(request)
 
-        sent: list[str] = []
-        for system_prompt, request in first_by_system_prompt.items():
-            if system_prompt not in shared:
+        warm_ups: dict[base.Request, caches.ResponseData] = {}
+        for sharing in by_system_prompt.values():
+            if len(sharing) < 2:
                 continue
-            print("Sending one request ahead of the batch to fill the prompt cache.")
+            print(
+                "Sending a warm-up request ahead of the batch to fill the prompt cache."
+            )
+            warm_up = _warm_up_request(sharing)
             # The batch parameters, so that it writes the same hour-long
             # cache entry the batch will read.
-            message = await self._client.messages.create(
-                **self._params(request, batch=True)
-            )
-            try:
-                responses[request.key] = _response_data(message, batch=False)
-            except base.IncompleteResponseError as e:
-                failures[request.key] = str(e)
-            sent.append(request.key)
-        return sent
+            params = self._params(warm_up, batch=True)
+            params["max_tokens"] = WARM_UP_MAX_TOKENS
+            message = await self._client.messages.create(**params)
+            warm_ups[warm_up] = _response_data(message, batch=False, warm_up=True)
+        return warm_ups
 
     async def _wait_for(self, job_id: str) -> None:
         interval = self.poll_interval
@@ -266,22 +274,47 @@ def _collect(
     match result.type:
         case "succeeded":
             try:
-                responses[item.custom_id] = _response_data(result.message, batch=True)
+                _require_complete(result.message)
             except base.IncompleteResponseError as e:
                 failures[item.custom_id] = str(e)
+            else:
+                responses[item.custom_id] = _response_data(result.message, batch=True)
         case "errored":
             failures[item.custom_id] = f"errored: {result.error.error.message}"
         case other:
             failures[item.custom_id] = other
 
 
-def _response_data(
-    message: anthropic.types.Message, *, batch: bool
-) -> caches.ResponseData:
+def _warm_up_request(sharing: Sequence[base.Request]) -> base.Request:
+    """The throwaway request that warms the cache for ``sharing``.
+
+    The prompt after the cached system prompt can be anything; it names the
+    batch it warms (by a digest of the requests' keys) so that each batch's
+    warm-up is recorded separately in the response cache, where the usage
+    report finds it.
+    """
+    digest = hashlib.md5(
+        "".join(sorted(request.key for request in sharing)).encode("ascii"),
+        usedforsecurity=False,
+    ).hexdigest()
+    first = sharing[0]
+    return base.Request(
+        f"Prompt cache warm-up for batch {digest}.",
+        system_prompt=first.system_prompt,
+        json_schema=first.json_schema,
+    )
+
+
+def _require_complete(message: anthropic.types.Message) -> None:
     if message.stop_reason in _INCOMPLETE_STOP_REASONS:
         raise base.IncompleteResponseError(
             f"The response stopped early (stop_reason={message.stop_reason!r})."
         )
+
+
+def _response_data(
+    message: anthropic.types.Message, *, batch: bool, warm_up: bool = False
+) -> caches.ResponseData:
     usage = message.usage
     details: dict[str, Any] = {
         "cache_creation_input_tokens": usage.cache_creation_input_tokens,
@@ -289,6 +322,8 @@ def _response_data(
         "batch": batch,
         "message_id": message.id,
     }
+    if warm_up:
+        details["warm_up"] = True
     if usage.cache_creation is not None:
         # Cache writes cost more for the longer lifetime, so the split is
         # needed to price a run exactly.

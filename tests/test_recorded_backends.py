@@ -195,12 +195,27 @@ def test_sentences_batched(
 
     _assert_sentences(words, recorded_backend.model_name)
     usage = _cached_usage(query_runner)
-    assert len(usage) == len(WORDS)
-    # A backend may answer some requests outside the batch, e.g. to warm a
-    # prompt cache for the rest.
-    assert any(entry["details"] and entry["details"]["batch"] for entry in usage)
+    warm_ups = [entry for entry in usage if (entry["details"] or {}).get("warm_up")]
+    answers = [entry for entry in usage if entry not in warm_ups]
+    assert len(answers) == len(WORDS)
+    assert all(entry["details"] and entry["details"]["batch"] for entry in answers)
     assert query_runner.journal.pending() == {}
     _assert_prompt_cache_used(query_runner, usage)
+    if base.Feature.PROMPT_CACHING in query_runner.backend.features:
+        # The warm-up wrote the shared system prompt (or found it still
+        # cached from a recent run), outside the batch and for next to no
+        # output. Whether the batched requests then read it is up to the
+        # API: cache hits in batches are best-effort, and the recording
+        # shows the batch missing, so that is not asserted.
+        (warm_up,) = warm_ups
+        assert warm_up["details"] is not None
+        assert not warm_up["details"]["batch"]
+        assert (
+            warm_up["details"]["cache_creation_input_tokens"]
+            + warm_up["details"]["cache_read_input_tokens"]
+            > 0
+        )
+        assert warm_up["output"] <= 1
 
 
 @pytest.mark.vcr

@@ -80,6 +80,9 @@ class FakeAPI:
     """Just enough of the Messages and Message Batches endpoints."""
 
     message: Mapping[str, Any] = attrs.field(factory=_message)
+    single_message: Mapping[str, Any] | None = None
+    """What the Messages endpoint answers, if not ``message``."""
+
     batch_results: dict[str, Sequence[Mapping[str, Any]]] = attrs.field(factory=dict)
     """JSONL result lines for each job ID that exists."""
 
@@ -93,7 +96,7 @@ class FakeAPI:
         self.sent.append((request.method, path, body))
 
         if path == "/v1/messages":
-            return httpx2.Response(200, json=self.message)
+            return httpx2.Response(200, json=self.single_message or self.message)
         if path == "/v1/messages/batches":
             self.batch_results[JOB_ID] = [
                 {
@@ -349,17 +352,26 @@ SHARED_REQUESTS: Final = (
 
 
 def test_query_batch_warms_the_prompt_cache() -> None:
-    """One request per shared system prompt goes ahead of the batch, writing
-    the hour-long cache entry the batched requests will read."""
-    api = FakeAPI()
+    """A throwaway one-token request per shared system prompt goes ahead of
+    the batch, writing the hour-long cache entry the batched requests read;
+    every real request is then batched."""
+    api = FakeAPI(single_message=_message("{", stop_reason="max_tokens"))
 
-    results, submitted = _query_batch(_backend(api), SHARED_REQUESTS)
+    results, submitted = _query_batch(_backend(api, effort="low"), SHARED_REQUESTS)
 
     (warm_up,) = api.bodies("POST", "/v1/messages")
-    warm_key = min(request.key for request in SHARED_REQUESTS[:3])
-    (warm_request,) = [r for r in SHARED_REQUESTS if r.key == warm_key]
-    assert warm_up["messages"][0]["content"] == warm_request.prompt
-    assert warm_up["system"][0]["cache_control"] == {"type": "ephemeral", "ttl": "1h"}
+    assert warm_up["max_tokens"] == anthropic_sdk.WARM_UP_MAX_TOKENS
+    assert warm_up["system"] == [
+        {
+            "type": "text",
+            "text": "shared",
+            "cache_control": {"type": "ephemeral", "ttl": "1h"},
+        }
+    ]
+    assert warm_up["output_config"] == {"effort": "low"}
+    (user_message,) = warm_up["messages"]
+    assert user_message["content"].strip()
+    assert user_message["content"] not in {r.prompt for r in SHARED_REQUESTS}
     methods_and_paths = [(method, path) for method, path, _ in api.sent]
     assert methods_and_paths.index(("POST", "/v1/messages")) < methods_and_paths.index(
         ("POST", "/v1/messages/batches")
@@ -367,13 +379,54 @@ def test_query_batch_warms_the_prompt_cache() -> None:
 
     (body,) = api.bodies("POST", "/v1/messages/batches")
     batched = {item["custom_id"] for item in body["requests"]}
-    assert batched == {request.key for request in SHARED_REQUESTS} - {warm_key}
+    assert batched == {request.key for request in SHARED_REQUESTS}
     for item in body["requests"]:
+        assert item["params"]["max_tokens"] == anthropic_sdk.DEFAULT_MAX_TOKENS
         if "system" in item["params"]:
             assert item["params"]["system"][0]["cache_control"]["ttl"] == "1h"
     assert submitted == {JOB_ID: frozenset(batched)}
-    assert set(results.responses) == {request.key for request in SHARED_REQUESTS}
-    assert results.responses[warm_key]["usage"]["details"]["batch"] is False
+
+    # The cut-off warm-up is no failure: it was never meant to answer.
+    assert results.failures == {}
+    warm_up_request, warm_up_response = next(iter(results.warm_ups.items()))
+    assert warm_up_request.prompt == user_message["content"]
+    assert warm_up_request.system_prompt == "shared"
+    assert warm_up_response["usage"]["details"]["batch"] is False
+    assert warm_up_response["usage"]["details"]["warm_up"] is True
+    assert warm_up_response["usage"]["details"]["cache_creation_input_tokens"] == 100
+    assert all(
+        "warm_up" not in response["usage"]["details"]
+        for response in results.responses.values()
+    )
+
+
+def test_warm_up_matches_the_batch_requests_settings() -> None:
+    """The cache entry is keyed by more than the system prompt, so the
+    warm-up sends everything the batched requests do but the token limit."""
+    api = FakeAPI()
+    requests = [
+        base.Request("a", system_prompt="shared", json_schema=SCHEMA),
+        base.Request("b", system_prompt="shared", json_schema=SCHEMA),
+    ]
+
+    _query_batch(_backend(api, effort="medium"), requests)
+
+    (warm_up,) = api.bodies("POST", "/v1/messages")
+    (body,) = api.bodies("POST", "/v1/messages/batches")
+    batched = body["requests"][0]["params"]
+    differing = {key for key in batched if warm_up.get(key) != batched[key]}
+    assert differing == {"max_tokens", "messages"}
+
+
+def test_warm_up_is_the_same_for_the_same_batch() -> None:
+    """A retried batch of the same requests overwrites its warm-up record
+    rather than adding one, and one of different requests adds one."""
+    first, _ = _query_batch(_backend(FakeAPI()), SHARED_REQUESTS[:3])
+    again, _ = _query_batch(_backend(FakeAPI()), list(reversed(SHARED_REQUESTS[:3])))
+    fewer, _ = _query_batch(_backend(FakeAPI()), SHARED_REQUESTS[:2])
+
+    assert set(first.warm_ups) == set(again.warm_ups)
+    assert set(first.warm_ups) != set(fewer.warm_ups)
 
 
 def test_query_batch_without_prompt_caching() -> None:
@@ -388,19 +441,6 @@ def test_query_batch_without_prompt_caching() -> None:
         "cache_control" not in item["params"].get("system", [{}])[0]
         for item in body["requests"]
     )
-
-
-def test_query_batch_incomplete_warm_up() -> None:
-    """A cut-off warm-up response is a failure to retry; the batch still runs."""
-    api = FakeAPI(message=_message("[{", stop_reason="max_tokens"))
-
-    results, submitted = _query_batch(_backend(api), SHARED_REQUESTS[:2])
-
-    warm_key = min(request.key for request in SHARED_REQUESTS[:2])
-    assert "max_tokens" in results.failures[warm_key]
-    assert submitted == {
-        JOB_ID: frozenset({r.key for r in SHARED_REQUESTS[:2]} - {warm_key})
-    }
 
 
 def test_query_batch_all_resumed_needs_no_warm_up() -> None:
