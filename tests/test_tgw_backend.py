@@ -7,15 +7,19 @@ so no server is needed.
 import asyncio
 import contextlib
 from collections.abc import AsyncIterator, Mapping, Sequence
-from typing import Any
+from typing import Any, Final
 
 import aiohttp
+import multidict
 import pytest
+import yarl
 
+from anki_lang_cards import _types as types
 from anki_lang_cards.backends import base, tgw
 
-MODEL = "llama.gguf"
-REQUEST = base.Request("prompt", system_prompt="sys ")
+MODEL: Final = "llama.gguf"
+REQUEST: Final = base.Request("prompt", system_prompt="sys ")
+ENDPOINT: Final = yarl.URL("http://tgw.invalid/v1/completions")
 
 
 def _completion(finish_reason: str, text: str = "answer") -> Mapping[str, Any]:
@@ -32,7 +36,11 @@ class FakeResponse:
     def raise_for_status(self) -> None:
         if isinstance(self.reply, int):
             raise aiohttp.ClientResponseError(
-                request_info=None,  # type: ignore[arg-type]
+                request_info=aiohttp.RequestInfo(
+                    ENDPOINT,
+                    "POST",
+                    multidict.CIMultiDictProxy(multidict.CIMultiDict()),
+                ),
                 history=(),
                 status=self.reply,
             )
@@ -79,7 +87,9 @@ def _query(monkeypatch: pytest.MonkeyPatch, session: FakeSession) -> Mapping[str
     monkeypatch.setattr(aiohttp, "ClientSession", lambda **kwargs: session)
 
     async def run() -> Mapping[str, Any]:
-        backend = tgw.TGWBackend(MODEL, api_base_url="http://tgw.invalid/v1/")
+        backend = tgw.TGWBackend(
+            MODEL, api_base_url=types.Url("http://tgw.invalid/v1/")
+        )
         async with backend:
             return await backend.query(REQUEST)
 
@@ -116,32 +126,18 @@ def test_transient_errors_are_retried(
 
 
 def test_retries_are_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
-    session = FakeSession([500] * (tgw.MAX_TRIES + 1))
+    session = FakeSession([500] * (tgw._MAX_TRIES + 1))
     with pytest.raises(aiohttp.ClientResponseError):
         _query(monkeypatch, session)
-    assert session.posts == tgw.MAX_TRIES
+    assert session.posts == tgw._MAX_TRIES
 
 
-@pytest.mark.parametrize("status", [400, 401, 404, 422])
+@pytest.mark.parametrize("status", [400, 401, 404, 422, 499])
 def test_client_errors_are_not_retried(
     monkeypatch: pytest.MonkeyPatch, status: int
 ) -> None:
     session = FakeSession([status, _completion("stop")])
-    with pytest.raises(aiohttp.ClientResponseError):
+    with pytest.raises(aiohttp.ClientResponseError) as exc_info:
         _query(monkeypatch, session)
+    assert exc_info.value.status == status
     assert session.posts == 1
-
-
-@pytest.mark.parametrize(
-    ("error", "expected"),
-    [
-        (aiohttp.ClientResponseError(None, (), status=400), True),  # type: ignore[arg-type]
-        (aiohttp.ClientResponseError(None, (), status=499), True),  # type: ignore[arg-type]
-        (aiohttp.ClientResponseError(None, (), status=429), False),  # type: ignore[arg-type]
-        (aiohttp.ClientResponseError(None, (), status=500), False),  # type: ignore[arg-type]
-        (aiohttp.ClientResponseError(None, (), status=399), False),  # type: ignore[arg-type]
-        (ValueError("not HTTP"), False),
-    ],
-)
-def test_gives_up(error: Exception, expected: bool) -> None:
-    assert tgw.gives_up(error) is expected
