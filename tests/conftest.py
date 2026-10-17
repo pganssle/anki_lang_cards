@@ -6,7 +6,7 @@ import pathlib
 import re
 import shutil
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
 from typing import Final
 
 import pytest
@@ -182,10 +182,16 @@ def _caused_by_unmatched_request(error: BaseException) -> bool:
     HTTP clients like the Anthropic SDK re-raise transport errors as their
     own connection errors, so VCR's exception is usually the cause.
     """
+    try:
+        import vcr.errors
+    except ImportError:
+        # Without vcrpy installed, nothing can have refused a request.
+        return False
+
     seen: set[int] = set()
     current: BaseException | None = error
     while current is not None and id(current) not in seen:
-        if type(current).__name__ == "CannotOverwriteExistingCassetteException":
+        if isinstance(current, vcr.errors.CannotOverwriteExistingCassetteException):
             return True
         seen.add(id(current))
         current = current.__cause__ or current.__context__
@@ -193,7 +199,9 @@ def _caused_by_unmatched_request(error: BaseException) -> bool:
 
 
 @pytest.hookimpl(wrapper=True)
-def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[None]):  # type: ignore[no-untyped-def]
+def pytest_runtest_makereport(
+    item: pytest.Item, call: pytest.CallInfo[None]
+) -> Generator[None, pytest.TestReport, pytest.TestReport]:
     """Say how to fix a recording that no longer matches the requests."""
     report = yield
     if call.excinfo is not None and _caused_by_unmatched_request(call.excinfo.value):

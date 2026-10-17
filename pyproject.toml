@@ -30,7 +30,7 @@ books = [
     "pystardict",
 ]
 testing = [
-    "pytest>=7.0.0",
+    "pytest>=8.0.0",
     "httpx2>=2.0",
     "hypothesis",
     "pytest-recording>=0.14",
@@ -177,3 +177,8 @@ warn_unreachable = true
 module = "tests.*"
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
+
+[[tool.mypy.overrides]]
+# vcrpy ships no type information and is not installed in the type env.
+module = "vcr.*"
+ignore_missing_imports = true
