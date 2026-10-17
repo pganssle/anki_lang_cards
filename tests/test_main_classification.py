@@ -159,3 +159,26 @@ def test_the_gate_is_strictly_less_than(sentence_count: int) -> None:
 def test_at_the_gate_means_no_generation() -> None:
     word = make_word("gato", sentence_count=MAX_SENTENCES)
     assert classify([word]).to_llm == ()
+
+
+def test_an_untouched_rank_less_deck_note_is_skipped() -> None:
+    """A deck note with an empty Rank field passes the rank-based selection
+    (rank-less words are assumed to be inputs or split cards), so it has to
+    be caught here rather than sent off for sentences."""
+    deck_note = make_word("gato", rank=None, sentence_count=1)
+    result = classify([deck_note], deck=[deck_note])
+
+    assert result.skipped == (deck_note,)
+    assert result.to_llm == ()
+    assert result.include_directly == ()
+
+
+def test_a_rank_less_input_matching_a_deck_note_is_not_mistaken_for_it() -> None:
+    """Only the deck's own object is left alone: an input that merely looks
+    like a deck note (a declined duplicate, say) is still generated for."""
+    deck_note = make_word("gato", rank=None, sentence_count=1)
+    incoming = make_word("gato", rank=None, sentence_count=1)
+    result = classify([incoming], deck=[deck_note], inputs=[incoming])
+
+    assert result.to_llm == (incoming,)
+    assert result.skipped == ()
