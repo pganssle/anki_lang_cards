@@ -2,11 +2,13 @@
 
 import json
 import pathlib
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Final
 
 import attrs
+import hypothesis
 import pytest
+from hypothesis import strategies as st
 
 from anki_lang_cards import _types as types
 from anki_lang_cards import definition_similarity, triage
@@ -591,6 +593,74 @@ def test_equal_words_hash_equal(
     assert a == b
     assert hash(a) == hash(b)
     assert len({a, b}) == 1
+
+
+# Parts of speech grouped by base, so a pair drawn from one group has the
+# same base part of speech but may or may not be equal ("n" == "nm", but
+# "nm" != "nf").
+_POS_GROUPS: Final[Sequence[Sequence[str]]] = (
+    ("n", "nm", "nf", "nmf"),
+    ("v", "vi", "vtr"),
+    ("adj",),
+    ("adv",),
+)
+_CASE_VARIANTS: Final[Sequence[Callable[[str], str]]] = (
+    str.lower,
+    str.upper,
+    str.casefold,
+    str.title,
+    str.swapcase,
+)
+
+
+@st.composite
+def nearby_word_pairs(draw: st.DrawFn) -> tuple[types.Word, types.Word]:
+    """Two words that are usually, but not always, equal to each other.
+
+    The second word is built from the first by changing case, padding with
+    whitespace and varying the part of speech within its base, with each
+    of those sometimes replaced by an unrelated value so that unequal pairs
+    are generated too.
+    """
+
+    # Replace a component with an unrelated one a quarter of the time, so
+    # most pairs still have a real chance of being equal.
+    replaced = st.integers(min_value=0, max_value=3).map(lambda n: n == 0)
+
+    def variant(text: str) -> str:
+        if draw(replaced):
+            return draw(st.text(min_size=1, max_size=12))
+        pad = st.text(alphabet=" \t", max_size=2)
+        return draw(pad) + draw(st.sampled_from(_CASE_VARIANTS))(text) + draw(pad)
+
+    pos_group = draw(st.sampled_from(_POS_GROUPS))
+    if draw(replaced):
+        other_pos_group = draw(st.sampled_from(_POS_GROUPS))
+    else:
+        other_pos_group = pos_group
+
+    word = draw(st.text(min_size=1, max_size=12))
+    meaning = draw(st.text(min_size=1, max_size=12))
+    ranks = st.integers(min_value=1, max_value=20) | st.none()
+    return (
+        make_word(word, draw(st.sampled_from(pos_group)), meaning, draw(ranks)),
+        make_word(
+            variant(word),
+            draw(st.sampled_from(other_pos_group)),
+            variant(meaning),
+            draw(ranks),
+        ),
+    )
+
+
+@hypothesis.given(pair=nearby_word_pairs())
+def test_hash_agrees_with_equality(pair: tuple[types.Word, types.Word]) -> None:
+    a, b = pair
+    hypothesis.event("equal" if a == b else "unequal")
+    if a == b:
+        assert hash(a) == hash(b)
+    # Equal words share one slot; unequal ones must not be conflated.
+    assert len({a, b}) == (1 if a == b else 2)
 
 
 class TestSplit:
