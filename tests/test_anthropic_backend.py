@@ -11,7 +11,6 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any, Final
 
-import anthropic
 import attrs
 import httpx2
 import pytest
@@ -130,9 +129,7 @@ def _backend(api: FakeAPI, **kwargs: Any) -> anthropic_sdk.AnthropicBackend:
         api_key="test-key",
         poll_interval=0.0,
         max_poll_interval=0.0,
-        http_client=anthropic.DefaultAsyncHttpxClient(
-            transport=httpx2.MockTransport(api.handle)
-        ),
+        http_transport=httpx2.MockTransport(api.handle),
         **kwargs,
     )
 
@@ -252,6 +249,24 @@ def test_query_incomplete_response(stop_reason: str) -> None:
 
     with pytest.raises(base.IncompleteResponseError, match=stop_reason):
         _query(_backend(api), REQUEST)
+
+
+def test_backend_can_be_entered_again() -> None:
+    """Leaving the backend closes its client, so each entry needs a new one."""
+    api = FakeAPI()
+    backend = _backend(api)
+
+    async def run() -> Sequence[Any]:
+        responses = []
+        for _ in range(2):
+            async with backend:
+                responses.append(await backend.query(REQUEST))
+        return responses
+
+    responses = asyncio.run(run())
+
+    assert [response["text"] for response in responses] == ["hola", "hola"]
+    assert len(api.bodies("POST", "/v1/messages")) == 2
 
 
 def test_query_params() -> None:

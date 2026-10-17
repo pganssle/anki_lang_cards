@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar, Final, Self
 
 import anthropic
+import httpx2
 
 from .. import caches, config
 from . import base
@@ -44,7 +45,7 @@ class AnthropicBackend:
         structured_output: bool = True,
         poll_interval: float = 10.0,
         max_poll_interval: float = 60.0,
-        http_client: anthropic.DefaultAsyncHttpxClient | None = None,
+        http_transport: httpx2.AsyncBaseTransport | None = None,
     ):
         """
         :param api_key: If omitted, the SDK finds credentials itself (the
@@ -54,6 +55,8 @@ class AnthropicBackend:
             model's default.
         :param poll_interval: Seconds between the first batch status checks;
             this doubles after each check, up to ``max_poll_interval``.
+        :param http_transport: Where the SDK's HTTP client sends requests,
+            for tests; None for the real API.
         """
         self.model_name = model_name
         self.max_concurrency: int | None = None
@@ -63,9 +66,9 @@ class AnthropicBackend:
         self.structured_output = structured_output
         self.poll_interval = poll_interval
         self.max_poll_interval = max_poll_interval
-        self._client = anthropic.AsyncAnthropic(
-            api_key=api_key, base_url=base_url, http_client=http_client
-        )
+        self._api_key = api_key
+        self._base_url = base_url
+        self._http_transport = http_transport
 
     @classmethod
     def supported_features(cls, model_name: str) -> frozenset[base.Feature]:
@@ -90,6 +93,16 @@ class AnthropicBackend:
         )
 
     async def __aenter__(self) -> Self:
+        # Built here rather than in __init__ because closing the client on
+        # exit is final, and a runner may be entered more than once.
+        http_client = (
+            None
+            if self._http_transport is None
+            else anthropic.DefaultAsyncHttpxClient(transport=self._http_transport)
+        )
+        self._client = anthropic.AsyncAnthropic(
+            api_key=self._api_key, base_url=self._base_url, http_client=http_client
+        )
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
