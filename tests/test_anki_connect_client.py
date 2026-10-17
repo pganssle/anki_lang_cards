@@ -5,7 +5,16 @@ import contextlib
 from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Any
 
+import attrs
+import pytest
+
 from anki_lang_cards import anki_import
+
+
+@attrs.frozen
+class _Request:
+    action: str
+    params: Mapping[str, Any]
 
 
 class _FakeResponse:
@@ -20,32 +29,65 @@ class _FakeResponse:
 
 
 class _FakeSession:
-    """Records posted payloads and answers like Anki Connect would."""
+    """Records every posted action and answers it from a scripted mapping.
 
-    def __init__(self, known_cards: Sequence[int]):
-        self.known_cards = frozenset(known_cards)
-        self.requests: list[Mapping[str, Any]] = []
+    ``responses`` maps an Anki Connect action name to the ``result`` the
+    server should answer with; an action that is not in the mapping gets an
+    error response, as the real server does for an unknown action.
+    """
+
+    def __init__(self, responses: Mapping[str, Any]):
+        self._responses = responses
+        self.requests: list[_Request] = []
 
     @contextlib.asynccontextmanager
     async def post(
         self, endpoint: str, json: Mapping[str, Any], timeout: float
     ) -> AsyncIterator[_FakeResponse]:
-        self.requests.append(json)
-        assert json["action"] == "unsuspend"
-        cards = json["params"]["cards"]
-        # Anki Connect expects a flat list of integer card ids
-        assert isinstance(cards, list), cards
-        assert all(isinstance(card, int) for card in cards), cards
-        assert set(cards) <= self.known_cards, cards
-        yield _FakeResponse({"result": None, "error": None})
+        action = json["action"]
+        self.requests.append(_Request(action, json["params"]))
+        if action in self._responses:
+            yield _FakeResponse({"result": self._responses[action], "error": None})
+        else:
+            yield _FakeResponse(
+                {"result": None, "error": f"unsupported action: {action}"}
+            )
 
 
-def test_unsuspend_cards_sends_flat_card_list() -> None:
-    session = _FakeSession(known_cards=[5000, 5001])
-    client = anki_import.AnkiConnectClient(session)  # type: ignore[arg-type]
-    card_ids = (anki_import.CardId(5000), anki_import.CardId(5001))
+def _client(session: _FakeSession) -> anki_import.AnkiConnectClient:
+    # The client only ever calls ``session.post``, which the fake provides,
+    # so the aiohttp.ClientSession annotation is stricter than it needs.
+    return anki_import.AnkiConnectClient(session)  # type: ignore[arg-type]
+
+
+def _card_ids(*ids: int) -> Sequence[anki_import.CardId]:
+    return tuple(anki_import.CardId(card_id) for card_id in ids)
+
+
+@pytest.mark.parametrize(
+    "card_ids",
+    [
+        pytest.param(_card_ids(5000, 5001), id="tuple"),
+        pytest.param(list(_card_ids(5000, 5001)), id="list"),
+        pytest.param(frozenset(_card_ids(5000)), id="frozenset"),
+    ],
+)
+def test_unsuspend_cards_sends_flat_card_list(
+    card_ids: Sequence[anki_import.CardId],
+) -> None:
+    session = _FakeSession({"unsuspend": None})
+    client = _client(session)
 
     assert asyncio.run(client.unsuspend_cards(card_ids)) is None
-    assert [request["params"] for request in session.requests] == [
-        {"cards": [5000, 5001]}
-    ]
+    assert session.requests == [_Request("unsuspend", {"cards": list(card_ids)})]
+    # Anki Connect expects a flat list of integer card ids
+    (request,) = session.requests
+    assert isinstance(request.params["cards"], list)
+
+
+def test_unsuspend_cards_raises_on_error() -> None:
+    session = _FakeSession({})
+    client = _client(session)
+
+    with pytest.raises(ValueError, match="unsupported action: unsuspend"):
+        asyncio.run(client.unsuspend_cards(_card_ids(5000)))
