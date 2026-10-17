@@ -524,6 +524,29 @@ class TestDecisionFile:
 
         assert "sentence_allocation[0]" in str(excinfo.value)
 
+    @pytest.mark.parametrize(
+        "contents, expected",
+        [
+            pytest.param(None, "No such file or directory", id="missing"),
+            pytest.param("[1, 2", "is not JSON", id="not-json"),
+            pytest.param('{"a": 1}', "list of candidates, not dict", id="object"),
+            pytest.param('["x"]', "candidate 0 is not an object", id="entry"),
+        ],
+    )
+    def test_an_unusable_file_names_the_problem(
+        self, tmp_path: pathlib.Path, contents: str | None, expected: str
+    ) -> None:
+        """A file that cannot be read at all is a DecisionFileError too, so
+        every caller reports it the same way as a bad answer."""
+        path = tmp_path / "pending.json"
+        if contents is not None:
+            path.write_text(contents)
+
+        with pytest.raises(dedup_flow.DecisionFileError) as excinfo:
+            dedup_flow.read_decision_file(path)
+
+        assert expected in str(excinfo.value)
+
     def test_a_file_round_trip_matches_a_ui_session(self, decisions, tmp_path) -> None:
         """Answering by file and answering on screen record the same thing."""
         deck = [make_word("zanja", "nf", "trench", 1)]

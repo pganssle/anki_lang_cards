@@ -428,11 +428,23 @@ def read_decision_file(path: pathlib.Path) -> Sequence[triage.Candidate]:
     without replacements is legal — it means "accept the proposal", and the
     proposal is recomputed exactly as it was written.
     """
-    with path.open() as f:
-        data = json.load(f)
+    try:
+        with path.open() as f:
+            data = json.load(f)
+    except OSError as error:
+        raise DecisionFileError([f"{path}: {error.strerror or error}"]) from error
+    except json.JSONDecodeError as error:
+        raise DecisionFileError([f"{path} is not JSON: {error}"]) from error
+    if not isinstance(data, list):
+        raise DecisionFileError(
+            [f"{path} must hold a list of candidates, not {type(data).__name__}"]
+        )
     candidates: list[triage.Candidate] = []
     problems: list[str] = []
     for position, entry in enumerate(data):
+        if not isinstance(entry, Mapping):
+            problems.append(f"candidate {position} is not an object")
+            continue
         label = _entry_label(entry, position)
         try:
             candidate = triage.Candidate.from_dict(entry)
