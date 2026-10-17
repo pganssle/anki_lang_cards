@@ -254,6 +254,48 @@ def test_query_incomplete_response(stop_reason: str) -> None:
         _query(_backend(api), REQUEST)
 
 
+@pytest.mark.parametrize("status", [400, 404])
+def test_query_reports_http_errors(status: int) -> None:
+    def reject(request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            status, json={"type": "error", "error": {"message": "no"}}
+        )
+
+    backend = anthropic_sdk.AnthropicBackend(
+        "claude-test",
+        api_key="test-key",
+        http_client=anthropic.DefaultAsyncHttpxClient(
+            transport=httpx2.MockTransport(reject)
+        ),
+    )
+
+    with pytest.raises(base.RequestError, match=f"{status}") as info:
+        _query(backend, REQUEST)
+
+    assert info.value.status == status
+    assert isinstance(info.value.__cause__, anthropic.APIStatusError)
+
+
+def test_query_reports_connection_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ConnectError("refused", request=request)
+
+    backend = anthropic_sdk.AnthropicBackend(
+        "claude-test",
+        api_key="test-key",
+        http_client=anthropic.DefaultAsyncHttpxClient(
+            transport=httpx2.MockTransport(refuse)
+        ),
+    )
+    # The SDK would otherwise retry with a backoff of seconds.
+    monkeypatch.setattr(backend._client, "max_retries", 0)
+
+    with pytest.raises(base.RequestError, match="APIConnectionError") as info:
+        _query(backend, REQUEST)
+
+    assert info.value.status is None
+
+
 def test_query_params() -> None:
     backend = _backend(FakeAPI(), effort="medium", prompt_caching=False)
 

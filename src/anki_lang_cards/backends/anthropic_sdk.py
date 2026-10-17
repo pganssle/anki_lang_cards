@@ -104,9 +104,15 @@ class AnthropicBackend:
         }
 
     async def query(self, request: base.Request) -> caches.ResponseData:
-        message = await self._client.messages.create(
-            **self._params(request, batch=False)
-        )
+        try:
+            message = await self._client.messages.create(
+                **self._params(request, batch=False)
+            )
+        except anthropic.APIError as e:
+            # APIStatusError for an HTTP error, APIConnectionError (which has
+            # no status) when the request never got an answer.
+            status = e.status_code if isinstance(e, anthropic.APIStatusError) else None
+            raise base.RequestError(f"{type(e).__name__}: {e}", status=status) from e
         return _response_data(message, batch=False)
 
     async def query_batch(

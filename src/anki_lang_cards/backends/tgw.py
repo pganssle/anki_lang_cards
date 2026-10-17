@@ -80,12 +80,25 @@ class TGWBackend:
     def query_params(self) -> Mapping[str, object]:
         return self._params
 
+    async def query(self, request: base.Request) -> caches.ResponseData:
+        try:
+            return await self._query(request)
+        except aiohttp.ClientResponseError as e:
+            raise base.RequestError(
+                f"HTTP {e.status}: {e.message}", status=e.status
+            ) from e
+        except aiohttp.ClientError as e:
+            raise base.RequestError(f"{type(e).__name__}: {e}") from e
+
     @backoff.on_exception(
         backoff.expo,
         aiohttp.client_exceptions.ClientResponseError,
         on_backoff=[_backoff_logger],
+        # Backing off helps with a busy or restarting server, not with a
+        # request the server rejects (apart from being rate limited).
+        giveup=lambda e: 400 <= e.status < 500 and e.status != 429,
     )
-    async def query(self, request: base.Request) -> caches.ResponseData:
+    async def _query(self, request: base.Request) -> caches.ResponseData:
         data = {"prompt": request.system_prompt + request.prompt, **self._params}
         async with self._session.post(
             self._endpoint("completions"), json=data

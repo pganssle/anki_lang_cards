@@ -54,6 +54,25 @@ class IncompleteResponseError(ValueError):
     """
 
 
+class RequestError(Exception):
+    """The backend could not get an answer to one request.
+
+    Backends raise this from :meth:`Backend.query` for the errors their
+    client reports about a request — an HTTP error for one prompt, a
+    transport failure, a plugin choking on one input — so that the runner
+    can fail that request, retry it, and carry on with the others. Anything
+    else a backend raises is taken for a bug and stops the run.
+
+    :param status: The HTTP status the client reported, if there was one.
+        The runner stops the run on statuses every request would hit the
+        same way, like a bad API key.
+    """
+
+    def __init__(self, message: str, *, status: int | None = None):
+        super().__init__(message)
+        self.status = status
+
+
 class Backend(Protocol):
     """A model endpoint that answers one :class:`Request` at a time."""
 
@@ -104,6 +123,7 @@ class Backend(Protocol):
         """Send one request and wait for the response.
 
         :raises IncompleteResponseError: If the model's response was cut off.
+        :raises RequestError: If the client reported an error for the request.
         """
         ...
 

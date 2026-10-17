@@ -55,41 +55,24 @@ class BatchJournal:
         return self.directory / f"{job_id}.json"
 
 
-_ABORTING_STATUSES: Final[frozenset[int]] = frozenset({401, 403})
+_ABORTING_STATUSES: Final[frozenset[int]] = frozenset({401, 403, 404})
 """HTTP statuses that mean no request will get through: bad or missing
-credentials, or no access to the model."""
-
-_PROGRAMMING_ERRORS: Final[tuple[type[Exception], ...]] = (
-    AssertionError,
-    AttributeError,
-    NameError,
-    TypeError,
-)
+credentials or no access to the model (401, 403), or a model name or endpoint
+that does not exist (404). An expired batch job is also a 404, but the
+backend handles that itself and it never reaches the runner."""
 
 
-def aborts_run(error: Exception) -> bool:
-    """Whether a backend error should stop the run rather than fail one request.
+def _aborts_run(error: base.RequestError) -> bool:
+    """Whether a request's error should stop the run rather than fail the request.
 
-    Most errors from a backend — a 400 for one prompt, a server error, a
-    plugin choking on one input — say nothing about the other requests, so
-    they become a :class:`Failure` and the rest of the run carries on and
-    gets cached. Errors every request would hit the same way stop the run
-    instead, because carrying on would only fail (and maybe bill) each one in
-    turn: configuration errors, authentication or permission errors (an HTTP
-    401 or 403, whether the client reports it as ``status_code`` like the
-    Anthropic SDK or ``status`` like aiohttp), and programming errors, which
-    are bugs to fix rather than responses to retry.
-
-    Only :class:`Exception` reaches this: ``KeyboardInterrupt`` and
-    :class:`asyncio.CancelledError` always propagate.
+    Most errors a backend reports about a request — a 400 for one prompt, a
+    server error, a plugin choking on one input — say nothing about the
+    other requests, so they become a :class:`Failure` and the rest of the run
+    carries on and gets cached. An error every request would hit the same
+    way, like a bad API key, stops the run instead, because carrying on would
+    only fail (and maybe bill) each one in turn.
     """
-    if isinstance(error, (base.ConfigurationError, *_PROGRAMMING_ERRORS)):
-        return True
-    for attribute in ("status_code", "status"):
-        status = getattr(error, attribute, None)
-        if isinstance(status, int) and status in _ABORTING_STATUSES:
-            return True
-    return False
+    return error.status in _ABORTING_STATUSES
 
 
 @attrs.frozen
@@ -184,10 +167,12 @@ class QueryRunner:
                     response = await self.backend.query(request)
                 except base.IncompleteResponseError as e:
                     return Failure(request, str(e))
-                except Exception as e:
-                    if aborts_run(e):
+                except base.RequestError as e:
+                    if _aborts_run(e):
                         raise
-                    return Failure(request, f"{type(e).__name__}: {e}")
+                    return Failure(request, str(e))
+                # Anything else is a bug, in the backend or in this code,
+                # and propagates with its traceback.
             if write_cache:
                 self._cache(request, response)
             return Success(request, response)
@@ -243,7 +228,8 @@ async def run_with_retries[T](
     """Run requests and parse the responses, retrying any that fail.
 
     A request fails if the backend's response was incomplete, the backend
-    raised an error that does not abort the run (see :func:`aborts_run`), or
+    reported an error for it (a :class:`base.RequestError`, unless its status
+    means every request would fail the same way, which stops the run), or
     ``parse`` raises :class:`ValueError` (which includes JSON decoding
     errors).
     Retries skip the response cache, since the bad response is in it, and run

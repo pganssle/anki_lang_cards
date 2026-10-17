@@ -7,6 +7,8 @@ import pathlib
 from collections.abc import Callable, Mapping, Sequence
 from typing import ClassVar, Self
 
+import aiohttp.test_utils
+import aiohttp.web
 import attrs
 import pytest
 
@@ -477,30 +479,14 @@ def test_runner_incomplete_response_not_cached(
     assert query_runner.cacher.load_from_cache("uno", system_prompt="sys") is None
 
 
-class StatusCodeError(Exception):
-    """Reports its HTTP status the way the Anthropic SDK does."""
-
-    def __init__(self, status_code: int):
-        super().__init__(f"HTTP {status_code}")
-        self.status_code = status_code
-
-
-class StatusError(Exception):
-    """Reports its HTTP status the way aiohttp does."""
-
-    def __init__(self, status: int):
-        super().__init__(f"HTTP {status}")
-        self.status = status
-
-
 @pytest.mark.parametrize(
     ("error", "reason"),
     [
-        (StatusCodeError(400), "StatusCodeError: HTTP 400"),
-        (StatusError(429), "StatusError: HTTP 429"),
-        (StatusCodeError(500), "StatusCodeError: HTTP 500"),
-        (RuntimeError("plugin broke"), "RuntimeError: plugin broke"),
-        (ValueError("bad input"), "ValueError: bad input"),
+        (base.RequestError("HTTP 400", status=400), "HTTP 400"),
+        (base.RequestError("HTTP 429", status=429), "HTTP 429"),
+        (base.RequestError("HTTP 500", status=500), "HTTP 500"),
+        (base.RequestError("Connection error."), "Connection error."),
+        (base.RequestError("ModelError: plugin broke"), "ModelError: plugin broke"),
     ],
 )
 def test_runner_request_error_fails_only_that_request(
@@ -522,12 +508,13 @@ def test_runner_request_error_fails_only_that_request(
 @pytest.mark.parametrize(
     "error",
     [
-        StatusCodeError(401),
-        StatusCodeError(403),
-        StatusError(401),
-        base.ConfigurationError("no API key"),
+        base.RequestError("bad key", status=401),
+        base.RequestError("no access", status=403),
+        base.RequestError("no such model", status=404),
+        # Not RequestErrors, so bugs rather than failed requests.
         TypeError("bug"),
-        AttributeError("bug"),
+        KeyError("content"),
+        base.ConfigurationError("no API key"),
     ],
 )
 def test_runner_run_wide_error_aborts(tmp_path: pathlib.Path, error: Exception) -> None:
@@ -537,37 +524,6 @@ def test_runner_run_wide_error_aborts(tmp_path: pathlib.Path, error: Exception) 
 
     with pytest.raises(type(error)):
         _run(query_runner, REQUESTS)
-
-
-@pytest.mark.parametrize(
-    ("status", "aborts"),
-    [("401", False), (None, False), (401.0, False), (401, True)],
-)
-def test_aborts_run_needs_an_integer_status(status: object, aborts: bool) -> None:
-    error = RuntimeError("odd")
-    error.status = status  # type: ignore[attr-defined]
-    assert runner.aborts_run(error) is aborts
-
-
-def test_runner_retries_request_errors(tmp_path: pathlib.Path) -> None:
-    """A request error is retried like incomplete output."""
-    backend = FakeBackend({"uno": [StatusCodeError(500), "1"]})
-    query_runner = runner.QueryRunner(backend, _cacher(tmp_path))
-
-    async def collect() -> Mapping[str, str]:
-        async with query_runner:
-            return {
-                request.prompt: parsed
-                async for request, parsed in runner.run_with_retries(
-                    query_runner,
-                    REQUESTS,
-                    lambda _, response: response["text"],
-                    max_retries=1,
-                    describe=lambda request: request.prompt,
-                )
-            }
-
-    assert asyncio.run(collect()) == {"uno": "1", "dos": "answer to dos"}
 
 
 def test_runner_batch_failures(tmp_path: pathlib.Path) -> None:
@@ -692,6 +648,19 @@ def test_retries_give_up(
     assert "Skipping uno after 3 attempt(s)." in capsys.readouterr().out
 
 
+def test_retries_request_errors(tmp_path: pathlib.Path) -> None:
+    """A request error is retried like incomplete output."""
+    backend = FakeBackend(
+        {"uno": [base.RequestError("HTTP 500", status=500), "1"], "dos": ["2"]}
+    )
+    query_runner = runner.QueryRunner(backend, _cacher(tmp_path))
+
+    assert _run_with_retries(query_runner, REQUESTS, max_retries=1) == {
+        "uno": 1,
+        "dos": 2,
+    }
+
+
 def test_retries_respect_skip_cache(tmp_path: pathlib.Path) -> None:
     backend = FakeBackend({"uno": ["bad", "1"]})
     query_runner = runner.QueryRunner(backend, _cacher(tmp_path))
@@ -706,6 +675,105 @@ def test_retries_respect_skip_cache(tmp_path: pathlib.Path) -> None:
 
     assert results == {"uno": 1}
     assert not any(query_runner.cacher.cache_dir.glob("*.json"))
+
+
+#####
+# Backends report request errors
+
+
+class _StatusError(Exception):
+    """An SDK error carrying its HTTP status, as the Anthropic SDK's do."""
+
+    def __init__(self, status_code: int):
+        super().__init__(f"HTTP {status_code}")
+        self.status_code = status_code
+
+
+@pytest.mark.parametrize(
+    ("error", "status"),
+    [
+        (llm_fallback.llm.ModelError("plugin broke"), None),
+        (_StatusError(429), 429),
+        (_StatusError(401), 401),
+    ],
+)
+def test_llm_backend_reports_request_errors(
+    monkeypatch: pytest.MonkeyPatch, error: Exception, status: int | None
+) -> None:
+    class Model:
+        needs_key = None
+        supports_schema = False
+
+        async def prompt(self, *args: object, **kwargs: object) -> object:
+            raise error
+
+    monkeypatch.setattr(llm_fallback.llm, "get_async_model", lambda name: Model())
+    backend = llm_fallback.LLMBackend("fake")
+
+    with pytest.raises(base.RequestError, match=str(error)) as info:
+        asyncio.run(backend.query(REQUESTS[0]))
+
+    assert info.value.status == status
+    assert info.value.__cause__ is error
+
+
+def test_llm_backend_passes_other_errors_through(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An error with no HTTP status is not known to be about the request."""
+
+    class Model:
+        needs_key = None
+        supports_schema = False
+
+        async def prompt(self, *args: object, **kwargs: object) -> object:
+            raise KeyError("content")
+
+    monkeypatch.setattr(llm_fallback.llm, "get_async_model", lambda name: Model())
+
+    with pytest.raises(KeyError):
+        asyncio.run(llm_fallback.LLMBackend("fake").query(REQUESTS[0]))
+
+
+def _tgw_app(status: int) -> aiohttp.web.Application:
+    async def info(request: aiohttp.web.Request) -> aiohttp.web.Response:
+        return aiohttp.web.json_response({"model_name": "model"})
+
+    async def completions(request: aiohttp.web.Request) -> aiohttp.web.Response:
+        return aiohttp.web.Response(status=status, reason="rejected")
+
+    app = aiohttp.web.Application()
+    app.router.add_get("/v1/internal/model/info", info)
+    app.router.add_post("/v1/completions", completions)
+    return app
+
+
+def test_tgw_backend_reports_http_errors() -> None:
+    async def query() -> None:
+        async with aiohttp.test_utils.TestServer(_tgw_app(400)) as server:
+            backend = tgw.TGWBackend("model", api_base_url=str(server.make_url("/v1/")))
+            async with backend:
+                await backend.query(REQUESTS[0])
+
+    with pytest.raises(base.RequestError, match="HTTP 400: rejected") as info:
+        asyncio.run(query())
+
+    assert info.value.status == 400
+
+
+def test_tgw_backend_reports_connection_errors() -> None:
+    async def query() -> None:
+        server = aiohttp.test_utils.TestServer(_tgw_app(200))
+        await server.start_server()
+        backend = tgw.TGWBackend("model", api_base_url=str(server.make_url("/v1/")))
+        async with backend:
+            await server.close()
+            await backend.query(REQUESTS[0])
+
+    with pytest.raises(base.RequestError, match="ServerDisconnectedError") as info:
+        asyncio.run(query())
+
+    assert info.value.status is None
 
 
 #####
