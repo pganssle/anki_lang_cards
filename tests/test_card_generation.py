@@ -702,13 +702,18 @@ def test_main_run_twice_emits_nothing_new(
     first = _run_main_raw(workdir, CARDS_DIR / "words.csv", dictionary_paths)
     assert first.returncode == 0, first.stderr
     output_csv = workdir / "output" / "output.csv"
+    diff_csv = workdir / "output" / "diff.csv"
     before = output_csv.read_bytes()
+    assert diff_csv.exists()
 
     second = _run_main_raw(workdir, CARDS_DIR / "words.csv", dictionary_paths)
 
     assert second.returncode == 0, second.stderr
     assert output_csv.read_bytes() == before
     assert "Found 0 new or updated words." in second.stdout
+    # The first run's diff describes rows this run did not produce; importing
+    # it again would revert the deck, so it must not survive.
+    assert not diff_csv.exists()
 
 
 def _conflicting_inputs(workdir: pathlib.Path) -> pathlib.Path:
@@ -819,12 +824,9 @@ def test_main_exports_a_merge_that_needs_no_new_sentences(
     assert set(diffed) == {"existente"}
     assert diffed["existente"].rank == 1400
 
-    # Nothing may tell the user to delete the note the diff updates.
-    if superseded_path.exists():
-        with superseded_path.open(newline="") as f:
-            superseded_ranks = {int(row["rank"]) for row in csv.DictReader(f)}
-        assert superseded_ranks
-        assert superseded_ranks.isdisjoint(word.rank for word in diffed.values())
+    # The merge keeps the deck note's rank, so the diff updates it in place and
+    # nothing is superseded: the stale file naming that note must go.
+    assert not superseded_path.exists()
 
 
 def test_main_leaves_review_groups_pending(
