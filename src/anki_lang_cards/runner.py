@@ -215,6 +215,49 @@ class QueryRunner:
         )
 
 
+@attrs.frozen
+class Parsed[T]:
+    """A request's response, parsed."""
+
+    request: base.Request
+    value: T
+
+
+@attrs.frozen
+class Skipped:
+    """A request given up on, after its last retry failed."""
+
+    request: base.Request
+    reason: str
+    """Why the last attempt failed."""
+    attempts: int
+
+
+class AllRequestsFailedError(Exception):
+    """Every request in a run's first round failed at the backend.
+
+    One request failing says nothing about the others, but all of them
+    failing before any got through means something is wrong with the run as
+    a whole — the API is unreachable, the local server is down, the output
+    limit cuts off every response — and retrying would only fail (and maybe
+    bill) each one again.
+    """
+
+    def __init__(self, failures: Sequence[Failure]):
+        super().__init__(
+            f"All {len(failures)} request(s) failed at the backend; "
+            f"the first error was: {failures[0].reason}"
+        )
+        self.failures = tuple(failures)
+
+
+EXIT_REQUESTS_DROPPED: Final[int] = 4
+"""Exit status for a command that finished, but with some requests dropped
+after their last retry (see :class:`Skipped`), so part of the input produced
+nothing. Distinct from 1 so a harness can tell "re-run for the rest" from
+"look at a traceback"."""
+
+
 async def run_with_retries[T](
     runner: QueryRunner,
     requests: Sequence[base.Request],
@@ -224,7 +267,7 @@ async def run_with_retries[T](
     describe: Callable[[base.Request], str],
     invalidate_cache: bool = False,
     skip_cache: bool = False,
-) -> AsyncIterator[tuple[base.Request, T]]:
+) -> AsyncIterator[Parsed[T] | Skipped]:
     """Run requests and parse the responses, retrying any that fail.
 
     A request fails if the backend's response was incomplete, the backend
@@ -234,35 +277,51 @@ async def run_with_retries[T](
     errors).
     Retries skip the response cache, since the bad response is in it, and run
     together, so in batch mode each round of retries is one more batch job.
+    A request that fails its last retry is yielded as :class:`Skipped`, so a
+    caller can tell which of its input got no answer.
+
+    :raises AllRequestsFailedError: If every request in the first round
+        failed at the backend (not in ``parse``), which is a problem with the
+        run rather than with any one request.
     """
     pending = requests
     attempt = 0
     while pending:
         attempt += 1
-        failed: list[base.Request] = []
+        failed: dict[base.Request, str] = {}
+        backend_failures: list[Failure] = []
+        outcomes = 0
         async for outcome in runner.run(
             pending,
             invalidate_cache=invalidate_cache and not skip_cache,
             skip_cache=skip_cache,
         ):
+            outcomes += 1
             match outcome:
                 case Failure(request=request, reason=reason):
                     print(f"Attempt {attempt} failed for {describe(request)}: {reason}")
-                    failed.append(request)
+                    failed[request] = reason
+                    backend_failures.append(outcome)
                 case Success(request=request, response=response):
                     try:
                         parsed = parse(request, response)
                     except ValueError as e:
                         print(f"Attempt {attempt} failed for {describe(request)}: {e}")
-                        failed.append(request)
+                        failed[request] = str(e)
                     else:
-                        yield request, parsed
+                        yield Parsed(request, parsed)
+
+        # Later rounds are the subset that failed before, where all of them
+        # failing again is just how one bad prompt ends.
+        if attempt == 1 and backend_failures and len(backend_failures) == outcomes:
+            raise AllRequestsFailedError(backend_failures)
 
         if failed and attempt <= max_retries:
             print(f"Retrying {len(failed)} request(s) after invalid output.")
-            pending = failed
+            pending = tuple(failed)
             invalidate_cache = True
         else:
-            for request in failed:
+            for request, reason in failed.items():
                 print(f"Skipping {describe(request)} after {attempt} attempt(s).")
+                yield Skipped(request, reason, attempts=attempt)
             pending = ()

@@ -637,7 +637,7 @@ async def main() -> None:
     print(f"Processing {len(requests)} prompts {mode}.")
     async with query_runner:
         with tqdm.tqdm(total=len(requests), desc="Processing prompts") as progress:
-            async for _, words in runner.run_with_retries(
+            async for outcome in runner.run_with_retries(
                 query_runner,
                 requests,
                 parse,
@@ -647,7 +647,9 @@ async def main() -> None:
                 skip_cache=args.skip_response_cache,
             ):
                 progress.update()
-                for word in words:
+                if isinstance(outcome, runner.Skipped):
+                    continue
+                for word in outcome.value:
                     if word in existing:
                         existing[word].update(word)
                     else:

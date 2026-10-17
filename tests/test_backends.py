@@ -590,24 +590,41 @@ def _parse_number(request: base.Request, response: caches.ResponseData) -> int:
     return int(response["text"])
 
 
+def _parse_text(request: base.Request, response: caches.ResponseData) -> str:
+    return response["text"]
+
+
 def _run_with_retries(
     query_runner: runner.QueryRunner,
     requests: Sequence[base.Request],
     parse: Callable[[base.Request, caches.ResponseData], int] = _parse_number,
     **kwargs: object,
 ) -> Mapping[str, int]:
-    async def collect() -> Mapping[str, int]:
+    return {
+        outcome.request.prompt: outcome.value
+        for outcome in _run_outcomes(query_runner, requests, parse, **kwargs)
+        if isinstance(outcome, runner.Parsed)
+    }
+
+
+def _run_outcomes[T](
+    query_runner: runner.QueryRunner,
+    requests: Sequence[base.Request],
+    parse: Callable[[base.Request, caches.ResponseData], T],
+    **kwargs: object,
+) -> Sequence[runner.Parsed[T] | runner.Skipped]:
+    async def collect() -> Sequence[runner.Parsed[T] | runner.Skipped]:
         async with query_runner:
-            return {
-                request.prompt: parsed
-                async for request, parsed in runner.run_with_retries(
+            return [
+                outcome
+                async for outcome in runner.run_with_retries(
                     query_runner,
                     requests,
                     parse,
                     describe=lambda request: request.prompt,
                     **kwargs,  # type: ignore[arg-type]
                 )
-            }
+            ]
 
     return asyncio.run(collect())
 
@@ -635,17 +652,116 @@ def test_retries_bypass_the_cache(
     assert _run_with_retries(query_runner, REQUESTS, max_retries=0) == results
 
 
+@pytest.mark.parametrize(
+    ("reply", "reason"),
+    [
+        ("bad", "invalid literal for int() with base 10: 'bad'"),
+        (base.RequestError("HTTP 500", status=500), "HTTP 500"),
+        (base.IncompleteResponseError("cut off"), "cut off"),
+    ],
+)
 def test_retries_give_up(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: pathlib.Path,
+    capsys: pytest.CaptureFixture[str],
+    reply: str | Exception,
+    reason: str,
 ) -> None:
-    backend = FakeBackend({"uno": ["bad"], "dos": ["2"]})
+    """A request that fails its last retry is reported as skipped, with the
+    reason its last attempt failed."""
+    backend = FakeBackend({"uno": [reply], "dos": ["2"]})
     query_runner = runner.QueryRunner(backend, _cacher(tmp_path))
 
-    results = _run_with_retries(query_runner, REQUESTS, max_retries=2)
+    outcomes = _run_outcomes(query_runner, REQUESTS, _parse_number, max_retries=2)
 
-    assert results == {"dos": 2}
+    assert set(outcomes) == {
+        runner.Parsed(REQUESTS[1], 2),
+        runner.Skipped(REQUESTS[0], reason, attempts=3),
+    }
     assert backend.queried.count("uno") == 3
     assert "Skipping uno after 3 attempt(s)." in capsys.readouterr().out
+
+
+def test_retries_report_the_last_reason(tmp_path: pathlib.Path) -> None:
+    backend = FakeBackend(
+        {"uno": [base.RequestError("HTTP 500", status=500), "bad"], "dos": ["2"]}
+    )
+    query_runner = runner.QueryRunner(backend, _cacher(tmp_path))
+
+    outcomes = _run_outcomes(query_runner, REQUESTS, _parse_number, max_retries=1)
+
+    (skipped,) = (o for o in outcomes if isinstance(o, runner.Skipped))
+    assert skipped.request == REQUESTS[0]
+    assert skipped.reason.startswith("invalid literal")
+    assert skipped.attempts == 2
+
+
+@pytest.mark.parametrize(
+    "error",
+    [base.RequestError("Connection error."), base.IncompleteResponseError("cut")],
+)
+def test_every_request_failing_stops_the_run(
+    tmp_path: pathlib.Path, error: Exception
+) -> None:
+    """Nothing getting through in the first round is a problem with the run,
+    not with the requests, so there are no retries to pay for."""
+    backend = FakeBackend({"uno": [error, "1"], "dos": [error, "2"]})
+    query_runner = runner.QueryRunner(backend, _cacher(tmp_path))
+
+    with pytest.raises(runner.AllRequestsFailedError, match=str(error)) as info:
+        _run_outcomes(query_runner, REQUESTS, _parse_number, max_retries=2)
+
+    assert {failure.request for failure in info.value.failures} == set(REQUESTS)
+    assert sorted(backend.queried) == ["dos", "uno"]
+
+
+def test_every_batch_request_failing_stops_the_run(tmp_path: pathlib.Path) -> None:
+    backend = FakeBackend(
+        batch_failures={"uno": "errored: overloaded", "dos": "errored: overloaded"}
+    )
+    query_runner = runner.QueryRunner(backend, _cacher(tmp_path), batch=True)
+
+    with pytest.raises(runner.AllRequestsFailedError, match="overloaded"):
+        _run_outcomes(query_runner, REQUESTS, _parse_number, max_retries=2)
+
+    assert len(backend.resumed) == 1
+
+
+def test_every_request_failing_to_parse_is_retried(tmp_path: pathlib.Path) -> None:
+    """Unparseable output is the model's doing, and a retry may well fix it."""
+    backend = FakeBackend({"uno": ["bad", "1"], "dos": ["bad", "2"]})
+    query_runner = runner.QueryRunner(backend, _cacher(tmp_path))
+
+    assert _run_with_retries(query_runner, REQUESTS, max_retries=1) == {
+        "uno": 1,
+        "dos": 2,
+    }
+
+
+def test_only_a_retry_round_failing_does_not_stop_the_run(
+    tmp_path: pathlib.Path,
+) -> None:
+    """One persistently bad request is skipped, not escalated, even though
+    it is all that is left in the retry rounds."""
+    backend = FakeBackend({"uno": [base.RequestError("HTTP 500", status=500)]})
+    query_runner = runner.QueryRunner(backend, _cacher(tmp_path))
+
+    outcomes = _run_outcomes(query_runner, REQUESTS, _parse_number, max_retries=1)
+
+    assert runner.Skipped(REQUESTS[0], "HTTP 500", attempts=2) in outcomes
+
+
+def test_cached_responses_count_as_getting_through(tmp_path: pathlib.Path) -> None:
+    """A cached success alongside a failed miss is not a run-wide failure."""
+    query_runner = runner.QueryRunner(FakeBackend(), _cacher(tmp_path))
+    _run_with_retries(query_runner, REQUESTS[1:], max_retries=0, parse=_parse_text)
+    query_runner.backend = FakeBackend({"uno": [base.RequestError("down")]})  # type: ignore[assignment]
+
+    outcomes = _run_outcomes(query_runner, REQUESTS, _parse_text, max_retries=0)
+
+    assert set(outcomes) == {
+        runner.Parsed(REQUESTS[1], "answer to dos"),
+        runner.Skipped(REQUESTS[0], "down", attempts=1),
+    }
 
 
 def test_retries_request_errors(tmp_path: pathlib.Path) -> None:

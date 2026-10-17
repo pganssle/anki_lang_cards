@@ -46,13 +46,16 @@ async def generate_sentences(
         return str(tuple(word.word for word in requests[request]))
 
     citation = types.ModelCitation(model=model_name)
-    async for request, parsed in runner.run_with_retries(
+    async for outcome in runner.run_with_retries(
         query_runner,
         tuple(requests),
         _parse_response,
         max_retries=max_invalid_output_retries,
         describe=describe,
     ):
+        if isinstance(outcome, runner.Skipped):
+            continue
+        request, parsed = outcome.request, outcome.value
         parsed_with_sources = [
             {
                 **entry,

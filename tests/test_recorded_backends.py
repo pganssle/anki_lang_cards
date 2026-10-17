@@ -243,10 +243,11 @@ def test_book_annotations(
         async with query_runner:
             return [
                 word
-                async for _, words in runner.run_with_retries(
+                async for outcome in runner.run_with_retries(
                     query_runner, [request], parse, max_retries=1, describe=str
                 )
-                for word in words
+                if isinstance(outcome, runner.Parsed)
+                for word in outcome.value
             ]
 
     (word,) = asyncio.run(annotate())
