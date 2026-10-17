@@ -5,6 +5,7 @@ import json
 import pathlib
 import re
 from collections.abc import Callable, Mapping, Sequence
+from types import TracebackType
 from typing import Any, ClassVar, Final, Self
 
 import pytest
@@ -94,14 +95,19 @@ class ResponderBackend:
 
     def __init__(self, responder: Responder):
         self.model_name = "fake-model"
-        self.max_concurrency = None
+        self.max_concurrency: int | None = None
         self.responder = responder
         self.calls = 0
 
     async def __aenter__(self) -> Self:
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         pass
 
     def query_params(self) -> Mapping[str, object]:
