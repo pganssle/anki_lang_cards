@@ -121,7 +121,7 @@ class QueryRunner:
                 cached = self.cacher.load_from_cache(
                     request.prompt, system_prompt=request.system_prompt
                 )
-                if cached is not None:
+                if cached is not None and not _is_warm_up(cached["response"]):
                     yield Success(request, cached["response"])
                     continue
             misses.append(request)
@@ -174,25 +174,45 @@ class QueryRunner:
             else:
                 reason = results.failures.get(request.key, "no response")
                 outcomes.append(Failure(request, reason))
+        if write_cache:
+            # Warm-ups answer nothing, but the usage report reads the cache.
+            for request, response in results.warm_ups.items():
+                self._cache(request, response, warm_up=True)
         for job_id in results.completed_jobs:
             journal.discard(job_id)
 
         for outcome in outcomes:
             yield outcome
 
-    def _cache(self, request: base.Request, response: caches.ResponseData) -> None:
+    def _cache(
+        self,
+        request: base.Request,
+        response: caches.ResponseData,
+        *,
+        warm_up: bool = False,
+    ) -> None:
         # A backend may answer some requests of a batch run outside the batch
         # (the warm-up, for one), and says so in the response.
         details = response["usage"].get("details") or {}
+        query_params: dict[str, object] = {
+            **self.backend.query_params(),
+            "batch": bool(details.get("batch", self.batch)),
+        }
+        if warm_up:
+            query_params["warm_up"] = True
         self.cacher.cache_result(
             request.prompt,
             response,
             system_prompt=request.system_prompt,
-            query_params={
-                **self.backend.query_params(),
-                "batch": bool(details.get("batch", self.batch)),
-            },
+            query_params=query_params,
         )
+
+
+def _is_warm_up(response: caches.ResponseData) -> bool:
+    """Whether a cached response is a prompt cache warm-up rather than an
+    answer, so that it is never served as one."""
+    details = response["usage"].get("details") or {}
+    return bool(details.get("warm_up"))
 
 
 async def run_with_retries[T](

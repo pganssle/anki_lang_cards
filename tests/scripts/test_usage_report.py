@@ -103,6 +103,19 @@ def sdk_details(
             {"batch": True},
             (2 * (1000 + 2.0 * 2000) + 10 * 100) / 1e6,
         ),
+        # A throwaway warm-up: the hour-long write, its placeholder prompt
+        # and the one output token it is allowed, at full price.
+        (
+            sdk_details(
+                batch=False,
+                write=2000,
+                warm_up=True,
+                cache_creation_5m_input_tokens=0,
+                cache_creation_1h_input_tokens=2000,
+            ),
+            {"batch": False, "warm_up": True},
+            (2 * (1000 + 2.0 * 2000) + 10 * 100) / 1e6,
+        ),
         # Not batched, no split recorded: the five-minute lifetime.
         (
             sdk_details(batch=False, write=2000, read=500),

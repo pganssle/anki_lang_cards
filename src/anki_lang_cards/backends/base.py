@@ -125,6 +125,11 @@ class BatchResults:
     completed_jobs: frozenset[str]
     """The provider's IDs for the jobs whose results are all collected."""
 
+    warm_ups: Mapping[Request, caches.ResponseData] = attrs.field(factory=dict)
+    """Responses to throwaway requests sent to warm a prompt cache ahead of
+    the jobs. They answer nothing, but they cost money, so the runner records
+    them for usage accounting."""
+
 
 class SubmitCallback(Protocol):
     def __call__(self, job_id: str, request_keys: frozenset[str]) -> None: ...

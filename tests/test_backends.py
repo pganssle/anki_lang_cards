@@ -5,7 +5,7 @@ import asyncio
 import importlib.metadata
 import pathlib
 from collections.abc import Callable, Mapping, Sequence
-from typing import ClassVar, Self
+from typing import ClassVar, Final, Self
 
 import attrs
 import pytest
@@ -295,6 +295,17 @@ def _response(text: str) -> caches.ResponseData:
     return {"text": text, "usage": {"input": 1, "output": 1, "details": None}}
 
 
+WARM_UP: Final = base.Request("warm-up", system_prompt="sys")
+WARM_UP_RESPONSE: Final[caches.ResponseData] = {
+    "text": "{",
+    "usage": {
+        "input": 1,
+        "output": 1,
+        "details": {"batch": False, "warm_up": True},
+    },
+}
+
+
 class FakeBackend:
     """Answers each prompt with a scripted sequence of replies.
 
@@ -312,15 +323,18 @@ class FakeBackend:
         *,
         max_concurrency: int | None = None,
         batch_failures: Mapping[str, str] | None = None,
+        warms_cache: bool = False,
         details: Mapping[str, Mapping[str, object]] | None = None,
     ):
         """
+        :param warms_cache: Whether batches come with a cache warm-up.
         :param details: Usage details to attach to the replies to a prompt.
         """
         self.model_name = "fake-model"
         self.max_concurrency = max_concurrency
         self.replies = dict(replies or {})
         self.batch_failures = dict(batch_failures or {})
+        self.warms_cache = warms_cache
         self.details = dict(details or {})
         self.queried: list[str] = []
         self.resumed: list[Mapping[str, frozenset[str]]] = []
@@ -376,6 +390,7 @@ class FakeBackend:
             responses=responses,
             failures=failures,
             completed_jobs=frozenset({job_id, *resume}),
+            warm_ups={WARM_UP: WARM_UP_RESPONSE} if self.warms_cache else {},
         )
 
 
@@ -435,6 +450,41 @@ def test_runner_caches_responses(tmp_path: pathlib.Path, batch: bool) -> None:
     assert cached is not None
     assert cached["input"]["system_prompt"] == "sys"
     assert cached["input"]["query_params"] == {"fake": True, "batch": batch}
+
+
+def test_runner_records_warm_ups(tmp_path: pathlib.Path) -> None:
+    """A batch's cache warm-up is recorded for the usage report, marked as
+    such and at the price it was billed at, but never served as an answer."""
+    backend = FakeBackend(warms_cache=True)
+    query_runner = runner.QueryRunner(backend, _cacher(tmp_path), batch=True)
+
+    _run(query_runner, REQUESTS)
+    cached = query_runner.cacher.load_from_cache(
+        WARM_UP.prompt, system_prompt=WARM_UP.system_prompt
+    )
+    assert cached is not None
+    assert cached["response"] == WARM_UP_RESPONSE
+    assert cached["input"]["query_params"] == {
+        "fake": True,
+        "batch": False,
+        "warm_up": True,
+    }
+
+    outcomes = _run(query_runner, [WARM_UP])
+
+    assert _texts(outcomes) == {"warm-up": "answer to warm-up"}
+    assert backend.queried == ["uno", "dos", "warm-up"]
+
+
+def test_runner_skips_cache_for_warm_ups_too(tmp_path: pathlib.Path) -> None:
+    backend = FakeBackend(warms_cache=True)
+    query_runner = runner.QueryRunner(backend, _cacher(tmp_path), batch=True)
+
+    _run(query_runner, REQUESTS, skip_cache=True)
+
+    assert not query_runner.cacher.cache_dir.exists() or not list(
+        query_runner.cacher.cache_dir.glob("*.json")
+    )
 
 
 def test_runner_stamps_batch_from_the_response(tmp_path: pathlib.Path) -> None:
