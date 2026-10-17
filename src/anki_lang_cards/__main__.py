@@ -69,7 +69,8 @@ class Classification:
     """Changed and already full of sentences; written straight to the output."""
 
     skipped: tuple[types.Word, ...]
-    """Already emitted by an earlier run with nothing new to add."""
+    """Already emitted by an earlier run with nothing new to add, or an
+    untouched deck note that only got this far for want of a rank."""
 
 
 def _decided_ranks(outcome: apply_merges.Outcome) -> frozenset[int]:
@@ -115,6 +116,14 @@ def _classify_for_generation(
     skipped: list[types.Word] = []
 
     for word in selected:
+        # The selection keeps every rank-less word on the assumption that it
+        # is an input or a split card, but a deck note whose Rank field is
+        # empty is rank-less too, and the deck lookup is the only thing that
+        # tells them apart. Nothing touched such a note (a merge or rewrite
+        # would have produced a new object), so it is not this run's business.
+        if word.rank is None and any(w is word for w in deck_wl.lookup(word)):
+            skipped.append(word)
+            continue
         prior = output_wl.lookup(word)
         if prior:
             prior_merged = conflict_resolver.merge_word_set(tuple(prior))
@@ -317,7 +326,7 @@ async def main():
         print("Loading words from Anki Connect")
         note_cache = anki_import.NoteCache(args.note_cache)
         async with anki_import.create_client() as client:
-            current_deck_notes = await client.retrieve_matching_words(
+            current_deck_notes = await client.retrieve_related_words(
                 deck_name, words, cache=note_cache
             )
             current_deck = list(current_deck_notes.values())
