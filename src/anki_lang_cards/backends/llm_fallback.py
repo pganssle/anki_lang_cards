@@ -32,7 +32,7 @@ class LLMBackend:
         """
         self.model_name = model_name
         self.max_concurrency: int | None = None
-        self._model = llm.get_async_model(model_name)
+        self._model = _get_model(model_name)
         self.features = _model_features(self._model)
         self.structured_output = (
             structured_output and base.Feature.STRUCTURED_OUTPUT in self.features
@@ -43,7 +43,7 @@ class LLMBackend:
 
     @classmethod
     def supported_features(cls, model_name: str) -> frozenset[base.Feature]:
-        return _model_features(llm.get_async_model(model_name))
+        return _model_features(_get_model(model_name))
 
     @classmethod
     def from_config(
@@ -87,6 +87,17 @@ class LLMBackend:
                 "details": usage.details,
             },
         }
+
+
+def _get_model(model_name: str) -> llm.AsyncModel:
+    try:
+        return llm.get_async_model(model_name)
+    except llm.UnknownModelError as e:
+        raise base.UnknownModelError(
+            f"The llm library has no model named {model_name!r}. "
+            "`llm models list` shows the models it knows, and "
+            "`llm install <plugin>` adds more."
+        ) from e
 
 
 def _model_features(model: llm.AsyncModel) -> frozenset[base.Feature]:

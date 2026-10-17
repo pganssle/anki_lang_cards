@@ -287,6 +287,38 @@ def test_make_runner_tgw_without_config() -> None:
         )
 
 
+def test_make_runner_unknown_llm_model() -> None:
+    """A model name ``llm`` has no plugin for is a selection error, not a
+    traceback, since it is the likeliest typo to make."""
+    with pytest.raises(
+        model_selection.BackendConfigurationError, match="llm models list"
+    ) as info:
+        model_selection.make_runner(
+            _parse("--model", "no-such-model-xyz"),
+            _config(),
+            caches.CacheTypes.SENTENCES,
+            confirm=_never_asked,
+        )
+
+    assert "no-such-model-xyz" in str(info.value)
+
+
+@pytest.mark.parametrize(
+    "construct",
+    [
+        llm_fallback.LLMBackend.supported_features,
+        llm_fallback.LLMBackend,
+        lambda name: llm_fallback.LLMBackend.from_config(name, _config(), frozenset()),
+    ],
+    ids=["supported_features", "init", "from_config"],
+)
+def test_llm_backend_unknown_model(
+    construct: Callable[[str], object],
+) -> None:
+    with pytest.raises(base.UnknownModelError, match="no-such-model-xyz"):
+        construct("no-such-model-xyz")
+
+
 #####
 # The query runner
 
@@ -356,6 +388,7 @@ class FakeBackend:
         on_submit(job_id, frozenset(request.key for request in requests))
         responses: dict[str, caches.ResponseData] = {}
         failures: dict[str, str] = {}
+        refusals: dict[str, str] = {}
         for request in requests:
             if request.prompt in self.batch_failures:
                 failures[request.key] = self.batch_failures[request.prompt]
@@ -364,10 +397,13 @@ class FakeBackend:
                 responses[request.key] = self._reply(request)
             except base.IncompleteResponseError as e:
                 failures[request.key] = str(e)
+            except base.RefusedResponseError as e:
+                refusals[request.key] = str(e)
         return base.BatchResults(
             responses=responses,
             failures=failures,
             completed_jobs=frozenset({job_id, *resume}),
+            refusals=refusals,
         )
 
 
@@ -473,6 +509,18 @@ def test_runner_incomplete_response_not_cached(
     outcomes = _run(query_runner, REQUESTS)
 
     assert outcomes["uno"] == runner.Failure(REQUESTS[0], "cut off")
+    assert isinstance(outcomes["dos"], runner.Success)
+    assert query_runner.cacher.load_from_cache("uno", system_prompt="sys") is None
+
+
+@pytest.mark.parametrize("batch", [False, True])
+def test_runner_refused_response(tmp_path: pathlib.Path, batch: bool) -> None:
+    backend = FakeBackend({"uno": [base.RefusedResponseError("refused")]})
+    query_runner = runner.QueryRunner(backend, _cacher(tmp_path), batch=batch)
+
+    outcomes = _run(query_runner, REQUESTS)
+
+    assert outcomes["uno"] == runner.Failure(REQUESTS[0], "refused", retry=False)
     assert isinstance(outcomes["dos"], runner.Success)
     assert query_runner.cacher.load_from_cache("uno", system_prompt="sys") is None
 
@@ -584,6 +632,28 @@ def test_retries_bypass_the_cache(
     assert "Retrying 2 request(s)" in out
     # The good response replaced the bad one in the cache.
     assert _run_with_retries(query_runner, REQUESTS, max_retries=0) == results
+
+
+@pytest.mark.parametrize("batch", [False, True])
+def test_refusals_are_not_retried(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str], batch: bool
+) -> None:
+    """A refused request is dropped at once; the rest still get their retries."""
+    backend = FakeBackend(
+        {
+            "uno": [base.RefusedResponseError("refused"), "1"],
+            "dos": [base.IncompleteResponseError("cut off"), "2"],
+        }
+    )
+    query_runner = runner.QueryRunner(backend, _cacher(tmp_path), batch=batch)
+
+    results = _run_with_retries(query_runner, REQUESTS, max_retries=2)
+
+    assert results == {"dos": 2}
+    assert backend.queried.count("uno") == 1
+    out = capsys.readouterr().out
+    assert "Skipping uno: refused" in out
+    assert "Retrying 1 request(s)" in out
 
 
 def test_retries_give_up(

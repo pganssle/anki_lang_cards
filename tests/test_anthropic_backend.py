@@ -11,7 +11,6 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any, Final
 
-import anthropic
 import attrs
 import httpx2
 import pytest
@@ -130,9 +129,7 @@ def _backend(api: FakeAPI, **kwargs: Any) -> anthropic_sdk.AnthropicBackend:
         api_key="test-key",
         poll_interval=0.0,
         max_poll_interval=0.0,
-        http_client=anthropic.DefaultAsyncHttpxClient(
-            transport=httpx2.MockTransport(api.handle)
-        ),
+        http_transport=httpx2.MockTransport(api.handle),
         **kwargs,
     )
 
@@ -246,12 +243,40 @@ def test_query_skips_thinking_blocks() -> None:
     assert _query(_backend(api), REQUEST)["text"] == "[1, 2]"
 
 
-@pytest.mark.parametrize("stop_reason", ["max_tokens", "refusal"])
-def test_query_incomplete_response(stop_reason: str) -> None:
-    api = FakeAPI(message=_message("[{", stop_reason=stop_reason))
+def test_query_incomplete_response() -> None:
+    api = FakeAPI(message=_message("[{", stop_reason="max_tokens"))
 
-    with pytest.raises(base.IncompleteResponseError, match=stop_reason):
+    with pytest.raises(base.IncompleteResponseError, match="max_tokens"):
         _query(_backend(api), REQUEST)
+
+
+def test_query_refused_response() -> None:
+    """A refusal is its own error, so the runner can give up rather than
+    retry it; it is not an incomplete response."""
+    api = FakeAPI(message=_message("", stop_reason="refusal"))
+
+    with pytest.raises(base.RefusedResponseError, match="refused") as info:
+        _query(_backend(api), REQUEST)
+
+    assert not isinstance(info.value, base.IncompleteResponseError)
+
+
+def test_backend_can_be_entered_again() -> None:
+    """Leaving the backend closes its client, so each entry needs a new one."""
+    api = FakeAPI()
+    backend = _backend(api)
+
+    async def run() -> Sequence[Any]:
+        responses = []
+        for _ in range(2):
+            async with backend:
+                responses.append(await backend.query(REQUEST))
+        return responses
+
+    responses = asyncio.run(run())
+
+    assert [response["text"] for response in responses] == ["hola", "hola"]
+    assert len(api.bodies("POST", "/v1/messages")) == 2
 
 
 def test_query_params() -> None:
@@ -401,6 +426,44 @@ def test_query_batch_incomplete_warm_up() -> None:
     assert submitted == {
         JOB_ID: frozenset({r.key for r in SHARED_REQUESTS[:2]} - {warm_key})
     }
+
+
+def test_query_batch_refused_warm_up() -> None:
+    """A refused warm-up request is reported as a refusal, not a failure."""
+    api = FakeAPI(message=_message("", stop_reason="refusal"))
+
+    results, _ = _query_batch(_backend(api), SHARED_REQUESTS[:2])
+
+    warm_key = min(request.key for request in SHARED_REQUESTS[:2])
+    assert "refused" in results.refusals[warm_key]
+    assert warm_key not in results.failures
+
+
+def test_query_batch_refusals() -> None:
+    api = FakeAPI()
+    api.batch_results["msgbatch_old"] = [
+        {
+            "custom_id": REQUEST.key,
+            "result": {
+                "type": "succeeded",
+                "message": _message("", stop_reason="refusal"),
+            },
+        },
+        {
+            "custom_id": OTHER_REQUEST.key,
+            "result": {"type": "succeeded", "message": _message()},
+        },
+    ]
+
+    results, _ = _query_batch(
+        _backend(api),
+        [REQUEST, OTHER_REQUEST],
+        resume={"msgbatch_old": frozenset({REQUEST.key, OTHER_REQUEST.key})},
+    )
+
+    assert set(results.responses) == {OTHER_REQUEST.key}
+    assert results.failures == {}
+    assert "refused" in results.refusals[REQUEST.key]
 
 
 def test_query_batch_all_resumed_needs_no_warm_up() -> None:
