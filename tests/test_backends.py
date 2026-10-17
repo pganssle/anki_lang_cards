@@ -4,10 +4,11 @@ import argparse
 import asyncio
 import importlib.metadata
 import pathlib
-from collections.abc import Callable, Mapping, Sequence
-from typing import ClassVar, Self
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from typing import Any, ClassVar, Self
 
 import attrs
+import llm
 import pytest
 
 from anki_lang_cards import backends, caches, config, model_selection, runner
@@ -790,17 +791,84 @@ def test_make_runner_anthropic_structured_output(
     assert query_runner.backend.structured_output is expected  # type: ignore[attr-defined]
 
 
-def test_llm_structured_output_follows_the_model() -> None:
+class RecordingModel(llm.AsyncModel):
+    """An ``llm`` model that records the schema each prompt was given."""
+
+    model_id = "recording"
+    can_stream = False
+
+    def __init__(self, *, supports_schema: bool = True) -> None:
+        self.supports_schema = supports_schema
+        self.schemas: list[Mapping[str, Any] | None] = []
+
+    async def execute(
+        self,
+        prompt: llm.Prompt,
+        stream: bool,
+        response: llm.AsyncResponse,
+        conversation: llm.AsyncConversation | None,
+    ) -> AsyncIterator[str]:
+        self.schemas.append(prompt.schema)
+        response.set_usage(input=3, output=5)
+        yield '{"words": []}'
+
+
+@pytest.fixture
+def recording_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[bool], RecordingModel]:
+    """Register a RecordingModel as the only model ``llm`` can find."""
+
+    def register(supports_schema: bool) -> RecordingModel:
+        model = RecordingModel(supports_schema=supports_schema)
+        monkeypatch.setattr(llm_fallback.llm, "get_async_model", lambda name: model)
+        return model
+
+    return register
+
+
+@pytest.mark.parametrize("supports_schema", [True, False])
+def test_llm_structured_output_follows_the_model(
+    recording_model: Callable[[bool], RecordingModel], supports_schema: bool
+) -> None:
     """Whether the llm fallback can enforce a schema depends on the model."""
-    assert base.Feature.STRUCTURED_OUTPUT in (
-        llm_fallback.LLMBackend.supported_features("anthropic/claude-sonnet-5")
-    )
-    backend = llm_fallback.LLMBackend("anthropic/claude-sonnet-5")
-    assert backend.structured_output
-    assert backend.query_params() == {"structured_output": True}
+    recording_model(supports_schema)
+    expected = frozenset({base.Feature.STRUCTURED_OUTPUT} if supports_schema else ())
+
+    assert llm_fallback.LLMBackend.supported_features("recording") == expected
+    backend = llm_fallback.LLMBackend("recording")
+    assert backend.structured_output is supports_schema
+    assert backend.query_params() == {"structured_output": supports_schema}
     assert not llm_fallback.LLMBackend(
-        "anthropic/claude-sonnet-5", structured_output=False
+        "recording", structured_output=False
     ).structured_output
+
+
+@pytest.mark.parametrize(
+    ("supports_schema", "structured_output", "expected"),
+    [
+        (True, True, {"type": "object"}),
+        (True, False, None),
+        (False, True, None),
+    ],
+)
+def test_llm_passes_the_schema(
+    recording_model: Callable[[bool], RecordingModel],
+    supports_schema: bool,
+    structured_output: bool,
+    expected: Mapping[str, Any] | None,
+) -> None:
+    """The schema reaches llm only when structured output is on and supported."""
+    model = recording_model(supports_schema)
+    backend = llm_fallback.LLMBackend("recording", structured_output=structured_output)
+    request = base.Request("prompt", json_schema={"type": "object"})
+
+    response = asyncio.run(backend.query(request))
+
+    assert model.schemas == [expected]
+    assert response["text"] == '{"words": []}'
+    assert response["usage"]["input"] == 3
+    assert response["usage"]["output"] == 5
 
 
 def test_required_structured_output_unavailable() -> None:
