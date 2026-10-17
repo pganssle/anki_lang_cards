@@ -424,10 +424,11 @@ def _estimate_tokens(request: base.Request) -> float:
 
 def generate_prompts(
     prompt_inputs: Sequence[PromptInput],
-    max_tokens: int = DEFAULT_PROMPT_TOKEN_BUDGET,
+    prompt_token_budget: int = DEFAULT_PROMPT_TOKEN_BUDGET,
     dialect: str = config.DEFAULT_DIALECT,
 ) -> Iterable[base.Request]:
-    """Pack annotation entries into as few prompts as fit in ``max_tokens``.
+    """Pack annotation entries into as few prompts as fit in
+    ``prompt_token_budget`` estimated tokens.
 
     An entry too big to share a prompt with anything gets one to itself.
     """
@@ -438,7 +439,7 @@ def generate_prompts(
     for prompt_input in prompt_inputs:
         if stack and (
             _estimate_tokens(_generate_prompt([*stack, prompt_input], dialect=dialect))
-            > max_tokens
+            > prompt_token_budget
         ):
             yield _generate_prompt(stack, dialect=dialect)
             stack = []
@@ -643,7 +644,7 @@ async def main() -> None:
     requests = list(
         generate_prompts(
             prompt_inputs,
-            max_tokens=args.prompt_token_budget,
+            prompt_token_budget=args.prompt_token_budget,
             dialect=conf.sentences.dialect,
         )
     )
