@@ -182,7 +182,7 @@ def test_unknown_model_is_not_priced(script, tmp_path: pathlib.Path) -> None:
     assert totals.unpriced == 1
     assert totals.cost == pytest.approx((2 * 1000 + 10 * 100) / 1e6)
     assert totals.input_tokens == 2000
-    table = script.format_table(runs, loaded.skipped)
+    table = script.format_table(runs, len(loaded.skipped))
     assert "unknown" in table
     assert "+?" in table
 
@@ -209,7 +209,30 @@ def test_skips_journal_and_non_responses(script, tmp_path: pathlib.Path) -> None
     loaded = script.load_entries(tmp_path)
 
     assert len(loaded.entries) == 1
-    assert loaded.skipped == 3
+    assert sorted(skipped.path for skipped in loaded.skipped) == [
+        tmp_path / "annotations" / "broken.json",
+        tmp_path / "annotations" / "list.json",
+        tmp_path / "sentences" / "partial.json",
+    ]
+
+
+@pytest.mark.parametrize("verbose", [True, False])
+def test_verbose_names_skipped_files(
+    script, tmp_path: pathlib.Path, capsys, verbose: bool
+) -> None:
+    write_entry(tmp_path, "real")
+    partial = tmp_path / "annotations" / "partial.json"
+    partial.write_text(json.dumps({"input": {}}))
+    broken = tmp_path / "annotations" / "broken.json"
+    broken.write_text("{not json")
+
+    args = ["--cache-root", str(tmp_path), *(["--verbose"] if verbose else [])]
+    assert script.main(args) == 0
+
+    out, err = capsys.readouterr()
+    assert "Skipped 2 files" in out
+    assert (str(partial) in err) == verbose
+    assert (str(broken) in err) == verbose
 
 
 def test_missing_cache_root(script, tmp_path: pathlib.Path, capsys) -> None:

@@ -212,17 +212,24 @@ def _entry(cache_type: str, data: Any) -> Entry | None:
 
 
 @attrs.frozen
+class Skipped:
+    """A file under the cache that is not a readable cached response."""
+
+    path: pathlib.Path
+    reason: str
+
+
+@attrs.frozen
 class Loaded:
     entries: tuple[Entry, ...]
-    skipped: int
-    """Files under the cache that are not readable cached responses."""
+    skipped: tuple[Skipped, ...]
 
 
 def load_entries(
     cache_root: pathlib.Path, since: datetime.datetime | None = None
 ) -> Loaded:
     entries: list[Entry] = []
-    skipped = 0
+    skipped: list[Skipped] = []
     for cache_type in RESPONSE_CACHE_TYPES:
         directory = cache_root / cache_type.value
         if not directory.is_dir():
@@ -232,15 +239,15 @@ def load_entries(
                 continue
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-                skipped += 1
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
+                skipped.append(Skipped(path, f"unreadable: {e}"))
                 continue
             entry = _entry(cache_type.value, data)
             if entry is None:
-                skipped += 1
+                skipped.append(Skipped(path, "not a cached response"))
             elif since is None or entry.timestamp >= since:
                 entries.append(entry)
-    return Loaded(tuple(entries), skipped)
+    return Loaded(tuple(entries), tuple(skipped))
 
 
 def group_runs(entries: Iterable[Entry], gap: datetime.timedelta) -> Sequence[Run]:
@@ -413,16 +420,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--json", action="store_true", help="Print machine-readable JSON instead."
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Name each skipped file on stderr. The report only counts them, "
+        "so this is how to tell a stray file from a response that no longer "
+        "parses and is going uncounted.",
+    )
     args = parser.parse_args(argv)
 
     loaded = load_entries(args.cache_root, since=args.since)
+    if args.verbose:
+        for skipped in loaded.skipped:
+            print(f"Skipped {skipped.path}: {skipped.reason}", file=sys.stderr)
     runs = group_runs(loaded.entries, datetime.timedelta(minutes=args.gap_minutes))
     if args.json:
-        print(json.dumps(to_json(runs, loaded.skipped), indent=2))
+        print(json.dumps(to_json(runs, len(loaded.skipped)), indent=2))
     elif not runs:
         print(f"No cached responses under {args.cache_root}.")
     else:
-        print(format_table(runs, loaded.skipped))
+        print(format_table(runs, len(loaded.skipped)))
     return 0
 
 
