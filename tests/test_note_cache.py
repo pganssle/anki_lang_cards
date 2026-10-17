@@ -1,7 +1,10 @@
-"""Tests for the mod-time note cache and the batched, cached fetch."""
+"""Tests for the mod-time note cache, the batched, cached fetch, and the
+parsing of the AnkiConnect notes that fetch returns into `Word`s."""
 
 import asyncio
 from collections.abc import Mapping
+
+import pytest
 
 from anki_lang_cards import _types as types
 from anki_lang_cards import anki_import
@@ -121,3 +124,73 @@ class TestFetchNoteWords:
         assert len(result) == 3
         assert client.mod_requests == 0
         assert all(size > 1 for size in client.batch_sizes)
+
+
+def _note(fields: Mapping[str, str]) -> anki_import.NoteData:
+    return {
+        "noteId": anki_import.NoteId(1),
+        "fields": {
+            name: {"value": value, "order": i}
+            for i, (name, value) in enumerate(fields.items())
+        },
+    }
+
+
+class TestWordFromAnkiConnectResponse:
+    """AnkiConnect reports an empty field as "", never as a missing one."""
+
+    BASE_FIELDS: Mapping[str, str] = {
+        "Rank": "7",
+        "Word": "zanja",
+        "Definition": "trench",
+        "Part-of-Speech": "nf",
+        "Article": "la",
+        "Sentence Source": "",
+    }
+    EXTRA = '[{"spanish": "Cavaron una zanja.", "english": "They dug a trench."}]'
+
+    @staticmethod
+    def client() -> anki_import.AnkiConnectClient:
+        # Parsing a response never touches the session.
+        return anki_import.AnkiConnectClient(session=None)  # type: ignore[arg-type]
+
+    @pytest.mark.parametrize("extra_sentences", ["", EXTRA])
+    @pytest.mark.parametrize("spanish", ["", " ", "\n", " \t\n"])
+    def test_an_empty_spanish_field_yields_no_first_sentence(
+        self, spanish: str, extra_sentences: str
+    ) -> None:
+        note = _note(
+            {
+                **self.BASE_FIELDS,
+                "Spanish": spanish,
+                "English": "",
+                "Extra Sentences": extra_sentences,
+            }
+        )
+        word = self.client().word_from_anki_connect_response(note)
+        assert all(sentence.spanish for sentence in word.sentences)
+        assert len(word.sentences) == (1 if extra_sentences else 0)
+
+    def test_a_filled_spanish_field_is_the_first_sentence(self) -> None:
+        note = _note(
+            {
+                **self.BASE_FIELDS,
+                "Spanish": "La zanja es honda.",
+                "English": "The trench is deep.",
+                "Extra Sentences": self.EXTRA,
+            }
+        )
+        word = self.client().word_from_anki_connect_response(note)
+        assert [s.spanish for s in word.sentences] == [
+            "La zanja es honda.",
+            "Cavaron una zanja.",
+        ]
+
+    def test_a_missing_spanish_field_matches_an_empty_one(self) -> None:
+        client = self.client()
+        common = {**self.BASE_FIELDS, "Extra Sentences": self.EXTRA}
+        empty = client.word_from_anki_connect_response(
+            _note({**common, "Spanish": "", "English": ""})
+        )
+        missing = client.word_from_anki_connect_response(_note(common))
+        assert empty.sentences == missing.sentences

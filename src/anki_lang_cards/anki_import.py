@@ -626,7 +626,12 @@ class AnkiConnectClient:
             return sentences
 
         rank_str = get_field_value("Rank")
-        spanish_sentence = get_field_value("Spanish")
+        # AnkiConnect returns "" for an empty field, not None; an empty (or
+        # whitespace-only) Spanish field means the note has no first sentence.
+        spanish_field = get_field_value("Spanish")
+        spanish_sentence = (
+            spanish_field if spanish_field and spanish_field.strip() else None
+        )
         english_sentence = get_field_value("English")
         example_sentences = parse_sentences()
 
@@ -832,8 +837,8 @@ async def fetch_note_words(
 
 
 def load_sentences(
-    spanish_sentence: str,
-    english_sentence: str,
+    spanish_sentence: str | None,
+    english_sentence: str | None,
     sentence_source: types.Citation | str | None,
     example_sentences: Mapping[str, str | Mapping],
 ) -> Sequence[types.Sentence]:
