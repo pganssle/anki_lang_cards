@@ -20,7 +20,6 @@ DEFAULT_CACHE_ROOT: Final = pathlib.Path(".cache")
 CACHE_TYPES: Final = ("annotations", "sentences")
 JOURNAL_DIR: Final = "batch-jobs"
 
-CACHE_READ_MULTIPLIER: Final = 0.1
 CACHE_WRITE_5M_MULTIPLIER: Final = 1.25
 CACHE_WRITE_1H_MULTIPLIER: Final = 2.0
 BATCH_MULTIPLIER: Final = 0.5
@@ -32,11 +31,19 @@ class Price:
 
     input: float
     output: float
+    cache_read: float = attrs.field(
+        default=attrs.Factory(lambda self: self.input / 10, takes_self=True)
+    )
+    """The price of input read back from the prompt cache.
+
+    Most models read at a tenth of the input price, but it is set per model:
+    the newest ones read cheaper.
+    """
 
 
 PRICES: Final[Mapping[str, Price]] = {
-    "claude-fable-5-1": Price(10.0, 50.0),
-    "claude-opus-5-5": Price(4.0, 20.0),
+    "claude-fable-5-1": Price(10.0, 50.0, cache_read=0.25),
+    "claude-opus-5-5": Price(4.0, 20.0, cache_read=0.20),
     "claude-opus-5": Price(5.0, 25.0),
     "claude-sonnet-5": Price(2.0, 10.0),
     "claude-haiku-4-5": Price(1.0, 5.0),
@@ -83,9 +90,10 @@ class Entry:
             self.input_tokens
             + CACHE_WRITE_5M_MULTIPLIER * self.cache_write_5m
             + CACHE_WRITE_1H_MULTIPLIER * self.cache_write_1h
-            + CACHE_READ_MULTIPLIER * self.cache_read
         )
-        total = (input_cost + price.output * self.output_tokens) / 1_000_000
+        cache_read_cost = price.cache_read * self.cache_read
+        output_cost = price.output * self.output_tokens
+        total = (input_cost + cache_read_cost + output_cost) / 1_000_000
         return total * BATCH_MULTIPLIER if self.batch else total
 
 

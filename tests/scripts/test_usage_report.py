@@ -85,13 +85,14 @@ def sdk_details(
 
 
 @pytest.mark.parametrize(
-    ("details", "query_params", "expected"),
+    ("model", "details", "query_params", "expected"),
     [
         # llm-era response: plain input and output at list price.
-        (None, None, (2 * 1000 + 10 * 100) / 1e6),
+        (SONNET, None, None, (2 * 1000 + 10 * 100) / 1e6),
         # Batched, older entry without the write split: the write is assumed
         # to be at the hour-long lifetime.
         (
+            SONNET,
             sdk_details(batch=True, write=2000, read=3000),
             {"batch": True},
             0.5 * (2 * (1000 + 2.0 * 2000 + 0.1 * 3000) + 10 * 100) / 1e6,
@@ -99,18 +100,29 @@ def sdk_details(
         # The warm-up request ahead of a batch: billed at full price, but
         # writing the hour-long entry the batch reads.
         (
+            SONNET,
             sdk_details(batch=False, write=2000),
             {"batch": True},
             (2 * (1000 + 2.0 * 2000) + 10 * 100) / 1e6,
         ),
         # Not batched, no split recorded: the five-minute lifetime.
         (
+            SONNET,
             sdk_details(batch=False, write=2000, read=500),
             {"batch": False},
             (2 * (1000 + 1.25 * 2000 + 0.1 * 500) + 10 * 100) / 1e6,
         ),
+        # Cache reads are priced per model, not as a share of the input
+        # price: Fable 5.1 reads at $0.25/MTok against $10 input.
+        (
+            "anthropic/claude-fable-5-1",
+            sdk_details(batch=False, write=2000, read=40_000),
+            {"batch": False},
+            (10 * (1000 + 1.25 * 2000) + 0.25 * 40_000 + 50 * 100) / 1e6,
+        ),
         # A recorded split wins over any assumption.
         (
+            SONNET,
             sdk_details(
                 batch=True,
                 write=3000,
@@ -125,11 +137,12 @@ def sdk_details(
 def test_entry_cost(
     script,
     tmp_path: pathlib.Path,
+    model: str,
     details: Mapping[str, Any] | None,
     query_params: Mapping[str, Any] | None,
     expected: float,
 ) -> None:
-    write_entry(tmp_path, "a", details=details, query_params=query_params)
+    write_entry(tmp_path, "a", model=model, details=details, query_params=query_params)
 
     (entry,) = script.load_entries(tmp_path).entries
 
@@ -139,15 +152,19 @@ def test_entry_cost(
 @pytest.mark.parametrize(
     ("model", "price"),
     [
-        ("anthropic/claude-sonnet-5", (2.0, 10.0)),
-        ("claude-sonnet-5", (2.0, 10.0)),
-        ("anthropic/claude-opus-5-5", (4.0, 20.0)),
-        ("claude-3-5-sonnet-20241022", (3.0, 15.0)),
+        ("anthropic/claude-sonnet-5", (2.0, 10.0, 0.2)),
+        ("claude-sonnet-5", (2.0, 10.0, 0.2)),
+        ("anthropic/claude-fable-5-1", (10.0, 50.0, 0.25)),
+        ("anthropic/claude-opus-5-5", (4.0, 20.0, 0.20)),
+        ("claude-3-5-sonnet-20241022", (3.0, 15.0, 0.3)),
     ],
 )
-def test_price_for(script, model: str, price: tuple[float, float]) -> None:
-    found = script.price_for(model)
-    assert (found.input, found.output) == price
+def test_price_for(script, model: str, price: tuple[float, float, float]) -> None:
+    assert script.price_for(model) == script.Price(*price)
+
+
+def test_cache_read_defaults_to_a_tenth_of_input(script) -> None:
+    assert script.Price(3.0, 15.0).cache_read == pytest.approx(0.3)
 
 
 def test_unknown_model_is_not_priced(script, tmp_path: pathlib.Path) -> None:
