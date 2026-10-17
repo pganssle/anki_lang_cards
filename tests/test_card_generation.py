@@ -731,15 +731,25 @@ def _conflicting_inputs(workdir: pathlib.Path) -> pathlib.Path:
 def test_main_exits_3_on_an_unanswered_duplicate(
     dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
-    """Headless, an unanswered group stops the run before the LLM is used."""
+    """Headless, an unanswered group stops the run before the LLM is used,
+    and takes an earlier run's diff and superseded-notes file with it."""
     workdir = tmp_path_factory.mktemp("undecided")
     inputs = _conflicting_inputs(workdir)
+    output_dir = workdir / "output"
+    output_dir.mkdir()
+    stale_diff = output_dir / "diff.csv"
+    stale_diff.write_text("#separator:Comma\n9999,obsoleto,adj,stale,,,,,,,,,,\n")
+    stale_superseded = output_dir / "superseded_notes.csv"
+    stale_superseded.write_text("rank,word,part_of_speech,meaning\n1400,x,nm,stale\n")
 
     result = _run_main_raw(workdir, inputs, dictionary_paths, ("--no-ui",))
 
     assert result.returncode == 3, result.stderr
     assert "Generating sentences" not in result.stdout
-    assert not (workdir / "output" / "output.csv").exists()
+    assert not (output_dir / "output.csv").exists()
+    # Nothing was exported, so nothing from an earlier run may look like it was.
+    assert not stale_diff.exists()
+    assert not stale_superseded.exists()
     pending = json.loads((workdir / "output" / "merge_candidates.json").read_text())
     assert len(pending) == 1
     assert "existente" in pending[0]["words"]

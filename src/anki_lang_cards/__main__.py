@@ -156,6 +156,19 @@ def _classify_for_generation(
     )
 
 
+def _remove_run_outputs(
+    diff_output: pathlib.Path, superseded_output: pathlib.Path
+) -> None:
+    """Remove the per-run files an earlier run may have left behind.
+
+    The diff and the superseded-notes file describe one run only: a diff
+    left over from an earlier run reverts the deck if imported, and a stale
+    superseded file names notes to delete that may now be live.
+    """
+    diff_output.unlink(missing_ok=True)
+    superseded_output.unlink(missing_ok=True)
+
+
 async def main():
     parser = argparse.ArgumentParser(description="Anki Language Card Creator")
     parser.add_argument(
@@ -399,6 +412,9 @@ async def main():
     if result.interrupted:
         # Nothing reaches the LLM until every duplicate this import raises
         # has an answer; a silent skip here used to hide unresolved groups.
+        # This run exports nothing, so an earlier run's diff must not be
+        # left where the re-run's would go.
+        _remove_run_outputs(args.diff_output, args.superseded_output)
         print(f"{len(result.pending)} duplicate groups still need an answer:")
         for candidate in result.pending:
             for line in candidate.summarize():
