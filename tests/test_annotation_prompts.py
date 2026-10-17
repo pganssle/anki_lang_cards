@@ -109,7 +109,23 @@ def test_packing_properties(context_sizes: Sequence[int]) -> None:
         assert _estimated_tokens(next(iter(combined))) > BUDGET
 
 
-def test_default_budget_is_the_cli_default() -> None:
+def _entries_that_fit(budget: int, context_size: int) -> int:
+    """How many entries of ``context_size`` characters fit in one prompt of
+    ``budget`` tokens, measured from the prompts themselves."""
+    count = 0
+    while True:
+        (request,) = annotations_to_csv.generate_prompts(
+            [_prompt_input(i, context_size) for i in range(count + 1)],
+            prompt_token_budget=10**9,
+        )
+        if _estimated_tokens(request) > budget:
+            return count
+        count += 1
+
+
+def test_generate_prompts_defaults_to_the_shared_budget() -> None:
+    """Leaving the budget off is the same as passing
+    DEFAULT_PROMPT_TOKEN_BUDGET, which the CLI defaults to as well."""
     prompt_inputs = [_prompt_input(i, 600) for i in range(60)]
 
     default = annotations_to_csv.generate_prompts(prompt_inputs)
@@ -124,17 +140,24 @@ def test_default_budget_is_the_cli_default() -> None:
 def test_default_budget_packs_more_than_the_old_one() -> None:
     """The budget used to be 2048 tokens, most of which the system prompt
     took up, so only a few entries went in each request."""
+    old_budget = 2048
+    new_budget = annotations_to_csv.DEFAULT_PROMPT_TOKEN_BUDGET
     prompt_inputs = [_prompt_input(i, 600) for i in range(60)]
+    per_old_prompt = _entries_that_fit(old_budget, 600)
+    per_new_prompt = _entries_that_fit(new_budget, 600)
 
     old = list(
-        annotations_to_csv.generate_prompts(prompt_inputs, prompt_token_budget=2048)
+        annotations_to_csv.generate_prompts(
+            prompt_inputs, prompt_token_budget=old_budget
+        )
     )
     new = list(annotations_to_csv.generate_prompts(prompt_inputs))
 
-    assert max(len(_source_ids(r)) for r in old) == 4
-    assert min(len(_source_ids(r)) for r in new[:-1]) > 4 * 4
-    assert len(new) < len(old) / 4
+    # The system prompt eats most of the old budget, so the new one fits
+    # many times more entries per prompt than the ratio of the budgets alone.
+    assert per_new_prompt > per_old_prompt * new_budget // old_budget
+    # Entries are all the same size, so every prompt but the last is full.
+    assert [len(_source_ids(r)) for r in old[:-1]] == [per_old_prompt] * (len(old) - 1)
+    assert [len(_source_ids(r)) for r in new[:-1]] == [per_new_prompt] * (len(new) - 1)
     for request in new:
-        assert (
-            _estimated_tokens(request) <= annotations_to_csv.DEFAULT_PROMPT_TOKEN_BUDGET
-        )
+        assert _estimated_tokens(request) <= new_budget
