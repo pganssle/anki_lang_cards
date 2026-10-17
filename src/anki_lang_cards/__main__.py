@@ -21,7 +21,6 @@ from . import (
     model_selection,
     prompts,
     query,
-    triage,
 )
 
 try:
@@ -359,20 +358,7 @@ async def main():
     # may or may not have been imported to the deck already.
     output_wl = conflict_resolver.WordLookup(output_words)
 
-    decisions = triage.DecisionCache(args.decision_cache)
-    if args.decision_file is not None:
-        try:
-            recorded = dedup_flow.record_decision_file(args.decision_file, decisions)
-        except dedup_flow.DecisionFileError as e:
-            parser.exit(2, f"error: {e}\n")
-        print(f"Folded in {recorded} new answers from {args.decision_file}")
-    if not len(decisions):
-        print(
-            "WARNING: no recorded decisions at "
-            f"{args.decision_cache.resolve()} - if you have answered "
-            "questions before, check that you are running from the "
-            "repository root: the default cache paths are relative."
-        )
+    decisions = dedup_flow.load_decisions(args.decision_cache, args.decision_file)
     merge_cache = conflict_resolver.MergeCache(args.conflict_cache_path)
 
     result = await dedup_flow.resolve_duplicates(

@@ -547,6 +547,38 @@ class TestDecisionFile:
 
         assert expected in str(excinfo.value)
 
+    def test_load_decisions_folds_the_file_in(
+        self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        path = tmp_path / "pending.json"
+        dedup_flow.write_pending_file(path, [self.pending_candidate()])
+        data = json.loads(path.read_text())
+        data[0]["disposition"] = "merge"
+        path.write_text(json.dumps(data))
+        cache_path = tmp_path / "decisions.json"
+
+        decisions = dedup_flow.load_decisions(cache_path, path)
+
+        assert len(decisions) == 1
+        assert len(triage.DecisionCache(cache_path)) == 1
+        out = capsys.readouterr().out
+        assert "Read 0 decisions" in out
+        assert "WARNING: no recorded decisions" in out
+        assert "Folded in 1 new answers" in out
+
+    def test_load_decisions_exits_2_on_a_bad_file(
+        self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A bad file stops the run with its problems, and records nothing."""
+        cache_path = tmp_path / "decisions.json"
+
+        with pytest.raises(SystemExit) as excinfo:
+            dedup_flow.load_decisions(cache_path, tmp_path / "missing.json")
+
+        assert excinfo.value.code == 2
+        assert "missing.json" in capsys.readouterr().err
+        assert not cache_path.exists()
+
     def test_a_file_round_trip_matches_a_ui_session(self, decisions, tmp_path) -> None:
         """Answering by file and answering on screen record the same thing."""
         deck = [make_word("zanja", "nf", "trench", 1)]

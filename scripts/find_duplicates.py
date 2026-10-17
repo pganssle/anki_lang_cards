@@ -34,7 +34,6 @@ from anki_lang_cards import (
     apply_merges,
     conflict_resolver,
     dedup_flow,
-    triage,
 )
 
 try:
@@ -344,18 +343,7 @@ async def amain() -> int:
         if args.cache_file is not None:
             args.cache_file.write_text(words_to_csv(all_words))
 
-    decisions = triage.DecisionCache(args.decision_cache)
-    print(f"Read {len(decisions)} decisions from {args.decision_cache}")
-    if not len(decisions):
-        print(
-            "WARNING: no recorded decisions at "
-            f"{args.decision_cache.resolve()} - if you have answered "
-            "questions before, check that you are running from the "
-            "repository root: the default cache paths are relative."
-        )
-    if args.decision_file is not None:
-        recorded = dedup_flow.record_decision_file(args.decision_file, decisions)
-        print(f"Folded in {recorded} new answers from {args.decision_file}")
+    decisions = dedup_flow.load_decisions(args.decision_cache, args.decision_file)
 
     result = await dedup_flow.resolve_duplicates(
         (),
