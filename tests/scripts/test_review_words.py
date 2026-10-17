@@ -91,6 +91,9 @@ def write_words(
         ("gatos", "gato"),
         ("comillas", "comilla"),
         ("ingleses", "inglés"),
+        # What duplicate detection groups is pointed out here too.
+        ("mirón/a", "mirón/ona"),
+        ("percatarse (de)", "percatarse"),
     ],
 )
 def test_fold_keys_match(script: Any, first: str, second: str) -> None:

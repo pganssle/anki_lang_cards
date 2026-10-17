@@ -49,7 +49,7 @@ from typing import Any, Final
 import attrs
 
 from anki_lang_cards import _types as types
-from anki_lang_cards import anki_import
+from anki_lang_cards import anki_import, headword
 
 DEFAULT_CHUNK_SIZE: Final = 25
 SETTABLE_FIELDS: Final = frozenset({"word", "meaning", "part_of_speech", "article"})
@@ -69,17 +69,20 @@ def file_digest(path: pathlib.Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def fold_keys(headword: str) -> frozenset[str]:
+def fold_keys(word: str) -> frozenset[str]:
     """Keys under which two headwords are probably the same word.
 
-    Accents, case, a gender suffix (``seco/a``), a parenthetical qualifier, a
-    pronominal ``se`` and a plural ending on a single word are all ignored,
-    since the misses that matter have been things like
-    ``apañarselas``/``apañárselas``, ``despedir``/``despedirse`` and
-    ``gatos``/``gato``. It is deliberately loose: the matches are leads for a
-    reviewer, not merges.
+    This starts from ``headword.lookup_key``, the form duplicate detection
+    compares notes by, so that anything the generation step would group
+    (``mirón/a`` and ``mirón/ona``, ``percatarse (de)`` and ``percatarse``)
+    is pointed out here too. On top of that, accents, case, a gender suffix
+    (``seco/a``), a parenthetical qualifier, a pronominal ``se`` and a plural
+    ending on a single word are all ignored, since the misses that matter
+    have been things like ``apañarselas``/``apañárselas``,
+    ``despedir``/``despedirse`` and ``gatos``/``gato``. It is deliberately
+    loose: the matches are leads for a reviewer, not merges.
     """
-    text = unicodedata.normalize("NFD", headword.lower())
+    text = unicodedata.normalize("NFD", headword.lookup_key(word))
     text = "".join(char for char in text if not unicodedata.combining(char))
     text = _PARENTHETICAL.sub("", _GENDER_SUFFIX.sub("", text))
     key = " ".join(text.split())
