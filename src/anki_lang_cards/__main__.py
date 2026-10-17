@@ -21,7 +21,6 @@ from . import (
     model_selection,
     prompts,
     query,
-    triage,
 )
 
 try:
@@ -244,6 +243,14 @@ async def main():
     )
 
     parser.add_argument(
+        "--decision-file",
+        type=pathlib.Path,
+        default=None,
+        help="An answered pending file (see --pending-file) to fold into the "
+        "decision cache before duplicates are resolved. Groups still marked "
+        '"review" stay unanswered and are written back to the pending file.',
+    )
+    parser.add_argument(
         "--superseded-output",
         type=pathlib.Path,
         default=pathlib.Path("output/superseded_notes.csv"),
@@ -351,14 +358,7 @@ async def main():
     # may or may not have been imported to the deck already.
     output_wl = conflict_resolver.WordLookup(output_words)
 
-    decisions = triage.DecisionCache(args.decision_cache)
-    if not len(decisions):
-        print(
-            "WARNING: no recorded decisions at "
-            f"{args.decision_cache.resolve()} - if you have answered "
-            "questions before, check that you are running from the "
-            "repository root: the default cache paths are relative."
-        )
+    decisions = dedup_flow.load_decisions(args.decision_cache, args.decision_file)
     merge_cache = conflict_resolver.MergeCache(args.conflict_cache_path)
 
     result = await dedup_flow.resolve_duplicates(
@@ -393,7 +393,8 @@ async def main():
         dedup_flow.write_pending_file(args.pending_file, result.pending)
         print(
             f'Edit {args.pending_file} (set "disposition"; a merge with no '
-            '"replacements" accepts the proposal) and re-run.'
+            '"replacements" accepts the proposal) and re-run with '
+            f"--decision-file {args.pending_file}."
         )
         sys.exit(EXIT_DECISIONS_NEEDED)
 

@@ -524,6 +524,61 @@ class TestDecisionFile:
 
         assert "sentence_allocation[0]" in str(excinfo.value)
 
+    @pytest.mark.parametrize(
+        ("contents", "expected"),
+        [
+            pytest.param(None, "No such file or directory", id="missing"),
+            pytest.param("[1, 2", "is not JSON", id="not-json"),
+            pytest.param('{"a": 1}', "list of candidates, not dict", id="object"),
+            pytest.param('["x"]', "candidate 0 is not an object", id="entry"),
+        ],
+    )
+    def test_an_unusable_file_names_the_problem(
+        self, tmp_path: pathlib.Path, contents: str | None, expected: str
+    ) -> None:
+        """A file that cannot be read at all is a DecisionFileError too, so
+        every caller reports it the same way as a bad answer."""
+        path = tmp_path / "pending.json"
+        if contents is not None:
+            path.write_text(contents)
+
+        with pytest.raises(dedup_flow.DecisionFileError) as excinfo:
+            dedup_flow.read_decision_file(path)
+
+        assert expected in str(excinfo.value)
+
+    def test_load_decisions_folds_the_file_in(
+        self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        path = tmp_path / "pending.json"
+        dedup_flow.write_pending_file(path, [self.pending_candidate()])
+        data = json.loads(path.read_text())
+        data[0]["disposition"] = "merge"
+        path.write_text(json.dumps(data))
+        cache_path = tmp_path / "decisions.json"
+
+        decisions = dedup_flow.load_decisions(cache_path, path)
+
+        assert len(decisions) == 1
+        assert len(triage.DecisionCache(cache_path)) == 1
+        out = capsys.readouterr().out
+        assert "Read 0 decisions" in out
+        assert "WARNING: no recorded decisions" in out
+        assert "Folded in 1 new answers" in out
+
+    def test_load_decisions_exits_2_on_a_bad_file(
+        self, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A bad file stops the run with its problems, and records nothing."""
+        cache_path = tmp_path / "decisions.json"
+
+        with pytest.raises(SystemExit) as excinfo:
+            dedup_flow.load_decisions(cache_path, tmp_path / "missing.json")
+
+        assert excinfo.value.code == 2
+        assert "missing.json" in capsys.readouterr().err
+        assert not cache_path.exists()
+
     def test_a_file_round_trip_matches_a_ui_session(self, decisions, tmp_path) -> None:
         """Answering by file and answering on screen record the same thing."""
         deck = [make_word("zanja", "nf", "trench", 1)]

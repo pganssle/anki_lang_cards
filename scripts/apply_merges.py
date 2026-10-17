@@ -35,13 +35,7 @@ from collections.abc import Sequence
 import attrs
 
 from anki_lang_cards import _types as types
-from anki_lang_cards import (
-    anki_import,
-    apply_merges,
-    conflict_resolver,
-    dedup_flow,
-    triage,
-)
+from anki_lang_cards import anki_import, apply_merges, conflict_resolver, dedup_flow
 
 try:
     import textual  # noqa: F401
@@ -299,18 +293,7 @@ async def amain() -> int:
         )
 
     deck = await load_deck(args, added)
-    decisions = triage.DecisionCache(args.decision_cache)
-    print(f"Read {len(decisions)} decisions from {args.decision_cache}")
-    if not len(decisions):
-        print(
-            "WARNING: no recorded decisions at "
-            f"{args.decision_cache.resolve()} - if you have answered "
-            "questions before, check that you are running from the "
-            "repository root: the default cache paths are relative."
-        )
-    if args.decision_file is not None:
-        recorded = dedup_flow.record_decision_file(args.decision_file, decisions)
-        print(f"Folded in {recorded} new answers from {args.decision_file}")
+    decisions = dedup_flow.load_decisions(args.decision_cache, args.decision_file)
 
     result = await dedup_flow.resolve_duplicates(
         added,

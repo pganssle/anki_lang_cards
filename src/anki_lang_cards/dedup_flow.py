@@ -19,6 +19,7 @@ returned for the decision-file protocol instead of a screen.
 
 import json
 import pathlib
+import sys
 from collections.abc import Callable, Collection, Mapping, Sequence
 from typing import Any, Final
 
@@ -428,11 +429,23 @@ def read_decision_file(path: pathlib.Path) -> Sequence[triage.Candidate]:
     without replacements is legal — it means "accept the proposal", and the
     proposal is recomputed exactly as it was written.
     """
-    with path.open() as f:
-        data = json.load(f)
+    try:
+        with path.open() as f:
+            data = json.load(f)
+    except OSError as error:
+        raise DecisionFileError([f"{path}: {error.strerror or error}"]) from error
+    except json.JSONDecodeError as error:
+        raise DecisionFileError([f"{path} is not JSON: {error}"]) from error
+    if not isinstance(data, list):
+        raise DecisionFileError(
+            [f"{path} must hold a list of candidates, not {type(data).__name__}"]
+        )
     candidates: list[triage.Candidate] = []
     problems: list[str] = []
     for position, entry in enumerate(data):
+        if not isinstance(entry, Mapping):
+            problems.append(f"candidate {position} is not an object")
+            continue
         label = _entry_label(entry, position)
         try:
             candidate = triage.Candidate.from_dict(entry)
@@ -495,3 +508,32 @@ def record_decision_file(path: pathlib.Path, decisions: triage.DecisionCache) ->
     recorded = triage.record_decisions(candidates, decisions)
     decisions.save()
     return recorded
+
+
+def load_decisions(
+    cache_path: pathlib.Path, decision_file: pathlib.Path | None
+) -> triage.DecisionCache:
+    """Open the decision cache and fold an answered decision file into it.
+
+    The opening every entry point that resolves duplicates shares, so a
+    harness sees the same messages from each and the same exit from a bad
+    decision file: its problems on stderr, exit status 2, nothing recorded.
+    The warning describes the cache as read from disk, before any fold.
+    """
+    decisions = triage.DecisionCache(cache_path)
+    print(f"Read {len(decisions)} decisions from {cache_path}")
+    if not len(decisions):
+        print(
+            "WARNING: no recorded decisions at "
+            f"{cache_path.resolve()} - if you have answered "
+            "questions before, check that you are running from the "
+            "repository root: the default cache paths are relative."
+        )
+    if decision_file is not None:
+        try:
+            recorded = record_decision_file(decision_file, decisions)
+        except DecisionFileError as error:
+            print(f"error: {error}", file=sys.stderr)
+            raise SystemExit(2) from error
+        print(f"Folded in {recorded} new answers from {decision_file}")
+    return decisions
