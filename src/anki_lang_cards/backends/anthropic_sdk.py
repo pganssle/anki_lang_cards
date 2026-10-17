@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar, Final, Self
 
 import anthropic
+import attrs
 import httpx2
 
 from .. import caches, config
@@ -17,8 +18,6 @@ from . import base
 # Room for adaptive thinking as well as the response, since thinking counts
 # against max_tokens.
 DEFAULT_MAX_TOKENS: Final[int] = 16_000
-
-_INCOMPLETE_STOP_REASONS: Final = frozenset({"max_tokens", "refusal"})
 
 
 class AnthropicBackend:
@@ -138,11 +137,10 @@ class AnthropicBackend:
                 jobs.append(job_id)
                 unsubmitted -= keys
 
-        responses: dict[str, caches.ResponseData] = {}
-        failures: dict[str, str] = {}
+        collected = _Results()
         if self.prompt_caching:
             for key in await self._warm_cache(
-                [by_key[key] for key in sorted(unsubmitted)], responses, failures
+                [by_key[key] for key in sorted(unsubmitted)], collected
             ):
                 unsubmitted.remove(key)
 
@@ -166,25 +164,25 @@ class AnthropicBackend:
                         # A resumed job can hold requests this run no longer
                         # asks for; there is nowhere to put them.
                         continue
-                    _collect(item, responses, failures)
+                    _collect(item, collected)
             except anthropic.NotFoundError:
                 # Batch results expire after 29 days.
                 print(
                     f"Batch job {job_id} no longer exists; its requests will be retried."
                 )
 
-        for key in by_key.keys() - responses.keys() - failures.keys():
-            failures[key] = "no result came back from the batch job"
+        for key in by_key.keys() - collected.keys():
+            collected.failures[key] = "no result came back from the batch job"
 
         return base.BatchResults(
-            responses=responses, failures=failures, completed_jobs=frozenset(jobs)
+            responses=collected.responses,
+            failures=collected.failures,
+            completed_jobs=frozenset(jobs),
+            refusals=collected.refusals,
         )
 
     async def _warm_cache(
-        self,
-        requests: Sequence[base.Request],
-        responses: dict[str, caches.ResponseData],
-        failures: dict[str, str],
+        self, requests: Sequence[base.Request], results: "_Results"
     ) -> Sequence[str]:
         """Send one request per shared system prompt ahead of the batch.
 
@@ -216,10 +214,7 @@ class AnthropicBackend:
             message = await self._client.messages.create(
                 **self._params(request, batch=True)
             )
-            try:
-                responses[request.key] = _response_data(message, batch=False)
-            except base.IncompleteResponseError as e:
-                failures[request.key] = str(e)
+            results.add(request.key, message, batch=False)
             sent.append(request.key)
         return sent
 
@@ -270,28 +265,46 @@ class AnthropicBackend:
         return params
 
 
+@attrs.define
+class _Results:
+    """What a batch run has collected so far, sorted by outcome."""
+
+    responses: dict[str, caches.ResponseData] = attrs.field(factory=dict)
+    failures: dict[str, str] = attrs.field(factory=dict)
+    refusals: dict[str, str] = attrs.field(factory=dict)
+
+    def keys(self) -> set[str]:
+        return self.responses.keys() | self.failures.keys() | self.refusals.keys()
+
+    def add(self, key: str, message: anthropic.types.Message, *, batch: bool) -> None:
+        try:
+            self.responses[key] = _response_data(message, batch=batch)
+        except base.IncompleteResponseError as e:
+            self.failures[key] = str(e)
+        except base.RefusedResponseError as e:
+            self.refusals[key] = str(e)
+
+
 def _collect(
     item: anthropic.types.messages.MessageBatchIndividualResponse,
-    responses: dict[str, caches.ResponseData],
-    failures: dict[str, str],
+    results: _Results,
 ) -> None:
     result = item.result
     match result.type:
         case "succeeded":
-            try:
-                responses[item.custom_id] = _response_data(result.message, batch=True)
-            except base.IncompleteResponseError as e:
-                failures[item.custom_id] = str(e)
+            results.add(item.custom_id, result.message, batch=True)
         case "errored":
-            failures[item.custom_id] = f"errored: {result.error.error.message}"
+            results.failures[item.custom_id] = f"errored: {result.error.error.message}"
         case other:
-            failures[item.custom_id] = other
+            results.failures[item.custom_id] = other
 
 
 def _response_data(
     message: anthropic.types.Message, *, batch: bool
 ) -> caches.ResponseData:
-    if message.stop_reason in _INCOMPLETE_STOP_REASONS:
+    if message.stop_reason == "refusal":
+        raise base.RefusedResponseError("The model refused to answer the prompt.")
+    if message.stop_reason == "max_tokens":
         raise base.IncompleteResponseError(
             f"The response stopped early (stop_reason={message.stop_reason!r})."
         )

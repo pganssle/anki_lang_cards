@@ -58,6 +58,15 @@ class IncompleteResponseError(ValueError):
     """
 
 
+class RefusedResponseError(ValueError):
+    """The model declined to answer the request.
+
+    The same prompt would almost certainly be refused again, so unlike an
+    incomplete response this fails the request for good rather than being
+    retried. It is never written to the response cache either.
+    """
+
+
 class Backend(Protocol):
     """A model endpoint that answers one :class:`Request` at a time."""
 
@@ -113,6 +122,7 @@ class Backend(Protocol):
         """Send one request and wait for the response.
 
         :raises IncompleteResponseError: If the model's response was cut off.
+        :raises RefusedResponseError: If the model declined to answer.
         """
         ...
 
@@ -129,10 +139,16 @@ class BatchResults:
     """Responses keyed by :attr:`Request.key`."""
 
     failures: Mapping[str, str]
-    """Why each failed request failed, keyed by :attr:`Request.key`."""
+    """Why each failed request failed, keyed by :attr:`Request.key`.
+
+    These are worth retrying; a refusal goes in :attr:`refusals` instead."""
 
     completed_jobs: frozenset[str]
     """The provider's IDs for the jobs whose results are all collected."""
+
+    refusals: Mapping[str, str] = attrs.field(factory=dict, kw_only=True)
+    """Why the model declined each refused request, keyed by
+    :attr:`Request.key`. These are not retried."""
 
 
 class SubmitCallback(Protocol):

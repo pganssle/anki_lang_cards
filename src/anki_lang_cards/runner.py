@@ -66,6 +66,10 @@ class Failure:
     request: base.Request
     reason: str
 
+    retry: bool = True
+    """Whether asking again might get a response; False when the model
+    refused the request."""
+
 
 class QueryRunner:
     """Answers requests from the response cache, sending misses to a backend.
@@ -147,6 +151,8 @@ class QueryRunner:
                     response = await self.backend.query(request)
                 except base.IncompleteResponseError as e:
                     return Failure(request, str(e))
+                except base.RefusedResponseError as e:
+                    return Failure(request, str(e), retry=False)
             if write_cache:
                 self._cache(request, response)
             return Success(request, response)
@@ -171,6 +177,8 @@ class QueryRunner:
                 if write_cache:
                     self._cache(request, response)
                 outcomes.append(Success(request, response))
+            elif (reason := results.refusals.get(request.key)) is not None:
+                outcomes.append(Failure(request, reason, retry=False))
             else:
                 reason = results.failures.get(request.key, "no response")
                 outcomes.append(Failure(request, reason))
@@ -205,6 +213,8 @@ async def run_with_retries[T](
     raises :class:`ValueError` (which includes JSON decoding errors).
     Retries skip the response cache, since the bad response is in it, and run
     together, so in batch mode each round of retries is one more batch job.
+    A request the model refused is skipped straight away, since asking again
+    would not help.
     """
     pending = requests
     attempt = 0
@@ -217,6 +227,8 @@ async def run_with_retries[T](
             skip_cache=skip_cache,
         ):
             match outcome:
+                case Failure(request=request, reason=reason, retry=False):
+                    print(f"Skipping {describe(request)}: {reason}")
                 case Failure(request=request, reason=reason):
                     print(f"Attempt {attempt} failed for {describe(request)}: {reason}")
                     failed.append(request)
