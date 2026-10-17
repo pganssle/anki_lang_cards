@@ -45,24 +45,27 @@ async def generate_sentences(
     def describe(request: base.Request) -> str:
         return str(tuple(word.word for word in requests[request]))
 
+    def parse(
+        request: base.Request, response: caches.ResponseData
+    ) -> Sequence[tuple[types.Word, Mapping[str, Any]]]:
+        return match_entries(requests[request], decode_words(response["text"]))
+
     citation = types.ModelCitation(model=model_name)
-    async for request, parsed in runner.run_with_retries(
+    async for _, matched in runner.run_with_retries(
         query_runner,
         tuple(requests),
-        _parse_response,
+        parse,
         max_retries=max_invalid_output_retries,
         describe=describe,
     ):
-        parsed_with_sources = [
-            {
+        for word, entry in matched:
+            entry_with_sources = {
                 **entry,
                 "examples": [
                     {**example, "source": citation} for example in entry["examples"]
                 ],
             }
-            for entry in parsed
-        ]
-        for word in result_to_words(requests[request], parsed_with_sources):
+            word = result_to_word(word, entry_with_sources)
             word.model_used = model_name
             yield word
 
@@ -95,12 +98,6 @@ def decode_words(text: str) -> Sequence[Mapping[str, Any]]:
     return words
 
 
-def _parse_response(
-    request: base.Request, response: caches.ResponseData
-) -> Sequence[Mapping[str, Any]]:
-    return decode_words(response["text"])
-
-
 class SentencePromptHandler(PromptHandler):
     def __init__(self, prompt_template: str):
         self.prompt_template = prompt_template
@@ -124,11 +121,12 @@ class MultiSentencePromptHandler(PromptHandler):
         prompt_data = json.dumps(
             [
                 {
+                    "id": word_id,
                     "term": word.word,
                     "part_of_speech": str(word.part_of_speech),
                     "meaning": word.meaning,
                 }
-                for word in words
+                for word_id, word in enumerate(words)
             ],
             ensure_ascii=False,
             indent=4,
@@ -148,12 +146,33 @@ def result_to_word(
     return word
 
 
-def result_to_words(
-    words: Sequence[types.Word], parsed: Sequence[Mapping[str, Any]]
-) -> Iterable[types.Word]:
-    word_map = {word.word: word for word in words}
-    for parsed_word in parsed:
-        try:
-            yield result_to_word(word_map[parsed_word["term"]], parsed_word)
-        except KeyError:
-            print(f"Term mismatch for {parsed_word}, skipping.")
+def match_entries(
+    words: Sequence[types.Word], entries: Sequence[Mapping[str, Any]]
+) -> Sequence[tuple[types.Word, Mapping[str, Any]]]:
+    """Pair each entry of a sentence response with the word it answers.
+
+    Entries are matched on the ``id`` the prompt gave each word (its index in
+    ``words``) rather than on the term, which homographs share and which the
+    model sometimes rewrites.
+
+    :raises ValueError: If an entry's id is missing, unknown or repeated, or
+        if any word has no entry, so that the request is retried rather than
+        losing the word.
+    """
+    by_id: dict[int, Mapping[str, Any]] = {}
+    for entry in entries:
+        entry_id = entry.get("id")
+        if type(entry_id) is not int or not 0 <= entry_id < len(words):
+            raise ValueError(f"Response entry has no valid id: {entry}")
+        if entry_id in by_id:
+            raise ValueError(f"Response has more than one entry with id {entry_id}")
+        by_id[entry_id] = entry
+
+    if missing := [word.word for i, word in enumerate(words) if i not in by_id]:
+        raise ValueError(f"Response is missing entries for {missing}")
+
+    matched = tuple((word, by_id[i]) for i, word in enumerate(words))
+    for word, entry in matched:
+        if entry.get("term") != word.word:
+            print(f"Model reported {word.word!r} as {entry.get('term')!r}.")
+    return matched

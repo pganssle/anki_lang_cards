@@ -1,22 +1,24 @@
 interactions:
 - request:
     body: "{\"max_tokens\":16000,\"messages\":[{\"role\":\"user\",\"content\":\"Prompt:\\n=======\\nINPUT:\\n----------\\n[\\n
-      \   {\\n        \\\"term\\\": \\\"correr\\\",\\n        \\\"part_of_speech\\\":
-      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"to run\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n\"}],\"model\":\"claude-sonnet-5\",\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"words\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"term\":{\"type\":\"string\"},\"examples\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"spanish\":{\"type\":\"string\"},\"english\":{\"type\":\"string\"}},\"required\":[\"spanish\",\"english\"],\"additionalProperties\":false}}},\"required\":[\"term\",\"examples\"],\"additionalProperties\":false}}},\"required\":[\"words\"],\"additionalProperties\":false}}},\"system\":[{\"type\":\"text\",\"text\":\"You
+      \   {\\n        \\\"id\\\": 0,\\n        \\\"term\\\": \\\"gato\\\",\\n        \\\"part_of_speech\\\":
+      \\\"nm\\\",\\n        \\\"meaning\\\": \\\"cat\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n\"}],\"model\":\"claude-sonnet-5\",\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"words\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"term\":{\"type\":\"string\"},\"examples\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"spanish\":{\"type\":\"string\"},\"english\":{\"type\":\"string\"}},\"required\":[\"spanish\",\"english\"],\"additionalProperties\":false}}},\"required\":[\"id\",\"term\",\"examples\"],\"additionalProperties\":false}}},\"required\":[\"words\"],\"additionalProperties\":false}}},\"system\":[{\"type\":\"text\",\"text\":\"You
       are an expert Spanish teacher and lexicographer, whose specialty is designing
       excellent example sentences that show off the range of uses of a given word.\\n\\nI
-      am going to give you valid JSON representing a list of mappings containing terms
-      (\\\"term\\\") in Spanish and their meaning in English (\\\"meaning\\\"). For
-      each term, I would like you to generate valid JSON containing 4 example sentences
-      in idiomatic Spanish that use the term accompanied by a translation from the
-      original Spanish into English; the example sentences should use the sense of
-      the term that has the meaning specified by the English meaning. If multiple
-      English meanings are provided, provide sentences that sample all the meanings.
-      When the word is a verb, select different moods and tenses in the different
-      sentences. The translations do not need to be word-for-word translations, it
-      is more important that they capture the general spirit of the original Spanish.\\n\\nIn
-      the output, DO NOT modify the value in \\\"term\\\", it is used to match the
-      answers to the inputs. If, for example, it is \\\"forastero/a\\\", do not use
+      am going to give you valid JSON representing a list of mappings containing an
+      identifier (\\\"id\\\"), terms (\\\"term\\\") in Spanish and their meaning in
+      English (\\\"meaning\\\"). For each term, I would like you to generate valid
+      JSON containing 4 example sentences in idiomatic Spanish that use the term accompanied
+      by a translation from the original Spanish into English; the example sentences
+      should use the sense of the term that has the meaning specified by the English
+      meaning. If multiple English meanings are provided, provide sentences that sample
+      all the meanings. When the word is a verb, select different moods and tenses
+      in the different sentences. The translations do not need to be word-for-word
+      translations, it is more important that they capture the general spirit of the
+      original Spanish.\\n\\nIn the output, copy each input's \\\"id\\\" unchanged
+      into its entry; it is used to match the answers to the inputs, since the same
+      term can appear more than once with different meanings. Do not modify the value
+      in \\\"term\\\" either. If, for example, it is \\\"forastero/a\\\", do not use
       \\\"forastero\\\" in the output. If there is a slash in the word, it usually
       is used to show different forms of the word, like \\\"at\xF3nito/a\\\" would
       expand to \\\"un hombre at\xF3nito\\\" or \\\"una mujer at\xF3nita\\\".\\n\\nPlease
@@ -37,18 +39,19 @@ interactions:
       you have come up with the example sentences, look over your work and see if
       you can make the original sentences more creative or interesting.\\n\\nRespond
       with a JSON object whose \\\"words\\\" list holds one entry per input term,
-      in the order the terms were given, each with the \\\"term\\\" exactly as given
-      and its \\\"examples\\\". Include ONLY the JSON, and nothing else: no markdown
-      code block, and no explanation of your choices.\\n\\nExample:\\n========\\nINPUT:\\n----------\\n[\\n
-      \   {\\n        \\\"term\\\": \\\"casa\\\",\\n        \\\"part_of_speech\\\":
-      \\\"nf\\\",\\n        \\\"meaning\\\": \\\"house\\\"\\n    },\\n    {\\n        \\\"term\\\":
-      \\\"rebotar\\\",\\n        \\\"part_of_speech\\\": \\\"vi\\\",\\n        \\\"meaning\\\":
-      \\\"bounce\\\"\\n    },\\n    {\\n        \\\"term\\\": \\\"piso\\\",\\n        \\\"part_of_speech\\\":
-      \\\"nm\\\",\\n        \\\"meaning\\\": \\\"apartment\\\"\\n    },\\n    {\\n
-      \       \\\"term\\\": \\\"mu\xF1eca\\\",\\n        \\\"part_of_speech\\\": \\\"nf\\\",\\n
-      \       \\\"meaning\\\": \\\"doll, wrist\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n{\\\"words\\\":
-      [\\n{\\\"term\\\": \\\"casa\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"La
-      casa de mi abuela est\xE1 en el campo.\\\", \\\"english\\\": \\\"My grandmother's
+      in the order the terms were given, each with the \\\"id\\\" and \\\"term\\\"
+      exactly as given and its \\\"examples\\\". Include ONLY the JSON, and nothing
+      else: no markdown code block, and no explanation of your choices.\\n\\nExample:\\n========\\nINPUT:\\n----------\\n[\\n
+      \   {\\n        \\\"id\\\": 0,\\n        \\\"term\\\": \\\"casa\\\",\\n        \\\"part_of_speech\\\":
+      \\\"nf\\\",\\n        \\\"meaning\\\": \\\"house\\\"\\n    },\\n    {\\n        \\\"id\\\":
+      1,\\n        \\\"term\\\": \\\"rebotar\\\",\\n        \\\"part_of_speech\\\":
+      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"bounce\\\"\\n    },\\n    {\\n        \\\"id\\\":
+      2,\\n        \\\"term\\\": \\\"piso\\\",\\n        \\\"part_of_speech\\\": \\\"nm\\\",\\n
+      \       \\\"meaning\\\": \\\"apartment\\\"\\n    },\\n    {\\n        \\\"id\\\":
+      3,\\n        \\\"term\\\": \\\"mu\xF1eca\\\",\\n        \\\"part_of_speech\\\":
+      \\\"nf\\\",\\n        \\\"meaning\\\": \\\"doll, wrist\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n{\\\"words\\\":
+      [\\n{\\\"id\\\": 0, \\\"term\\\": \\\"casa\\\", \\\"examples\\\": [{\\\"spanish\\\":
+      \\\"La casa de mi abuela est\xE1 en el campo.\\\", \\\"english\\\": \\\"My grandmother's
       house is in the country.\\\"}, {\\\"spanish\\\": \\\"En la Edad Media, las casas
       se constru\xEDan a menudo con bahareque, que consist\xEDa en revestir ramas
       y paja con arcilla, barro y esti\xE9rcol.\\\", \\\"english\\\": \\\"In the Middle
@@ -57,30 +60,31 @@ interactions:
       mi casa este fin de semana.\\\", \\\"english\\\": \\\"I am going to clean my
       house this weekend.\\\"}, {\\\"spanish\\\": \\\"Me gusta pasar tiempo en casa
       de mis padres.\\\", \\\"english\\\": \\\"I like to spend time at my parents'
-      house.\\\"}]},\\n{\\\"term\\\": \\\"rebotar\\\", \\\"examples\\\": [{\\\"spanish\\\":
-      \\\"El bal\xF3n rebota contra el suelo.\\\", \\\"english\\\": \\\"The ball is
-      bouncing on the ground.\\\"}, {\\\"spanish\\\": \\\"\xA1Rebota m\xE1s alto!\\\",
-      \\\"english\\\": \\\"Bounce higher!\\\"}, {\\\"spanish\\\": \\\"Los delfines
-      pueden \xABver\xBB rebotando ondas sonoras en su entorno.\\\", \\\"english\\\":
-      \\\"Dolphins can 'see' by bouncing sound waves off their surroundings.\\\"},
+      house.\\\"}]},\\n{\\\"id\\\": 1, \\\"term\\\": \\\"rebotar\\\", \\\"examples\\\":
+      [{\\\"spanish\\\": \\\"El bal\xF3n rebota contra el suelo.\\\", \\\"english\\\":
+      \\\"The ball is bouncing on the ground.\\\"}, {\\\"spanish\\\": \\\"\xA1Rebota
+      m\xE1s alto!\\\", \\\"english\\\": \\\"Bounce higher!\\\"}, {\\\"spanish\\\":
+      \\\"Los delfines pueden \xABver\xBB rebotando ondas sonoras en su entorno.\\\",
+      \\\"english\\\": \\\"Dolphins can 'see' by bouncing sound waves off their surroundings.\\\"},
       {\\\"spanish\\\": \\\"Rebotaremos la luz en la luna.\\\", \\\"english\\\": \\\"We
-      will bounce the light off the moon.\\\"}]},\\n{\\\"term\\\": \\\"piso\\\", \\\"examples\\\":
-      [{\\\"spanish\\\": \\\"\u2014Vivo en un piso en el centro de la ciudad \u2014dijo
-      Mar\xEDa.\\\", \\\"english\\\": \\\"\\\\\\\"I live in an apartment in the city
-      center,\\\\\\\" said Mar\xEDa.\\\"}, {\\\"spanish\\\": \\\"El piso de mi hermano
-      tiene tres dormitorios.\\\", \\\"english\\\": \\\"My brother's apartment has
-      three bedrooms.\\\"}, {\\\"spanish\\\": \\\"Necesito arreglar el fregadero del
-      piso.\\\", \\\"english\\\": \\\"I need to fix the sink in my apartment.\\\"},
-      {\\\"spanish\\\": \\\"El piso de al lado est\xE1 alquilado.\\\", \\\"english\\\":
-      \\\"The apartment next door is rented.\\\"}]},\\n{\\\"term\\\": \\\"mu\xF1eca\\\",
-      \\\"examples\\\": [{\\\"spanish\\\": \\\"Le regalaron una mu\xF1eca preciosa
-      por su cumplea\xF1os.\\\", \\\"english\\\": \\\"They gave her a pretty doll
-      for her birthday.\\\"}, {\\\"spanish\\\": \\\"Se cay\xF3 patinando y se rompi\xF3
-      la mu\xF1eca.\\\", \\\"english\\\": \\\"She fell when she was skating and broke
-      her wrist.\\\"}, {\\\"spanish\\\": \\\"Se puso una pulsera en la mu\xF1eca izquierda.\\\",
-      \\\"english\\\": \\\"She put the bracelet on her left wrist.\\\"}, {\\\"spanish\\\":
-      \\\"La peque\xF1a Mar\xEDa nunca dorm\xEDa sin su mu\xF1eca favorita.\\\", \\\"english\\\":
-      \\\"Little Maria never slept without her favorite doll.\\\"}]}\\n]}\\n\",\"cache_control\":{\"type\":\"ephemeral\",\"ttl\":\"1h\"}}]}"
+      will bounce the light off the moon.\\\"}]},\\n{\\\"id\\\": 2, \\\"term\\\":
+      \\\"piso\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"\u2014Vivo en un piso
+      en el centro de la ciudad \u2014dijo Mar\xEDa.\\\", \\\"english\\\": \\\"\\\\\\\"I
+      live in an apartment in the city center,\\\\\\\" said Mar\xEDa.\\\"}, {\\\"spanish\\\":
+      \\\"El piso de mi hermano tiene tres dormitorios.\\\", \\\"english\\\": \\\"My
+      brother's apartment has three bedrooms.\\\"}, {\\\"spanish\\\": \\\"Necesito
+      arreglar el fregadero del piso.\\\", \\\"english\\\": \\\"I need to fix the
+      sink in my apartment.\\\"}, {\\\"spanish\\\": \\\"El piso de al lado est\xE1
+      alquilado.\\\", \\\"english\\\": \\\"The apartment next door is rented.\\\"}]},\\n{\\\"id\\\":
+      3, \\\"term\\\": \\\"mu\xF1eca\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"Le
+      regalaron una mu\xF1eca preciosa por su cumplea\xF1os.\\\", \\\"english\\\":
+      \\\"They gave her a pretty doll for her birthday.\\\"}, {\\\"spanish\\\": \\\"Se
+      cay\xF3 patinando y se rompi\xF3 la mu\xF1eca.\\\", \\\"english\\\": \\\"She
+      fell when she was skating and broke her wrist.\\\"}, {\\\"spanish\\\": \\\"Se
+      puso una pulsera en la mu\xF1eca izquierda.\\\", \\\"english\\\": \\\"She put
+      the bracelet on her left wrist.\\\"}, {\\\"spanish\\\": \\\"La peque\xF1a Mar\xEDa
+      nunca dorm\xEDa sin su mu\xF1eca favorita.\\\", \\\"english\\\": \\\"Little
+      Maria never slept without her favorite doll.\\\"}]}\\n]}\\n\",\"cache_control\":{\"type\":\"ephemeral\",\"ttl\":\"1h\"}}]}"
     headers:
       accept:
       - application/json
@@ -91,13 +95,13 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '6555'
+      - '6887'
       content-type:
       - application/json
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.13.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -107,7 +111,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.13.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -122,42 +126,45 @@ interactions:
     uri: https://api.anthropic.com/v1/messages
   response:
     body:
-      string: "{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011CftqSRWVq1fwAa22j3ioz\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"Eu4DCscCCBIYAipAPil0SYWd2x+UYXCKawo3vf6kHhpDBnBOIBnskGsG5xkDtOtebpyD6Iskp4o0VrPQ/Kk2UXltunmWn7kLHQfEjDIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQwYTk5M2IyZS1kNWZlLTRjYWItYjg0ZS0yMmEyY2JhNGVjNDKaAREKD2NsYXVkZS1zb25uZXQtNagBucKp1gbCAT0IBRAAGg8BuSQC2ooDTzcF7IsEJq0gAjIEEnHPJToEc0C5BEIEODMjikoEODMjilAAWgTZBeFWYAJoAXAB2gFgChZwcmVmaXhfYmVmb3JlX2Jsb2NrX3YxEiAH3++h4UerkggJNzhdeq9vrEkDxw3spzX9zDEtxo0sQSIAMiDCwBPIapyS4i+Wbz2GF3aPi3pEyQKtzAl7+h4JivtOH0gDEgxMiDk+NTb18oH3tjUaDMOJ352hdrY9yzKyQiIw3zzMM056ryYtSoxOd1rwVQLRku0CfT0t6MW22e2SPGs517qh+khfMHuBdSiFNBj5KlSoqmIZ4ftDgj0yzKBhlZSUtKfOIJUcfD49HfY0dMz1mHVmR+dTU/Kr+ESPJ+Zbri0p3yaBGV6le+LWbUONhRgcCsWDQAOsXNFpQiveouzM5lVDCGgYAQ==\"},{\"type\":\"text\",\"text\":\"{\\\"words\\\":
-        [{\\\"term\\\": \\\"correr\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"Todas
-        las ma\xF1anas corro cinco kil\xF3metros por el parque.\\\", \\\"english\\\":
-        \\\"Every morning I run five kilometers through the park.\\\"}, {\\\"spanish\\\":
-        \\\"Cuando era ni\xF1o, corr\xEDa descalzo por la playa.\\\", \\\"english\\\":
-        \\\"When I was a child, I used to run barefoot on the beach.\\\"}, {\\\"spanish\\\":
-        \\\"Si corres m\xE1s r\xE1pido, llegar\xE1s a tiempo al tren.\\\", \\\"english\\\":
-        \\\"If you run faster, you'll make it to the train on time.\\\"}, {\\\"spanish\\\":
-        \\\"\u2014\xA1Corre, que se va el autob\xFAs! \u2014grit\xF3 mi madre desde
-        la puerta.\\\", \\\"english\\\": \\\"\\\\\\\"Run, the bus is leaving!\\\\\\\"
-        my mother shouted from the doorway.\\\"}]}]}\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":76,\"cache_creation_input_tokens\":2300,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":2300},\"output_tokens\":278,\"output_tokens_details\":{\"thinking_tokens\":26},\"service_tier\":\"standard\",\"inference_geo\":\"global\"},\"diagnostics\":null}"
+      string: "{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011Cfu3EmjVBBpwZTTzUbZkw\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"words\\\":
+        [{\\\"id\\\": 0, \\\"term\\\": \\\"gato\\\", \\\"examples\\\": [{\\\"spanish\\\":
+        \\\"El gato de mi vecina duerme todo el d\xEDa encima del sof\xE1.\\\", \\\"english\\\":
+        \\\"My neighbor's cat sleeps all day on top of the sofa.\\\"}, {\\\"spanish\\\":
+        \\\"Los gatos dom\xE9sticos descienden del gato salvaje africano, domesticado
+        hace unos nueve mil a\xF1os en Oriente Pr\xF3ximo.\\\", \\\"english\\\": \\\"Domestic
+        cats descend from the African wildcat, domesticated about nine thousand years
+        ago in the Near East.\\\"}, {\\\"spanish\\\": \\\"\u2014Ten cuidado, ese gato
+        ara\xF1a si lo molestas \u2014me advirti\xF3 el due\xF1o de la tienda.\\\",
+        \\\"english\\\": \\\"\\\\\\\"Be careful, that cat scratches if you bother
+        it,\\\\\\\" the shop owner warned me.\\\"}, {\\\"spanish\\\": \\\"Cuando era
+        ni\xF1o, siempre quer\xEDa adoptar un gato callejero y llevarlo a casa.\\\",
+        \\\"english\\\": \\\"When I was a child, I always wanted to adopt a stray
+        cat and bring it home.\\\"}]}]}\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":84,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":2425,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":337,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"standard\",\"inference_geo\":\"global\"},\"diagnostics\":null}"
     headers:
       anthropic-ratelimit-input-tokens-limit:
       - '5000000'
       anthropic-ratelimit-input-tokens-remaining:
-      - '4999000'
+      - '5000000'
       anthropic-ratelimit-input-tokens-reset:
-      - '2026-10-10T16:00:56Z'
+      - '2026-10-10T18:35:40Z'
       anthropic-ratelimit-output-tokens-limit:
       - '1000000'
       anthropic-ratelimit-output-tokens-remaining:
       - '1000000'
       anthropic-ratelimit-output-tokens-reset:
-      - '2026-10-10T16:00:59Z'
+      - '2026-10-10T18:35:43Z'
       anthropic-ratelimit-requests-limit:
       - '5000'
       anthropic-ratelimit-requests-remaining:
       - '4999'
       anthropic-ratelimit-requests-reset:
-      - '2026-10-10T16:00:55Z'
+      - '2026-10-10T18:35:39Z'
       anthropic-ratelimit-tokens-limit:
       - '6000000'
       anthropic-ratelimit-tokens-remaining:
-      - '5999000'
+      - '6000000'
       anthropic-ratelimit-tokens-reset:
-      - '2026-10-10T16:00:56Z'
+      - '2026-10-10T18:35:40Z'
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
       cf-cache-status:
@@ -165,21 +172,21 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '1918'
+      - '1405'
       content-security-policy:
       - default-src 'none'; frame-ancestors 'none'
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:00:59 GMT
+      - Sat, 10 Oct 2026 18:35:43 GMT
       request-id:
-      - req_011CftqSQeu2RVhzH3qdR9wS
+      - req_011Cfu3EmWq841R1nP3Fy41V
       server:
       - cloudflare
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       traceresponse:
-      - 00-d10727f8390b4c950a4c6ea6ad964f85-ab5f5c7bb6fb2aa7-01
+      - 00-d669048566b3c20334eec740f57b3374-2643c4bbf3b72e8b-01
       transfer-encoding:
       - chunked
       vary:
@@ -190,23 +197,25 @@ interactions:
       code: 200
       message: OK
 - request:
-    body: "{\"requests\":[{\"custom_id\":\"a552d8e5368c32869581439b8f9dc602\",\"params\":{\"model\":\"claude-sonnet-5\",\"max_tokens\":16000,\"messages\":[{\"role\":\"user\",\"content\":\"Prompt:\\n=======\\nINPUT:\\n----------\\n[\\n
-      \   {\\n        \\\"term\\\": \\\"gato\\\",\\n        \\\"part_of_speech\\\":
-      \\\"nm\\\",\\n        \\\"meaning\\\": \\\"cat\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n\"}],\"system\":[{\"type\":\"text\",\"text\":\"You
+    body: "{\"requests\":[{\"custom_id\":\"1de53049b3a0f5069467dfd343ff9fb6\",\"params\":{\"model\":\"claude-sonnet-5\",\"max_tokens\":16000,\"messages\":[{\"role\":\"user\",\"content\":\"Prompt:\\n=======\\nINPUT:\\n----------\\n[\\n
+      \   {\\n        \\\"id\\\": 0,\\n        \\\"term\\\": \\\"correr\\\",\\n        \\\"part_of_speech\\\":
+      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"to run\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n\"}],\"system\":[{\"type\":\"text\",\"text\":\"You
       are an expert Spanish teacher and lexicographer, whose specialty is designing
       excellent example sentences that show off the range of uses of a given word.\\n\\nI
-      am going to give you valid JSON representing a list of mappings containing terms
-      (\\\"term\\\") in Spanish and their meaning in English (\\\"meaning\\\"). For
-      each term, I would like you to generate valid JSON containing 4 example sentences
-      in idiomatic Spanish that use the term accompanied by a translation from the
-      original Spanish into English; the example sentences should use the sense of
-      the term that has the meaning specified by the English meaning. If multiple
-      English meanings are provided, provide sentences that sample all the meanings.
-      When the word is a verb, select different moods and tenses in the different
-      sentences. The translations do not need to be word-for-word translations, it
-      is more important that they capture the general spirit of the original Spanish.\\n\\nIn
-      the output, DO NOT modify the value in \\\"term\\\", it is used to match the
-      answers to the inputs. If, for example, it is \\\"forastero/a\\\", do not use
+      am going to give you valid JSON representing a list of mappings containing an
+      identifier (\\\"id\\\"), terms (\\\"term\\\") in Spanish and their meaning in
+      English (\\\"meaning\\\"). For each term, I would like you to generate valid
+      JSON containing 4 example sentences in idiomatic Spanish that use the term accompanied
+      by a translation from the original Spanish into English; the example sentences
+      should use the sense of the term that has the meaning specified by the English
+      meaning. If multiple English meanings are provided, provide sentences that sample
+      all the meanings. When the word is a verb, select different moods and tenses
+      in the different sentences. The translations do not need to be word-for-word
+      translations, it is more important that they capture the general spirit of the
+      original Spanish.\\n\\nIn the output, copy each input's \\\"id\\\" unchanged
+      into its entry; it is used to match the answers to the inputs, since the same
+      term can appear more than once with different meanings. Do not modify the value
+      in \\\"term\\\" either. If, for example, it is \\\"forastero/a\\\", do not use
       \\\"forastero\\\" in the output. If there is a slash in the word, it usually
       is used to show different forms of the word, like \\\"at\xF3nito/a\\\" would
       expand to \\\"un hombre at\xF3nito\\\" or \\\"una mujer at\xF3nita\\\".\\n\\nPlease
@@ -227,18 +236,19 @@ interactions:
       you have come up with the example sentences, look over your work and see if
       you can make the original sentences more creative or interesting.\\n\\nRespond
       with a JSON object whose \\\"words\\\" list holds one entry per input term,
-      in the order the terms were given, each with the \\\"term\\\" exactly as given
-      and its \\\"examples\\\". Include ONLY the JSON, and nothing else: no markdown
-      code block, and no explanation of your choices.\\n\\nExample:\\n========\\nINPUT:\\n----------\\n[\\n
-      \   {\\n        \\\"term\\\": \\\"casa\\\",\\n        \\\"part_of_speech\\\":
-      \\\"nf\\\",\\n        \\\"meaning\\\": \\\"house\\\"\\n    },\\n    {\\n        \\\"term\\\":
-      \\\"rebotar\\\",\\n        \\\"part_of_speech\\\": \\\"vi\\\",\\n        \\\"meaning\\\":
-      \\\"bounce\\\"\\n    },\\n    {\\n        \\\"term\\\": \\\"piso\\\",\\n        \\\"part_of_speech\\\":
-      \\\"nm\\\",\\n        \\\"meaning\\\": \\\"apartment\\\"\\n    },\\n    {\\n
-      \       \\\"term\\\": \\\"mu\xF1eca\\\",\\n        \\\"part_of_speech\\\": \\\"nf\\\",\\n
-      \       \\\"meaning\\\": \\\"doll, wrist\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n{\\\"words\\\":
-      [\\n{\\\"term\\\": \\\"casa\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"La
-      casa de mi abuela est\xE1 en el campo.\\\", \\\"english\\\": \\\"My grandmother's
+      in the order the terms were given, each with the \\\"id\\\" and \\\"term\\\"
+      exactly as given and its \\\"examples\\\". Include ONLY the JSON, and nothing
+      else: no markdown code block, and no explanation of your choices.\\n\\nExample:\\n========\\nINPUT:\\n----------\\n[\\n
+      \   {\\n        \\\"id\\\": 0,\\n        \\\"term\\\": \\\"casa\\\",\\n        \\\"part_of_speech\\\":
+      \\\"nf\\\",\\n        \\\"meaning\\\": \\\"house\\\"\\n    },\\n    {\\n        \\\"id\\\":
+      1,\\n        \\\"term\\\": \\\"rebotar\\\",\\n        \\\"part_of_speech\\\":
+      \\\"vi\\\",\\n        \\\"meaning\\\": \\\"bounce\\\"\\n    },\\n    {\\n        \\\"id\\\":
+      2,\\n        \\\"term\\\": \\\"piso\\\",\\n        \\\"part_of_speech\\\": \\\"nm\\\",\\n
+      \       \\\"meaning\\\": \\\"apartment\\\"\\n    },\\n    {\\n        \\\"id\\\":
+      3,\\n        \\\"term\\\": \\\"mu\xF1eca\\\",\\n        \\\"part_of_speech\\\":
+      \\\"nf\\\",\\n        \\\"meaning\\\": \\\"doll, wrist\\\"\\n    }\\n]\\n\\nOUTPUT:\\n--------------\\n{\\\"words\\\":
+      [\\n{\\\"id\\\": 0, \\\"term\\\": \\\"casa\\\", \\\"examples\\\": [{\\\"spanish\\\":
+      \\\"La casa de mi abuela est\xE1 en el campo.\\\", \\\"english\\\": \\\"My grandmother's
       house is in the country.\\\"}, {\\\"spanish\\\": \\\"En la Edad Media, las casas
       se constru\xEDan a menudo con bahareque, que consist\xEDa en revestir ramas
       y paja con arcilla, barro y esti\xE9rcol.\\\", \\\"english\\\": \\\"In the Middle
@@ -247,30 +257,31 @@ interactions:
       mi casa este fin de semana.\\\", \\\"english\\\": \\\"I am going to clean my
       house this weekend.\\\"}, {\\\"spanish\\\": \\\"Me gusta pasar tiempo en casa
       de mis padres.\\\", \\\"english\\\": \\\"I like to spend time at my parents'
-      house.\\\"}]},\\n{\\\"term\\\": \\\"rebotar\\\", \\\"examples\\\": [{\\\"spanish\\\":
-      \\\"El bal\xF3n rebota contra el suelo.\\\", \\\"english\\\": \\\"The ball is
-      bouncing on the ground.\\\"}, {\\\"spanish\\\": \\\"\xA1Rebota m\xE1s alto!\\\",
-      \\\"english\\\": \\\"Bounce higher!\\\"}, {\\\"spanish\\\": \\\"Los delfines
-      pueden \xABver\xBB rebotando ondas sonoras en su entorno.\\\", \\\"english\\\":
-      \\\"Dolphins can 'see' by bouncing sound waves off their surroundings.\\\"},
+      house.\\\"}]},\\n{\\\"id\\\": 1, \\\"term\\\": \\\"rebotar\\\", \\\"examples\\\":
+      [{\\\"spanish\\\": \\\"El bal\xF3n rebota contra el suelo.\\\", \\\"english\\\":
+      \\\"The ball is bouncing on the ground.\\\"}, {\\\"spanish\\\": \\\"\xA1Rebota
+      m\xE1s alto!\\\", \\\"english\\\": \\\"Bounce higher!\\\"}, {\\\"spanish\\\":
+      \\\"Los delfines pueden \xABver\xBB rebotando ondas sonoras en su entorno.\\\",
+      \\\"english\\\": \\\"Dolphins can 'see' by bouncing sound waves off their surroundings.\\\"},
       {\\\"spanish\\\": \\\"Rebotaremos la luz en la luna.\\\", \\\"english\\\": \\\"We
-      will bounce the light off the moon.\\\"}]},\\n{\\\"term\\\": \\\"piso\\\", \\\"examples\\\":
-      [{\\\"spanish\\\": \\\"\u2014Vivo en un piso en el centro de la ciudad \u2014dijo
-      Mar\xEDa.\\\", \\\"english\\\": \\\"\\\\\\\"I live in an apartment in the city
-      center,\\\\\\\" said Mar\xEDa.\\\"}, {\\\"spanish\\\": \\\"El piso de mi hermano
-      tiene tres dormitorios.\\\", \\\"english\\\": \\\"My brother's apartment has
-      three bedrooms.\\\"}, {\\\"spanish\\\": \\\"Necesito arreglar el fregadero del
-      piso.\\\", \\\"english\\\": \\\"I need to fix the sink in my apartment.\\\"},
-      {\\\"spanish\\\": \\\"El piso de al lado est\xE1 alquilado.\\\", \\\"english\\\":
-      \\\"The apartment next door is rented.\\\"}]},\\n{\\\"term\\\": \\\"mu\xF1eca\\\",
-      \\\"examples\\\": [{\\\"spanish\\\": \\\"Le regalaron una mu\xF1eca preciosa
-      por su cumplea\xF1os.\\\", \\\"english\\\": \\\"They gave her a pretty doll
-      for her birthday.\\\"}, {\\\"spanish\\\": \\\"Se cay\xF3 patinando y se rompi\xF3
-      la mu\xF1eca.\\\", \\\"english\\\": \\\"She fell when she was skating and broke
-      her wrist.\\\"}, {\\\"spanish\\\": \\\"Se puso una pulsera en la mu\xF1eca izquierda.\\\",
-      \\\"english\\\": \\\"She put the bracelet on her left wrist.\\\"}, {\\\"spanish\\\":
-      \\\"La peque\xF1a Mar\xEDa nunca dorm\xEDa sin su mu\xF1eca favorita.\\\", \\\"english\\\":
-      \\\"Little Maria never slept without her favorite doll.\\\"}]}\\n]}\\n\",\"cache_control\":{\"type\":\"ephemeral\",\"ttl\":\"1h\"}}],\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"words\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"term\":{\"type\":\"string\"},\"examples\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"spanish\":{\"type\":\"string\"},\"english\":{\"type\":\"string\"}},\"required\":[\"spanish\",\"english\"],\"additionalProperties\":false}}},\"required\":[\"term\",\"examples\"],\"additionalProperties\":false}}},\"required\":[\"words\"],\"additionalProperties\":false}}}}}]}"
+      will bounce the light off the moon.\\\"}]},\\n{\\\"id\\\": 2, \\\"term\\\":
+      \\\"piso\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"\u2014Vivo en un piso
+      en el centro de la ciudad \u2014dijo Mar\xEDa.\\\", \\\"english\\\": \\\"\\\\\\\"I
+      live in an apartment in the city center,\\\\\\\" said Mar\xEDa.\\\"}, {\\\"spanish\\\":
+      \\\"El piso de mi hermano tiene tres dormitorios.\\\", \\\"english\\\": \\\"My
+      brother's apartment has three bedrooms.\\\"}, {\\\"spanish\\\": \\\"Necesito
+      arreglar el fregadero del piso.\\\", \\\"english\\\": \\\"I need to fix the
+      sink in my apartment.\\\"}, {\\\"spanish\\\": \\\"El piso de al lado est\xE1
+      alquilado.\\\", \\\"english\\\": \\\"The apartment next door is rented.\\\"}]},\\n{\\\"id\\\":
+      3, \\\"term\\\": \\\"mu\xF1eca\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"Le
+      regalaron una mu\xF1eca preciosa por su cumplea\xF1os.\\\", \\\"english\\\":
+      \\\"They gave her a pretty doll for her birthday.\\\"}, {\\\"spanish\\\": \\\"Se
+      cay\xF3 patinando y se rompi\xF3 la mu\xF1eca.\\\", \\\"english\\\": \\\"She
+      fell when she was skating and broke her wrist.\\\"}, {\\\"spanish\\\": \\\"Se
+      puso una pulsera en la mu\xF1eca izquierda.\\\", \\\"english\\\": \\\"She put
+      the bracelet on her left wrist.\\\"}, {\\\"spanish\\\": \\\"La peque\xF1a Mar\xEDa
+      nunca dorm\xEDa sin su mu\xF1eca favorita.\\\", \\\"english\\\": \\\"Little
+      Maria never slept without her favorite doll.\\\"}]}\\n]}\\n\",\"cache_control\":{\"type\":\"ephemeral\",\"ttl\":\"1h\"}}],\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"words\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"id\":{\"type\":\"integer\"},\"term\":{\"type\":\"string\"},\"examples\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"spanish\":{\"type\":\"string\"},\"english\":{\"type\":\"string\"}},\"required\":[\"spanish\",\"english\"],\"additionalProperties\":false}}},\"required\":[\"id\",\"term\",\"examples\"],\"additionalProperties\":false}}},\"required\":[\"words\"],\"additionalProperties\":false}}}}}]}"
     headers:
       accept:
       - application/json
@@ -281,13 +292,13 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '6623'
+      - '6965'
       content-type:
       - application/json
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.13.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -297,7 +308,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.13.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -312,7 +323,7 @@ interactions:
     uri: https://api.anthropic.com/v1/messages/batches
   response:
     body:
-      string: '{"id":"msgbatch_01US2s6kcwQQGhj8vFQRmihn","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":1,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T16:00:59.580915+00:00","expires_at":"2026-10-11T16:00:59.580915+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+      string: '{"id":"msgbatch_01MASHMctvE1BjyERKqcuS1R","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":1,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T18:35:44.189214+00:00","expires_at":"2026-10-11T18:35:44.189214+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
     headers:
       anthropic-ratelimit-batch-requests-limit:
       - '300000'
@@ -331,13 +342,13 @@ interactions:
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:00:59 GMT
+      - Sat, 10 Oct 2026 18:35:44 GMT
       request-id:
-      - req_011CftqSgRvQG1YyKXvuLCeQ
+      - req_011Cfu3F69Fk7MvcZjR7ZA2P
       server:
       - cloudflare
       server-timing:
-      - x-originResponse;dur=320
+      - x-originResponse;dur=315
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:
@@ -363,7 +374,7 @@ interactions:
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.13.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -373,7 +384,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.13.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -385,10 +396,10 @@ interactions:
       x-stainless-timeout:
       - NOT_GIVEN
     method: GET
-    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01MASHMctvE1BjyERKqcuS1R
   response:
     body:
-      string: '{"id":"msgbatch_01US2s6kcwQQGhj8vFQRmihn","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":1,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T16:00:59.580915+00:00","expires_at":"2026-10-11T16:00:59.580915+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+      string: '{"id":"msgbatch_01MASHMctvE1BjyERKqcuS1R","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":1,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T18:35:44.189214+00:00","expires_at":"2026-10-11T18:35:44.189214+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
     headers:
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
@@ -403,15 +414,15 @@ interactions:
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:00:59 GMT
+      - Sat, 10 Oct 2026 18:35:44 GMT
       request-id:
-      - req_011CftqSi3APpd1uryMCMrSh
+      - req_011Cfu3F7qhZFdmp3aNW29Zj
       retry-after:
       - '10'
       server:
       - cloudflare
       server-timing:
-      - x-originResponse;dur=122
+      - x-originResponse;dur=164
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:
@@ -437,7 +448,7 @@ interactions:
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.13.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -447,7 +458,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.13.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -459,10 +470,10 @@ interactions:
       x-stainless-timeout:
       - NOT_GIVEN
     method: GET
-    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01MASHMctvE1BjyERKqcuS1R
   response:
     body:
-      string: '{"id":"msgbatch_01US2s6kcwQQGhj8vFQRmihn","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":1,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T16:00:59.580915+00:00","expires_at":"2026-10-11T16:00:59.580915+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+      string: '{"id":"msgbatch_01MASHMctvE1BjyERKqcuS1R","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":1,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T18:35:44.189214+00:00","expires_at":"2026-10-11T18:35:44.189214+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
     headers:
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
@@ -477,15 +488,15 @@ interactions:
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:01:09 GMT
+      - Sat, 10 Oct 2026 18:35:54 GMT
       request-id:
-      - req_011CftqTTf1Fc5n3wJ1vGi5n
+      - req_011Cfu3FsciLntfppDNv6zyk
       retry-after:
       - '10'
       server:
       - cloudflare
       server-timing:
-      - x-originResponse;dur=104
+      - x-originResponse;dur=115
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:
@@ -511,7 +522,7 @@ interactions:
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.13.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -521,7 +532,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.13.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -533,10 +544,10 @@ interactions:
       x-stainless-timeout:
       - NOT_GIVEN
     method: GET
-    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01MASHMctvE1BjyERKqcuS1R
   response:
     body:
-      string: '{"id":"msgbatch_01US2s6kcwQQGhj8vFQRmihn","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":1,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T16:00:59.580915+00:00","expires_at":"2026-10-11T16:00:59.580915+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+      string: '{"id":"msgbatch_01MASHMctvE1BjyERKqcuS1R","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":1,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T18:35:44.189214+00:00","expires_at":"2026-10-11T18:35:44.189214+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
     headers:
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
@@ -551,15 +562,15 @@ interactions:
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:01:30 GMT
+      - Sat, 10 Oct 2026 18:36:14 GMT
       request-id:
-      - req_011CftqUx5KUoQmjBz9X8q3q
+      - req_011Cfu3HN6zp3yR6YRaTtxSz
       retry-after:
       - '10'
       server:
       - cloudflare
       server-timing:
-      - x-originResponse;dur=142
+      - x-originResponse;dur=107
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:
@@ -585,7 +596,7 @@ interactions:
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.13.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -595,7 +606,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.13.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -607,10 +618,10 @@ interactions:
       x-stainless-timeout:
       - NOT_GIVEN
     method: GET
-    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01MASHMctvE1BjyERKqcuS1R
   response:
     body:
-      string: '{"id":"msgbatch_01US2s6kcwQQGhj8vFQRmihn","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":1,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T16:00:59.580915+00:00","expires_at":"2026-10-11T16:00:59.580915+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
+      string: '{"id":"msgbatch_01MASHMctvE1BjyERKqcuS1R","type":"message_batch","processing_status":"in_progress","request_counts":{"processing":1,"succeeded":0,"errored":0,"canceled":0,"expired":0},"ended_at":null,"created_at":"2026-10-10T18:35:44.189214+00:00","expires_at":"2026-10-11T18:35:44.189214+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":null}'
     headers:
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
@@ -625,15 +636,15 @@ interactions:
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:02:10 GMT
+      - Sat, 10 Oct 2026 18:36:55 GMT
       request-id:
-      - req_011CftqXvMU5eVHGdhw1xfi6
+      - req_011Cfu3LLHSmndYAc8jRTWa8
       retry-after:
       - '10'
       server:
       - cloudflare
       server-timing:
-      - x-originResponse;dur=116
+      - x-originResponse;dur=136
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:
@@ -659,7 +670,7 @@ interactions:
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.13.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -669,7 +680,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.13.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -681,10 +692,10 @@ interactions:
       x-stainless-timeout:
       - NOT_GIVEN
     method: GET
-    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01MASHMctvE1BjyERKqcuS1R
   response:
     body:
-      string: '{"id":"msgbatch_01US2s6kcwQQGhj8vFQRmihn","type":"message_batch","processing_status":"ended","request_counts":{"processing":0,"succeeded":1,"errored":0,"canceled":0,"expired":0},"ended_at":"2026-10-10T16:02:19.973874+00:00","created_at":"2026-10-10T16:00:59.580915+00:00","expires_at":"2026-10-11T16:00:59.580915+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":"https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn/results"}'
+      string: '{"id":"msgbatch_01MASHMctvE1BjyERKqcuS1R","type":"message_batch","processing_status":"ended","request_counts":{"processing":0,"succeeded":1,"errored":0,"canceled":0,"expired":0},"ended_at":"2026-10-10T18:36:57.335639+00:00","created_at":"2026-10-10T18:35:44.189214+00:00","expires_at":"2026-10-11T18:35:44.189214+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":"https://api.anthropic.com/v1/messages/batches/msgbatch_01MASHMctvE1BjyERKqcuS1R/results"}'
     headers:
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
@@ -699,13 +710,13 @@ interactions:
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:03:10 GMT
+      - Sat, 10 Oct 2026 18:37:55 GMT
       request-id:
-      - req_011CftqcN1gG3rZDuQ5G6Upn
+      - req_011Cfu3Qn1Ni1URYgKJ7mtfJ
       server:
       - cloudflare
       server-timing:
-      - x-originResponse;dur=156
+      - x-originResponse;dur=131
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:
@@ -731,7 +742,7 @@ interactions:
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.13.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -741,7 +752,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.13.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -753,10 +764,10 @@ interactions:
       x-stainless-timeout:
       - NOT_GIVEN
     method: GET
-    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01MASHMctvE1BjyERKqcuS1R
   response:
     body:
-      string: '{"id":"msgbatch_01US2s6kcwQQGhj8vFQRmihn","type":"message_batch","processing_status":"ended","request_counts":{"processing":0,"succeeded":1,"errored":0,"canceled":0,"expired":0},"ended_at":"2026-10-10T16:02:19.973874+00:00","created_at":"2026-10-10T16:00:59.580915+00:00","expires_at":"2026-10-11T16:00:59.580915+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":"https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn/results"}'
+      string: '{"id":"msgbatch_01MASHMctvE1BjyERKqcuS1R","type":"message_batch","processing_status":"ended","request_counts":{"processing":0,"succeeded":1,"errored":0,"canceled":0,"expired":0},"ended_at":"2026-10-10T18:36:57.335639+00:00","created_at":"2026-10-10T18:35:44.189214+00:00","expires_at":"2026-10-11T18:35:44.189214+00:00","archived_at":null,"cancel_initiated_at":null,"results_url":"https://api.anthropic.com/v1/messages/batches/msgbatch_01MASHMctvE1BjyERKqcuS1R/results"}'
     headers:
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
@@ -771,13 +782,13 @@ interactions:
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 16:03:10 GMT
+      - Sat, 10 Oct 2026 18:37:55 GMT
       request-id:
-      - req_011CftqcNmKcf4MfaKvatwLH
+      - req_011Cfu3QngJpdYkEkYBAawF5
       server:
       - cloudflare
       server-timing:
-      - x-originResponse;dur=125
+      - x-originResponse;dur=126
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:
@@ -803,7 +814,7 @@ interactions:
       host:
       - api.anthropic.com
       user-agent:
-      - AsyncAnthropic/Python 0.120.0
+      - AsyncAnthropic/Python 1.13.0
       x-stainless-arch:
       - x64
       x-stainless-async:
@@ -813,7 +824,7 @@ interactions:
       x-stainless-os:
       - Linux
       x-stainless-package-version:
-      - 0.120.0
+      - 1.13.0
       x-stainless-read-timeout:
       - '600'
       x-stainless-retry-count:
@@ -825,20 +836,20 @@ interactions:
       x-stainless-timeout:
       - NOT_GIVEN
     method: GET
-    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01US2s6kcwQQGhj8vFQRmihn/results
+    uri: https://api.anthropic.com/v1/messages/batches/msgbatch_01MASHMctvE1BjyERKqcuS1R/results
   response:
     body:
-      string: "{\"custom_id\":\"a552d8e5368c32869581439b8f9dc602\",\"result\":{\"type\":\"succeeded\",\"message\":{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011CftqTrRDzKAEkrpaHaWBb\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"words\\\":
-        [{\\\"term\\\": \\\"gato\\\", \\\"examples\\\": [{\\\"spanish\\\": \\\"Mi
-        gato duerme m\xE1s de doce horas al d\xEDa.\\\", \\\"english\\\": \\\"My cat
-        sleeps more than twelve hours a day.\\\"}, {\\\"spanish\\\": \\\"\u2014No
-        encuentro al gato por ninguna parte \u2014dijo Luc\xEDa, preocupada.\\\",
-        \\\"english\\\": \\\"\\\\\\\"I can't find the cat anywhere,\\\\\\\" said Luc\xEDa,
-        worried.\\\"}, {\\\"spanish\\\": \\\"Si tuviera un jard\xEDn m\xE1s grande,
-        adoptar\xEDa otro gato.\\\", \\\"english\\\": \\\"If I had a bigger garden,
-        I would adopt another cat.\\\"}, {\\\"spanish\\\": \\\"Los antiguos egipcios
-        veneraban al gato como un animal sagrado.\\\", \\\"english\\\": \\\"The ancient
-        Egyptians worshipped the cat as a sacred animal.\\\"}]}]}\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":76,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":2300,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":261,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"batch\",\"inference_geo\":\"global\"},\"diagnostics\":null}}}\n"
+      string: "{\"custom_id\":\"1de53049b3a0f5069467dfd343ff9fb6\",\"result\":{\"type\":\"succeeded\",\"message\":{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011Cfu3Fsnt1DomcC4U7iVs7\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"words\\\":
+        [{\\\"id\\\": 0, \\\"term\\\": \\\"correr\\\", \\\"examples\\\": [{\\\"spanish\\\":
+        \\\"Todas las ma\xF1anas corro cinco kil\xF3metros por el parque.\\\", \\\"english\\\":
+        \\\"Every morning I run five kilometers through the park.\\\"}, {\\\"spanish\\\":
+        \\\"El a\xF1o pasado corr\xED mi primer marat\xF3n en poco m\xE1s de cuatro
+        horas.\\\", \\\"english\\\": \\\"Last year I ran my first marathon in just
+        over four hours.\\\"}, {\\\"spanish\\\": \\\"\xA1Corre, que perdemos el autob\xFAs!\\\",
+        \\\"english\\\": \\\"Run, we're going to miss the bus!\\\"}, {\\\"spanish\\\":
+        \\\"Cuando era ni\xF1o, corr\xEDa descalzo por la playa sin preocuparme de
+        nada.\\\", \\\"english\\\": \\\"When I was a child, I used to run barefoot
+        on the beach without a care in the world.\\\"}]}]}\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":84,\"cache_creation_input_tokens\":2425,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":0,\"ephemeral_1h_input_tokens\":2425},\"output_tokens\":252,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"batch\",\"inference_geo\":\"global\"},\"diagnostics\":null}}}\n"
     headers:
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
@@ -847,19 +858,19 @@ interactions:
       connection:
       - keep-alive
       content-disposition:
-      - attachment; filename*=utf-8''msgbatch_01US2s6kcwQQGhj8vFQRmihn_results.jsonl
+      - attachment; filename*=utf-8''msgbatch_01MASHMctvE1BjyERKqcuS1R_results.jsonl
       content-security-policy:
       - default-src 'none'; frame-ancestors 'none'
       content-type:
       - application/x-jsonl
       date:
-      - Sat, 10 Oct 2026 16:03:11 GMT
+      - Sat, 10 Oct 2026 18:37:55 GMT
       request-id:
-      - req_011CftqcPVyVHxM6JwvgeZJv
+      - req_011Cfu3QoRCv5uavMXPew1js
       server:
       - cloudflare
       server-timing:
-      - x-originResponse;dur=257
+      - x-originResponse;dur=267
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       transfer-encoding:

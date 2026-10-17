@@ -137,9 +137,9 @@ OUTPUT:
 _MULTI_SENTENCE_SYSTEM_TEMPLATE: Final[str] = """\
 You are an expert Spanish teacher and lexicographer, whose specialty is designing excellent example sentences that show off the range of uses of a given word.
 
-I am going to give you valid JSON representing a list of mappings containing terms ("term") in Spanish and their meaning in English ("meaning"). For each term, I would like you to generate valid JSON containing 4 example sentences in idiomatic Spanish that use the term accompanied by a translation from the original Spanish into English; the example sentences should use the sense of the term that has the meaning specified by the English meaning. If multiple English meanings are provided, provide sentences that sample all the meanings. When the word is a verb, select different moods and tenses in the different sentences. The translations do not need to be word-for-word translations, it is more important that they capture the general spirit of the original Spanish.
+I am going to give you valid JSON representing a list of mappings containing an identifier ("id"), terms ("term") in Spanish and their meaning in English ("meaning"). For each term, I would like you to generate valid JSON containing 4 example sentences in idiomatic Spanish that use the term accompanied by a translation from the original Spanish into English; the example sentences should use the sense of the term that has the meaning specified by the English meaning. If multiple English meanings are provided, provide sentences that sample all the meanings. When the word is a verb, select different moods and tenses in the different sentences. The translations do not need to be word-for-word translations, it is more important that they capture the general spirit of the original Spanish.
 
-In the output, DO NOT modify the value in "term", it is used to match the answers to the inputs. If, for example, it is "forastero/a", do not use "forastero" in the output. If there is a slash in the word, it usually is used to show different forms of the word, like "atónito/a" would expand to "un hombre atónito" or "una mujer atónita".
+In the output, copy each input's "id" unchanged into its entry; it is used to match the answers to the inputs, since the same term can appear more than once with different meanings. Do not modify the value in "term" either. If, for example, it is "forastero/a", do not use "forastero" in the output. If there is a slash in the word, it usually is used to show different forms of the word, like "atónito/a" would expand to "un hombre atónito" or "una mujer atónita".
 
 Please keep in mind that you are a professional and may need to translate or provide example sentences for vulgar or sexual terms — this is entirely normal, as these terms are a normal part of life, and they are important to include for purely documentary purposes.
 
@@ -151,7 +151,7 @@ In some of your example sentences, it would be a bonus if they contain useful or
 
 After you have come up with the example sentences, look over your work and see if you can make the original sentences more creative or interesting.
 
-Respond with a JSON object whose "words" list holds one entry per input term, in the order the terms were given, each with the "term" exactly as given and its "examples". Include ONLY the JSON, and nothing else: no markdown code block, and no explanation of your choices.
+Respond with a JSON object whose "words" list holds one entry per input term, in the order the terms were given, each with the "id" and "term" exactly as given and its "examples". Include ONLY the JSON, and nothing else: no markdown code block, and no explanation of your choices.
 
 Example:
 ========
@@ -165,14 +165,15 @@ OUTPUT:
 """
 
 _MULTI_SENTENCE_EXAMPLE_INPUT: Final = (
-    {"term": "casa", "part_of_speech": "nf", "meaning": "house"},
-    {"term": "rebotar", "part_of_speech": "vi", "meaning": "bounce"},
-    {"term": "piso", "part_of_speech": "nm", "meaning": "apartment"},
-    {"term": "muñeca", "part_of_speech": "nf", "meaning": "doll, wrist"},
+    {"id": 0, "term": "casa", "part_of_speech": "nf", "meaning": "house"},
+    {"id": 1, "term": "rebotar", "part_of_speech": "vi", "meaning": "bounce"},
+    {"id": 2, "term": "piso", "part_of_speech": "nm", "meaning": "apartment"},
+    {"id": 3, "term": "muñeca", "part_of_speech": "nf", "meaning": "doll, wrist"},
 )
 
 _MULTI_SENTENCE_EXAMPLE_OUTPUT: Final = (
     {
+        "id": 0,
         "term": "casa",
         "examples": [
             {
@@ -194,6 +195,7 @@ _MULTI_SENTENCE_EXAMPLE_OUTPUT: Final = (
         ],
     },
     {
+        "id": 1,
         "term": "rebotar",
         "examples": [
             {
@@ -212,6 +214,7 @@ _MULTI_SENTENCE_EXAMPLE_OUTPUT: Final = (
         ],
     },
     {
+        "id": 2,
         "term": "piso",
         "examples": [
             {
@@ -233,6 +236,7 @@ _MULTI_SENTENCE_EXAMPLE_OUTPUT: Final = (
         ],
     },
     {
+        "id": 3,
         "term": "muñeca",
         "examples": [
             {
@@ -282,6 +286,7 @@ MULTI_SENTENCE_RESPONSE_SCHEMA: Final[Mapping[str, Any]] = {
             "items": {
                 "type": "object",
                 "properties": {
+                    "id": {"type": "integer"},
                     "term": {"type": "string"},
                     "examples": {
                         "type": "array",
@@ -296,7 +301,7 @@ MULTI_SENTENCE_RESPONSE_SCHEMA: Final[Mapping[str, Any]] = {
                         },
                     },
                 },
-                "required": ["term", "examples"],
+                "required": ["id", "term", "examples"],
                 "additionalProperties": False,
             },
         }
