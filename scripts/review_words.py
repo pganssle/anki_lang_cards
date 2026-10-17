@@ -27,6 +27,11 @@ and ``"first": true`` makes one the card's main sentence. Every problem in the
 corrections is reported at once, and nothing is written unless there are
 none.
 
+A ``row`` key is only meaningful for the file the chunks were exported from,
+so ``apply`` refuses row-keyed corrections unless ``--index`` is given to
+check that; corrections meant for a second file (the diff's, applied to
+``output.csv`` as well) are keyed by ``rank``.
+
 In the exported rows, ``csv_matches`` and ``deck_matches`` are probable
 duplicates by loose string matching (see ``fold_keys``); a row's
 ``deck_matches`` leave out the deck note with the row's own rank, which in a
@@ -540,6 +545,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 2
     try:
         corrections = _load_corrections(args.corrections)
+        if args.index is None and any("row" in entry for entry in corrections):
+            raise CorrectionError(
+                [
+                    "corrections keyed by 'row' need --index, which checks that "
+                    "the rows are still the ones that were exported; key them "
+                    "by 'rank' to apply them to another file"
+                ]
+            )
         revised, changes = apply_corrections(words, corrections, args.reviewer_model)
     except CorrectionError as error:
         print(f"error: the corrections have problems:\n{error}", file=sys.stderr)

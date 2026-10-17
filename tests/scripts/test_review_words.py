@@ -475,7 +475,9 @@ def test_apply_refuses_a_changed_file(
     ("content", "problem"),
     [
         ('{"row": 0}', "expected a JSON list"),
-        ('[{"row": 0, "word": "perro", "reason": "x"}]', "different version"),
+        ('[{"rank": 5, "word": "perro", "reason": "x"}]', "no row with rank 5"),
+        # Without --index nothing checks that row 0 is still the exported row.
+        ('[{"row": 0, "word": "gato", "reason": "x"}]', "need --index"),
     ],
 )
 def test_apply_reports_problems(
