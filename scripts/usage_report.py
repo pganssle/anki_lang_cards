@@ -16,9 +16,18 @@ from typing import Any, Final, Self
 
 import attrs
 
-DEFAULT_CACHE_ROOT: Final = pathlib.Path(".cache")
-CACHE_TYPES: Final = ("annotations", "sentences")
-JOURNAL_DIR: Final = "batch-jobs"
+from anki_lang_cards import caches, runner
+
+RESPONSE_CACHE_TYPES: Final = (
+    caches.CacheTypes.ANNOTATIONS,
+    caches.CacheTypes.SENTENCES,
+)
+"""The caches that hold model responses with their usage.
+
+``CacheTypes.RESPONSES`` is left out: ``org_to_csv`` queries with
+``skip_cache=True`` and keeps only the CSV it parses out of each answer there,
+so that directory holds no token counts.
+"""
 
 CACHE_WRITE_5M_MULTIPLIER: Final = 1.25
 CACHE_WRITE_1H_MULTIPLIER: Final = 2.0
@@ -214,19 +223,19 @@ def load_entries(
 ) -> Loaded:
     entries: list[Entry] = []
     skipped = 0
-    for cache_type in CACHE_TYPES:
-        directory = cache_root / cache_type
+    for cache_type in RESPONSE_CACHE_TYPES:
+        directory = cache_root / cache_type.value
         if not directory.is_dir():
             continue
         for path in sorted(directory.rglob("*.json")):
-            if JOURNAL_DIR in path.relative_to(directory).parts:
+            if runner.BATCH_JOURNAL_DIR in path.relative_to(directory).parts:
                 continue
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, UnicodeDecodeError, json.JSONDecodeError):
                 skipped += 1
                 continue
-            entry = _entry(cache_type, data)
+            entry = _entry(cache_type.value, data)
             if entry is None:
                 skipped += 1
             elif since is None or entry.timestamp >= since:
@@ -385,7 +394,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--cache-root",
         type=pathlib.Path,
-        default=DEFAULT_CACHE_ROOT,
+        default=caches.DEFAULT_CACHE_LOC,
         help="The response cache directory (default: %(default)s).",
     )
     parser.add_argument(

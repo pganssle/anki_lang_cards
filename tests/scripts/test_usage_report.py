@@ -11,6 +11,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from anki_lang_cards import runner
+
 SCRIPT: Final = (
     pathlib.Path(__file__).parent.parent.parent / "scripts" / "usage_report.py"
 )
@@ -191,7 +193,7 @@ def test_unknown_model_is_not_priced(script, tmp_path: pathlib.Path) -> None:
 
 def test_skips_journal_and_non_responses(script, tmp_path: pathlib.Path) -> None:
     write_entry(tmp_path, "real")
-    journal = tmp_path / "annotations" / "anthropic" / SONNET / "batch-jobs"
+    journal = tmp_path / "annotations" / "anthropic" / SONNET / runner.BATCH_JOURNAL_DIR
     journal.mkdir()
     (journal / "msgbatch_1.json").write_text(
         json.dumps({"job_id": "msgbatch_1", "request_keys": ["k"]})
