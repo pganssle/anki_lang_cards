@@ -156,6 +156,19 @@ def _classify_for_generation(
     )
 
 
+def _remove_run_outputs(
+    diff_output: pathlib.Path, superseded_output: pathlib.Path
+) -> None:
+    """Remove the per-run files an earlier run may have left behind.
+
+    The diff and the superseded-notes file describe one run only: a diff
+    left over from an earlier run reverts the deck if imported, and a stale
+    superseded file names notes to delete that may now be live.
+    """
+    diff_output.unlink(missing_ok=True)
+    superseded_output.unlink(missing_ok=True)
+
+
 async def main():
     parser = argparse.ArgumentParser(description="Anki Language Card Creator")
     parser.add_argument(
@@ -209,7 +222,9 @@ async def main():
         "--diff-output",
         type=pathlib.Path,
         default="output/diff_from_existing.csv",
-        help="Path to output a CSV only including new and updated words.",
+        help="Path to output a CSV only including the words this run added "
+        "or updated; removed when there are none, so a stale one is never "
+        "left to import.",
     )
 
     parser.add_argument(
@@ -256,7 +271,7 @@ async def main():
         type=pathlib.Path,
         default=pathlib.Path("output/superseded_notes.csv"),
         help="Where to list existing notes a merge replaced, which importing "
-        "cannot delete; written only when there are any.",
+        "cannot delete; removed when there are none.",
     )
 
     parser.add_argument(
@@ -397,6 +412,9 @@ async def main():
     if result.interrupted:
         # Nothing reaches the LLM until every duplicate this import raises
         # has an answer; a silent skip here used to hide unresolved groups.
+        # This run exports nothing, so an earlier run's diff must not be
+        # left where the re-run's would go.
+        _remove_run_outputs(args.diff_output, args.superseded_output)
         print(f"{len(result.pending)} duplicate groups still need an answer:")
         for candidate in result.pending:
             for line in candidate.summarize():
@@ -459,53 +477,57 @@ async def main():
         include_without_new_sentences.append(word)
     diff_words_lookup = conflict_resolver.WordLookup(diff_words)
     diff_out: list[types.Word] = []
-    if diff_words:
-        print(f"Generating sentences for {len(diff_words)} words")
-        async with query_runner:
-            query_results = query.generate_sentences(
-                query_runner,
-                diff_words,
-                prompt=prompt_handler,
-                model_name=query_runner.backend.model_name,
-                max_invalid_output_retries=args.max_retries,
-            )
+    # Directly-included words need no LLM call, so a run made only of them —
+    # a merge of notes already at the sentence target — must still write them.
+    if include_without_new_sentences or diff_words:
+        with open(args.output, "at") as f:
+            if needs_directives:
+                f.write("\n".join(types.Word.make_anki_directives(deck_name)) + "\n")
+            writer = csv.writer(f)
 
-            with open(args.output, "at") as f:
-                if needs_directives:
-                    f.write(
-                        "\n".join(types.Word.make_anki_directives(deck_name)) + "\n"
+            if needs_header:
+                writer.writerow(types.Word.make_csv_header())
+
+            for word in include_without_new_sentences:
+                diff_out.append(word)
+                writer.writerow(word.to_csv_line(require_rank=True))
+                f.flush()
+
+            if diff_words:
+                print(f"Generating sentences for {len(diff_words)} words")
+                async with query_runner:
+                    query_results = query.generate_sentences(
+                        query_runner,
+                        diff_words,
+                        prompt=prompt_handler,
+                        model_name=query_runner.backend.model_name,
+                        max_invalid_output_retries=args.max_retries,
                     )
-                writer = csv.writer(f)
 
-                if needs_header:
-                    writer.writerow(types.Word.make_csv_header())
-
-                for word in include_without_new_sentences:
-                    diff_out.append(word)
-                    writer.writerow(word.to_csv_line(require_rank=True))
-                    f.flush()
-
-                async for word in query_results:
-                    print(f"Adding {word.word}")
-                    diff_words_lookup.add(word)
-                    word = conflict_resolver.merge_word_set(
-                        diff_words_lookup.lookup(word)
-                    )
-                    if not word.rank:
-                        word.rank = rank
-                        rank += 1
+                    async for word in query_results:
+                        print(f"Adding {word.word}")
                         diff_words_lookup.add(word)
+                        word = conflict_resolver.merge_word_set(
+                            diff_words_lookup.lookup(word)
+                        )
+                        if not word.rank:
+                            word.rank = rank
+                            rank += 1
+                            diff_words_lookup.add(word)
 
-                    diff_out.append(word)
-                    writer.writerow(word.to_csv_line(require_rank=True))
-                    f.flush()
+                        diff_out.append(word)
+                        writer.writerow(word.to_csv_line(require_rank=True))
+                        f.flush()
 
     else:
         print("No new words found.")
 
     print(f"Found {len(diff_out)} new or updated words.")
     print("\n".join(map(word_getter, diff_out)))
-    if diff_words and diff_out:
+    # The diff and the superseded notes describe this run only: one left over
+    # from an earlier run would revert the deck or delete live notes, so both
+    # are always rewritten, or removed when this run has nothing for them.
+    if diff_out:
         with open(args.diff_output, "wt") as f:
             if args.csv_header:
                 csv.writer(f).writerow(types.Word.make_csv_header())
@@ -514,6 +536,8 @@ async def main():
             writer = csv.writer(f)
             for word in diff_out:
                 writer.writerow(word.to_csv_line(require_rank=True))
+    else:
+        args.diff_output.unlink(missing_ok=True)
 
     superseded = apply_merges.superseded_notes(outcome, current_deck)
     if superseded:
@@ -533,6 +557,8 @@ async def main():
                 for word in superseded
             )
         print(f"  (also written to {args.superseded_output})")
+    else:
+        args.superseded_output.unlink(missing_ok=True)
 
     discarded = apply_merges.discarded_imports(outcome, words, current_deck)
     if discarded:

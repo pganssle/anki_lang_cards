@@ -718,13 +718,18 @@ def test_main_run_twice_emits_nothing_new(
     first = _run_main_raw(workdir, CARDS_DIR / "words.csv", dictionary_paths)
     assert first.returncode == 0, first.stderr
     output_csv = workdir / "output" / "output.csv"
+    diff_csv = workdir / "output" / "diff.csv"
     before = output_csv.read_bytes()
+    assert diff_csv.exists()
 
     second = _run_main_raw(workdir, CARDS_DIR / "words.csv", dictionary_paths)
 
     assert second.returncode == 0, second.stderr
     assert output_csv.read_bytes() == before
     assert "Found 0 new or updated words." in second.stdout
+    # The first run's diff describes rows this run did not produce; importing
+    # it again would revert the deck, so it must not survive.
+    assert not diff_csv.exists()
 
 
 def _conflicting_inputs(workdir: pathlib.Path) -> pathlib.Path:
@@ -742,15 +747,25 @@ def _conflicting_inputs(workdir: pathlib.Path) -> pathlib.Path:
 def test_main_exits_3_on_an_unanswered_duplicate(
     dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
 ) -> None:
-    """Headless, an unanswered group stops the run before the LLM is used."""
+    """Headless, an unanswered group stops the run before the LLM is used,
+    and takes an earlier run's diff and superseded-notes file with it."""
     workdir = tmp_path_factory.mktemp("undecided")
     inputs = _conflicting_inputs(workdir)
+    output_dir = workdir / "output"
+    output_dir.mkdir()
+    stale_diff = output_dir / "diff.csv"
+    stale_diff.write_text("#separator:Comma\n9999,obsoleto,adj,stale,,,,,,,,,,\n")
+    stale_superseded = output_dir / "superseded_notes.csv"
+    stale_superseded.write_text("rank,word,part_of_speech,meaning\n1400,x,nm,stale\n")
 
     result = _run_main_raw(workdir, inputs, dictionary_paths, ("--no-ui",))
 
     assert result.returncode == 3, result.stderr
     assert "Generating sentences" not in result.stdout
-    assert not (workdir / "output" / "output.csv").exists()
+    assert not (output_dir / "output.csv").exists()
+    # Nothing was exported, so nothing from an earlier run may look like it was.
+    assert not stale_diff.exists()
+    assert not stale_superseded.exists()
     pending = json.loads((workdir / "output" / "merge_candidates.json").read_text())
     assert len(pending) == 1
     assert "existente" in pending[0]["words"]
@@ -792,6 +807,52 @@ def test_main_folds_in_an_answered_decision_file(
     # The answer is in the cache now, so later runs need no file at all.
     third = _run_main_raw(workdir, inputs, dictionary_paths, ("--no-ui",))
     assert third.returncode == 0, third.stdout + third.stderr
+
+
+def test_main_exports_a_merge_that_needs_no_new_sentences(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """A merged note already at the sentence target is still exported, even
+    when nothing in the run needs the LLM, and no stale diff or superseded-notes
+    file from an earlier run survives to contradict it."""
+    workdir = tmp_path_factory.mktemp("include-only")
+    inputs = _conflicting_inputs(workdir)
+    output_dir = workdir / "output"
+    superseded_path = output_dir / "superseded_notes.csv"
+    run_args = (
+        "--no-ui",
+        "--max-sentences",
+        "2",
+        "--superseded-output",
+        str(superseded_path),
+    )
+    first = _run_main_raw(workdir, inputs, dictionary_paths, run_args)
+    assert first.returncode == 3, first.stdout + first.stderr
+
+    # Leftovers from an earlier run, which re-importing would act on.
+    stale_diff = output_dir / "diff.csv"
+    stale_diff.write_text("#separator:Comma\n9999,obsoleto,adj,stale,,,,,,,,,,\n")
+    superseded_path.write_text("rank,word,part_of_speech,meaning\n1400,x,nm,stale\n")
+
+    pending_path = _answer_pending(workdir, disposition="merge")
+    second = _run_main_raw(
+        workdir,
+        inputs,
+        dictionary_paths,
+        (*run_args, "--decision-file", str(pending_path)),
+    )
+
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert "Generating sentences" not in second.stdout
+    exported = _words_by_headword(output_dir / "output.csv")
+    assert exported["existente"].rank == 1400
+    diffed = _words_by_headword(stale_diff)
+    assert set(diffed) == {"existente"}
+    assert diffed["existente"].rank == 1400
+
+    # The merge keeps the deck note's rank, so the diff updates it in place and
+    # nothing is superseded: the stale file naming that note must go.
+    assert not superseded_path.exists()
 
 
 def test_main_leaves_review_groups_pending(
