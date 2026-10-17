@@ -63,6 +63,56 @@ def _words(path: pathlib.Path) -> Sequence[str]:
             ["uno", "tres"],
             id="separated",
         ),
+        pytest.param(
+            [
+                ("uno", "Libro", 10),
+                ("dos", "Libro", 1),
+                ("tres", "Libro", 30),
+            ],
+            ["dos", "tres"],
+            id="first_row",
+        ),
+        pytest.param(
+            [
+                ("uno", "Libro", 10),
+                ("dos", "Libro", 11),
+                ("tres", "Libro", 30),
+            ],
+            ["tres"],
+            id="first_two_rows",
+        ),
+        pytest.param(
+            [
+                ("uno", "Libro", 10),
+                ("dos", "Libro", 11),
+                ("tres", "Libro", 12),
+            ],
+            [],
+            id="all_rows",
+        ),
+        pytest.param(
+            [("uno", "Libro", 10)],
+            [],
+            id="single_row",
+        ),
+        pytest.param(
+            [
+                ("uno", "Libro", 1),
+                ("dos", "Libro", 10),
+                ("tres", "Libro", 11),
+            ],
+            ["uno"],
+            id="run_to_eof",
+        ),
+        pytest.param(
+            [
+                ("uno", "Libro", 1),
+                ("dos\nlinea", "Libro", 10),
+                ("tres\nlinea", "Libro", 30),
+            ],
+            ["uno", "tres\nlinea"],
+            id="multiline_rows",
+        ),
     ],
 )
 def test_filter_csv_excludes_every_row_in_range(
