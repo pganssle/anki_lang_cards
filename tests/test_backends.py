@@ -287,6 +287,38 @@ def test_make_runner_tgw_without_config() -> None:
         )
 
 
+def test_make_runner_unknown_llm_model() -> None:
+    """A model name ``llm`` has no plugin for is a selection error, not a
+    traceback, since it is the likeliest typo to make."""
+    with pytest.raises(
+        model_selection.BackendConfigurationError, match="llm models list"
+    ) as info:
+        model_selection.make_runner(
+            _parse("--model", "no-such-model-xyz"),
+            _config(),
+            caches.CacheTypes.SENTENCES,
+            confirm=_never_asked,
+        )
+
+    assert "no-such-model-xyz" in str(info.value)
+
+
+@pytest.mark.parametrize(
+    "construct",
+    [
+        llm_fallback.LLMBackend.supported_features,
+        llm_fallback.LLMBackend,
+        lambda name: llm_fallback.LLMBackend.from_config(name, _config(), frozenset()),
+    ],
+    ids=["supported_features", "init", "from_config"],
+)
+def test_llm_backend_unknown_model(
+    construct: Callable[[str], object],
+) -> None:
+    with pytest.raises(base.UnknownModelError, match="no-such-model-xyz"):
+        construct("no-such-model-xyz")
+
+
 #####
 # The query runner
 

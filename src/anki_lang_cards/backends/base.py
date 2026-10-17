@@ -46,6 +46,10 @@ class ConfigurationError(ValueError):
     """The config file lacks something a backend needs."""
 
 
+class UnknownModelError(ConfigurationError):
+    """The backend has no model by the requested name."""
+
+
 class IncompleteResponseError(ValueError):
     """The model stopped before finishing, e.g. on its output token limit.
 
@@ -69,7 +73,11 @@ class Backend(Protocol):
 
     @classmethod
     def supported_features(cls, model_name: str) -> frozenset[Feature]:
-        """The features this backend supports for a model."""
+        """The features this backend supports for a model.
+
+        :raises UnknownModelError: If the backend can tell that it has no
+            such model.
+        """
         ...
 
     features: frozenset[Feature]
@@ -92,7 +100,8 @@ class Backend(Protocol):
 
         :param features: The optional features to use; a subset of
             :meth:`supported_features` for the model.
-        :raises ConfigurationError: If the config lacks something required.
+        :raises ConfigurationError: If the config lacks something required,
+            or the backend has no such model.
         """
         ...
 

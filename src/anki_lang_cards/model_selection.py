@@ -234,27 +234,28 @@ def make_runner(
     """
     resolved = resolve(model_spec(args, conf), args.model_service)
     backend_class = resolved.backend_class
-    features = choose_features(
-        (
-            _feature_request(base.Feature.BATCH, args.batch, conf.models.batch),
-            _feature_request(
-                base.Feature.PROMPT_CACHING,
-                args.prompt_caching,
-                conf.models.prompt_caching,
-            ),
-            _feature_request(
-                base.Feature.STRUCTURED_OUTPUT,
-                args.structured_output,
-                conf.models.structured_output,
-            ),
+    requests = (
+        _feature_request(base.Feature.BATCH, args.batch, conf.models.batch),
+        _feature_request(
+            base.Feature.PROMPT_CACHING,
+            args.prompt_caching,
+            conf.models.prompt_caching,
         ),
-        backend_class.supported_features(resolved.model_name),
-        backend_description=(
-            f"the {resolved.service} backend (model {resolved.model_name!r})"
+        _feature_request(
+            base.Feature.STRUCTURED_OUTPUT,
+            args.structured_output,
+            conf.models.structured_output,
         ),
-        confirm=confirm,
     )
     try:
+        features = choose_features(
+            requests,
+            backend_class.supported_features(resolved.model_name),
+            backend_description=(
+                f"the {resolved.service} backend (model {resolved.model_name!r})"
+            ),
+            confirm=confirm,
+        )
         backend = backend_class.from_config(resolved.model_name, conf, features)
     except base.ConfigurationError as e:
         raise BackendConfigurationError(str(e)) from e
