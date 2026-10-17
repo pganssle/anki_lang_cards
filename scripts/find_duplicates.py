@@ -29,12 +29,7 @@ from collections.abc import Collection, Mapping, Sequence
 from typing import NewType, TypedDict
 
 from anki_lang_cards import _types as types
-from anki_lang_cards import (
-    anki_import,
-    apply_merges,
-    conflict_resolver,
-    dedup_flow,
-)
+from anki_lang_cards import anki_import, apply_merges, conflict_resolver, dedup_flow
 
 try:
     import textual  # noqa: F401
