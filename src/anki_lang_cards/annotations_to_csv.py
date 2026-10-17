@@ -6,6 +6,7 @@ import csv
 import itertools
 import json
 import re
+import sys
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, TypeAlias, TypedDict, cast
@@ -417,12 +418,12 @@ def _estimate_tokens(request: base.Request) -> float:
     return (len(request.system_prompt) + len(request.prompt)) / 4
 
 
-def generate_prompts(
+def pack_prompt_inputs(
     prompt_inputs: Sequence[PromptInput],
     max_tokens: int = 2048,
     dialect: str = config.DEFAULT_DIALECT,
-) -> Iterable[base.Request]:
-    """Pack annotation entries into as few prompts as fit in ``max_tokens``.
+) -> Iterable[Sequence[PromptInput]]:
+    """Group annotation entries into as few prompts as fit in ``max_tokens``.
 
     An entry too big to share a prompt with anything gets one to itself.
     """
@@ -435,11 +436,21 @@ def generate_prompts(
             _estimate_tokens(_generate_prompt([*stack, prompt_input], dialect=dialect))
             > max_tokens
         ):
-            yield _generate_prompt(stack, dialect=dialect)
+            yield tuple(stack)
             stack = []
         stack.append(prompt_input)
 
-    yield _generate_prompt(stack, dialect=dialect)
+    yield tuple(stack)
+
+
+def generate_prompts(
+    prompt_inputs: Sequence[PromptInput],
+    max_tokens: int = 2048,
+    dialect: str = config.DEFAULT_DIALECT,
+) -> Iterable[base.Request]:
+    """The prompt for each group from :func:`pack_prompt_inputs`."""
+    for group in pack_prompt_inputs(prompt_inputs, max_tokens, dialect=dialect):
+        yield _generate_prompt(group, dialect=dialect)
 
 
 def _prepare_source_mapping(
@@ -622,7 +633,12 @@ async def main() -> None:
     source_mapping = _prepare_source_mapping(prompt_inputs)
 
     existing: dict[Word, Word] = {}
-    requests = list(generate_prompts(prompt_inputs, dialect=conf.sentences.dialect))
+    inputs_by_request = {
+        _generate_prompt(group, dialect=conf.sentences.dialect): group
+        for group in pack_prompt_inputs(prompt_inputs, dialect=conf.sentences.dialect)
+    }
+    requests = list(inputs_by_request)
+    skipped: list[runner.Skipped] = []
 
     def parse(request: base.Request, response: caches.ResponseData) -> Sequence[Word]:
         return parse_llm_response(
@@ -637,7 +653,7 @@ async def main() -> None:
     print(f"Processing {len(requests)} prompts {mode}.")
     async with query_runner:
         with tqdm.tqdm(total=len(requests), desc="Processing prompts") as progress:
-            async for _, words in runner.run_with_retries(
+            async for outcome in runner.run_with_retries(
                 query_runner,
                 requests,
                 parse,
@@ -647,7 +663,10 @@ async def main() -> None:
                 skip_cache=args.skip_response_cache,
             ):
                 progress.update()
-                for word in words:
+                if isinstance(outcome, runner.Skipped):
+                    skipped.append(outcome)
+                    continue
+                for word in outcome.value:
                     if word in existing:
                         existing[word].update(word)
                     else:
@@ -662,19 +681,37 @@ async def main() -> None:
             writer.writerow(word.to_csv_line())
 
     print(f"Written to {args.output}")
+    if skipped:
+        lost = [
+            entry for outcome in skipped for entry in inputs_by_request[outcome.request]
+        ]
+        highlights = sum(len(entry.annotation_entry["highlights"]) for entry in lost)
+        print(
+            f"\nWARNING: {len(skipped)} of {len(requests)} prompt(s) failed after "
+            f"every retry, so {len(lost)} annotation entries with {highlights} "
+            "highlight(s) produced no cards:"
+        )
+        for outcome in skipped:
+            print(f"  prompt {outcome.request.key}: {outcome.reason}")
+        print("Re-run to try them again; the responses that worked are cached.")
     # Generate and save processed pages JSON if requested
     if args.processed_pages_output:
+        # The processed-pages rules are generated from every loaded
+        # annotation, so after a partial run they would mark pages as
+        # processed that never were.
         if limited:
-            # The processed-pages rules are generated from every loaded
-            # annotation, so after a partial run they would mark pages as
-            # processed that never were.
             print("Not writing processed pages: --limit skipped part of the input.")
+        elif skipped:
+            print("Not writing processed pages: some prompts produced no cards.")
         else:
             print(f"Writing rules for processed pages to {args.processed_pages_output}")
             processed_pages = generate_processed_pages_json(combined_annotations)
             with open(args.processed_pages_output, "w") as f:
                 json.dump(processed_pages, f, indent=2)
             print(f"Processed pages written to {args.processed_pages_output}")
+
+    if skipped:
+        sys.exit(runner.EXIT_REQUESTS_DROPPED)
 
 
 if __name__ == "__main__":

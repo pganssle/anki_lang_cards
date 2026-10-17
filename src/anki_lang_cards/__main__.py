@@ -21,6 +21,7 @@ from . import (
     model_selection,
     prompts,
     query,
+    runner,
     triage,
 )
 
@@ -459,6 +460,7 @@ async def main():
         include_without_new_sentences.append(word)
     diff_words_lookup = conflict_resolver.WordLookup(diff_words)
     diff_out: list[types.Word] = []
+    dropped: list[query.DroppedWords] = []
     if diff_words:
         print(f"Generating sentences for {len(diff_words)} words")
         async with query_runner:
@@ -485,7 +487,11 @@ async def main():
                     writer.writerow(word.to_csv_line(require_rank=True))
                     f.flush()
 
-                async for word in query_results:
+                async for result in query_results:
+                    if isinstance(result, query.DroppedWords):
+                        dropped.append(result)
+                        continue
+                    word = result
                     print(f"Adding {word.word}")
                     diff_words_lookup.add(word)
                     word = conflict_resolver.merge_word_set(
@@ -515,7 +521,10 @@ async def main():
             for word in diff_out:
                 writer.writerow(word.to_csv_line(require_rank=True))
 
-    superseded = apply_merges.superseded_notes(outcome, current_deck)
+    dropped_words = [word for result in dropped for word in result.words]
+    superseded = apply_merges.superseded_notes(
+        outcome, current_deck, except_for=dropped_words
+    )
     if superseded:
         print(
             "\nNotes Anki will still hold that nothing will update — "
@@ -542,6 +551,20 @@ async def main():
         )
         for word in discarded:
             print(f"  {word.rank} {word.word} ({word.part_of_speech}) {word.meaning}")
+
+    if dropped:
+        print(
+            f"\nWARNING: {len(dropped)} request(s) failed after every retry, so "
+            f"{len(dropped_words)} word(s) got no sentences and are not in the "
+            "output:"
+        )
+        for result in dropped:
+            print(f"  {', '.join(word.word for word in result.words)}: {result.reason}")
+        print(
+            "Re-run to try them again; notes a merge involving them would have "
+            "replaced are left out of the superseded list until then."
+        )
+        sys.exit(runner.EXIT_REQUESTS_DROPPED)
 
 
 if __name__ == "__main__":

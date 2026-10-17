@@ -19,6 +19,8 @@ so tests can exercise the error-handling paths:
   be matched to the input word.
 - ``wordkey``: the response uses a ``"word"`` key instead of ``"term"``
   (a mistake the real prompt's own examples used to contain).
+- ``apierror``: the model raises ``llm.ModelError`` every time, as a
+  plugin does when its provider rejects the request.
 """
 
 import hashlib
@@ -162,6 +164,9 @@ def _generate_response(prompt_text: str) -> str:
                     flat_terms.append(highlight)
         else:
             flat_terms.append(entry["term"])
+
+    if any("apierror" in term for term in flat_terms):
+        raise llm.ModelError("the fake provider rejected this request")
 
     if any("badjson" in term for term in flat_terms):
         key = hashlib.md5(

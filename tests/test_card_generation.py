@@ -139,17 +139,17 @@ def _write_config(
     return config_path
 
 
-def _run_annotations_to_csv(
+def _run_annotations_to_csv_raw(
     workdir: pathlib.Path,
     combined_annotations: pathlib.Path,
     dictionaries: DictionaryPaths,
-    output_name: str = "words_from_annotations.csv",
+    output_csv: pathlib.Path,
     extra_args: Sequence[str] = (),
     dialect: str | None = None,
-) -> CliRun:
-    output_csv = workdir / output_name
+) -> subprocess.CompletedProcess[str]:
+    """Like _run_annotations_to_csv, but tolerant of failure."""
     config_path = _write_config(workdir, dictionaries, dialect=dialect)
-    result = subprocess.run(
+    return subprocess.run(
         (
             sys.executable,
             "-m",
@@ -170,11 +170,30 @@ def _run_annotations_to_csv(
             "1",
             *extra_args,
         ),
-        check=True,
         capture_output=True,
         text=True,
         cwd=workdir,
     )
+
+
+def _run_annotations_to_csv(
+    workdir: pathlib.Path,
+    combined_annotations: pathlib.Path,
+    dictionaries: DictionaryPaths,
+    output_name: str = "words_from_annotations.csv",
+    extra_args: Sequence[str] = (),
+    dialect: str | None = None,
+) -> CliRun:
+    output_csv = workdir / output_name
+    result = _run_annotations_to_csv_raw(
+        workdir,
+        combined_annotations,
+        dictionaries,
+        output_csv,
+        extra_args=extra_args,
+        dialect=dialect,
+    )
+    result.check_returncode()
     return CliRun(workdir=workdir, output_csv=output_csv, stdout=result.stdout)
 
 
@@ -617,6 +636,78 @@ def test_annotations_limit(
     assert "Limiting to the first 1 of 5 entries." in run.stdout
     assert set(_words_by_headword(run.output_csv)) == {"gatos", "fiambres (comida)"}
     assert not (workdir / "processed_pages.json").exists()
+
+
+def test_annotations_every_prompt_failing_aborts(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """When nothing gets through, the run stops with an error rather than
+    writing an empty CSV and marking every page processed."""
+    workdir = tmp_path_factory.mktemp("annotations-apierror-run")
+    combined = workdir / "combined.json"
+    combined.write_text(
+        json.dumps(
+            [
+                {
+                    "book": {
+                        "title": "Libro",
+                        "author": "Autora",
+                        "path": "Autora/Libro (1)",
+                        "language": "spa",
+                    },
+                    "annotations": [
+                        {
+                            "highlights": ["apierrorado"],
+                            "context": "El apierrorado nunca recibió respuesta.",
+                            "chapters": ["Capítulo 1"],
+                            "page_numbers": [1],
+                        }
+                    ],
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = _run_annotations_to_csv_raw(
+        workdir, combined, dictionary_paths, workdir / "words.csv"
+    )
+
+    assert result.returncode == 1, result.stdout
+    assert "AllRequestsFailedError" in result.stderr
+    assert "the fake provider rejected this request" in result.stderr
+    assert not (workdir / "words.csv").exists()
+    assert not (workdir / "processed_pages.json").exists()
+
+
+def test_main_dropped_request_exits_4(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """A request the model never answers leaves its words out of the output
+    and is reported with a distinct exit status, as #11 asks."""
+    workdir = tmp_path_factory.mktemp("main-apierror-run")
+    inputs = workdir / "words.csv"
+    # Fifteen words fill the first prompt; the failing one gets the second.
+    rows = [f",palabra{n},nm,word number {n},,,,,el,,,,," for n in range(15)]
+    rows.append(",apierrorado,nm,word the fake provider rejects,,,,,el,,,,,")
+    inputs.write_text(
+        "rank,word,part_of_speech,meaning,spanish_sentence,english_sentence,"
+        "frequency,image,article,sentence_source,note,example_sentences,"
+        "model_used,tags\n" + "\n".join(rows) + "\n",
+        encoding="utf-8",
+    )
+
+    result = _run_main_raw(workdir, inputs, dictionary_paths)
+
+    assert result.returncode == 4, result.stdout + result.stderr
+    assert (
+        "WARNING: 1 request(s) failed after every retry, so 1 word(s) got no "
+        "sentences and are not in the output:"
+    ) in result.stdout
+    assert "apierrorado: ModelError: the fake provider rejected" in result.stdout
+    words = _words_by_headword(workdir / "output" / "output.csv")
+    assert "apierrorado" not in words
+    assert {f"palabra{n}" for n in range(15)} <= set(words)
 
 
 def test_main_limit(

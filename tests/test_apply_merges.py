@@ -232,6 +232,25 @@ class TestReporting:
         (orphan,) = apply_merges.superseded_notes(outcome, deck)
         assert orphan.rank == 7608
 
+    def test_a_dropped_replacement_supersedes_nothing(
+        self, comparer, decisions
+    ) -> None:
+        """If the merged note never reached the output, its sources are still
+        the only copies and must not be deleted."""
+        deck = [
+            make_word("botarate", "nm/f", "spendthrift", 7383),
+            make_word("botarate", "nm/f", "fool", 7608),
+        ]
+        decide(decisions, deck, triage.Disposition.MERGE)
+
+        outcome = apply_merges.apply_decisions(deck, decisions, comparer)
+        (merge,) = outcome.merges
+        assert apply_merges.superseded_notes(outcome, deck)
+        assert (
+            apply_merges.superseded_notes(outcome, deck, except_for=[merge.result])
+            == ()
+        )
+
     def test_a_new_note_being_superseded_is_not_listed(
         self, comparer, decisions
     ) -> None:

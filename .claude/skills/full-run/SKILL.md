@@ -97,7 +97,14 @@ python -m anki_lang_cards.annotations_to_csv
 This writes `output/words_from_annotations.csv`, and
 `output/processed_pages.json`, the pages this run covered — mention that one
 in the report, since it is the starting point for updating
-`input/book_skip_list.json` so the next run skips them. It records one range
+`input/book_skip_list.json` so the next run skips them. A prompt the model
+never answers usably is dropped after its retries: the run then ends with
+**exit status 4**, lists the dropped prompts and how many entries they held,
+and does not write `processed_pages.json`. Re-run the same command (the
+answers that worked are cached) and, if it keeps happening, tell the user
+which entries were lost rather than treating the CSV as complete. If every
+prompt fails, the run stops with a traceback instead: the API or local
+server is unreachable, or the model name is wrong. It records one range
 per book, from the first highlighted page to the last, so copying it in also
 skips any later highlights on the pages in between; say so. `--limit N` processes
 only the first N entries if the user wants a trial run first, and a limited
@@ -194,7 +201,10 @@ is rewritten on every run and the copy is how an answer gets changed later
 When it gets past the duplicates, it generates sentences (a second batch job)
 and writes `output/diff_from_existing.csv` (new and updated notes — the file
 the user imports) and adds them to `output/output.csv`, which accumulates
-every row this and earlier runs emitted.
+every row this and earlier runs emitted. As in step 3, a request that fails
+every retry leaves its words out of both files and ends the run with **exit
+status 4**, listing the words; re-run to pick them up, and report any that
+keep failing.
 
 ## 6. Review the diff
 

@@ -431,20 +431,34 @@ def apply_decisions(
 
 
 def superseded_notes(
-    outcome: Outcome, existing: Collection[types.Word]
+    outcome: Outcome,
+    existing: Collection[types.Word],
+    *,
+    except_for: Collection[types.Word] = (),
 ) -> Sequence[types.Word]:
     """Deck notes a merge has replaced, which Anki will still be holding.
 
     Importing a merged note updates the rank it kept. The other ranks in the
     group are left behind as duplicates of what was just merged, and importing
     cannot remove them — that has to happen in Anki.
+
+    :param except_for: Replacement notes that never made it to the output
+        (their sentence request was dropped), whose sources are therefore not
+        superseded yet.
     """
     deck_ranks = {word.rank for word in existing if word.rank is not None}
+    changes: list[Merge | Split] = []
+    for merge in outcome.merges:
+        if merge.result not in except_for:
+            changes.append(merge)
+    for split in outcome.splits:
+        if not any(card in except_for for card in split.cards):
+            changes.append(split)
     # One rank can be superseded by several source notes — the deck copy and the
     # imported copy of the same note both appear — but it is one note to delete.
     by_rank = {
         word.rank: word
-        for change in (*outcome.merges, *outcome.splits)
+        for change in changes
         for word in change.superseded
         if word.rank in deck_ranks
     }
