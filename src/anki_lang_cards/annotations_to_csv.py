@@ -399,13 +399,12 @@ def prepare_prompt_inputs(
 def _generate_prompt(
     prompt_inputs: Sequence[PromptInput], dialect: str = config.DEFAULT_DIALECT
 ) -> AnnotationPrompt:
-    sources = dict(
-        enumerate((prompt_input.source for prompt_input in prompt_inputs), 1)
-    )
+    numbered = list(enumerate(prompt_inputs, 1))
+    sources = {source_id: prompt_input.source for source_id, prompt_input in numbered}
     annotation_input = json.dumps(
         [
             {**prompt_input.annotation_entry, "source_id": source_id}
-            for source_id, prompt_input in enumerate(prompt_inputs, 1)
+            for source_id, prompt_input in numbered
         ],
         indent=2,
         ensure_ascii=False,
