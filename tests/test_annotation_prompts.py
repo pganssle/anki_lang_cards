@@ -50,24 +50,24 @@ def _estimated_tokens(prompt: annotations_to_csv.AnnotationPrompt) -> float:
 def test_last_entry_overflowing_is_not_sent_twice() -> None:
     """Regression: when the final entry overflowed the budget, the last
     prompt used to repeat every entry of the prompt before it."""
-    requests = list(
+    prompts = list(
         annotations_to_csv.generate_prompts(
             [_prompt_input(i, 600) for i in range(5)], max_tokens=MAX_TOKENS
         )
     )
 
-    assert [_entry_ids(prompt) for prompt in requests] == [[0, 1, 2, 3], [4]]
+    assert [_entry_ids(prompt) for prompt in prompts] == [[0, 1, 2, 3], [4]]
 
 
 def test_oversized_entry_gets_its_own_prompt() -> None:
-    requests = list(
+    prompts = list(
         annotations_to_csv.generate_prompts(
             [_prompt_input(0, 100), _prompt_input(1, 20_000), _prompt_input(2, 100)],
             max_tokens=MAX_TOKENS,
         )
     )
 
-    assert [_entry_ids(prompt) for prompt in requests] == [[0], [1], [2]]
+    assert [_entry_ids(prompt) for prompt in prompts] == [[0], [1], [2]]
 
 
 def test_no_entries() -> None:
@@ -97,7 +97,7 @@ def test_packing_properties(context_sizes: Sequence[int]) -> None:
         _prompt_input(entry_id, size) for entry_id, size in enumerate(context_sizes)
     ]
 
-    requests = list(
+    prompts = list(
         annotations_to_csv.generate_prompts(prompt_inputs, max_tokens=MAX_TOKENS)
     )
 
@@ -106,13 +106,13 @@ def test_packing_properties(context_sizes: Sequence[int]) -> None:
     assert [entry_id for ids in packed for entry_id in ids] == list(
         range(len(context_sizes))
     )
-    for request, ids in zip(requests, packed):
+    for prompt, ids in zip(prompts, packed):
         # Only an entry alone in its prompt may go over the budget.
-        assert len(ids) == 1 or _estimated_tokens(request) <= MAX_TOKENS
+        assert len(ids) == 1 or _estimated_tokens(prompt) <= MAX_TOKENS
     # A prompt is only closed when the next entry would not have fit in it.
-    for request_ids, next_ids in zip(packed, packed[1:]):
+    for prompt_ids, next_ids in zip(packed, packed[1:]):
         combined = annotations_to_csv.generate_prompts(
-            [prompt_inputs[i] for i in (*request_ids, next_ids[0])],
+            [prompt_inputs[i] for i in (*prompt_ids, next_ids[0])],
             max_tokens=10**9,
         )
         assert _estimated_tokens(next(iter(combined))) > MAX_TOKENS
