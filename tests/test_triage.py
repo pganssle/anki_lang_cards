@@ -528,6 +528,29 @@ class TestDecisionCache:
         assert decision is not None
         assert decision.disposition is triage.Disposition.MERGE
 
+    def test_case_variants_with_tied_ranks_are_one_group(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        """With no rank to break the tie, the keys are sorted on the text, and
+        "Bench" must not land in a different position from "bench"."""
+        cache = triage.DecisionCache(tmp_path / "decisions.json")
+        bank = make_word("banco", "nm", "bank")
+        self.remember(
+            cache,
+            (bank, make_word("banco", "nm", "Bench")),
+            triage.Disposition.KEEP_SEPARATE,
+        )
+        self.remember(
+            cache,
+            (bank, make_word("banco", "nm", "bench")),
+            triage.Disposition.MERGE,
+        )
+
+        assert len(cache) == 1
+        decision = cache.get((make_word("banco", "nm", "bench"), bank))
+        assert decision is not None
+        assert decision.disposition is triage.Disposition.MERGE
+
     def test_keys_that_sort_as_ties_are_both_saved(
         self, tmp_path: pathlib.Path
     ) -> None:

@@ -264,8 +264,11 @@ class Sentence:
 @attrs.define(order=True)
 class Word:
     rank: int | None = attrs.field(order=lambda x: x if x is not None else float("inf"))
-    word: str
-    meaning: str
+    # Order on the same normalized text that __eq__ compares, so that sorting
+    # a collection of words puts equal words at the same position regardless
+    # of case or surrounding whitespace.
+    word: str = attrs.field(order=_normalize_str)
+    meaning: str = attrs.field(order=_normalize_str)
     part_of_speech: pos.PartOfSpeech = attrs.field(converter=_convert_pos, order=False)
     article: str | None = attrs.field(order=False)
     sentences: Sequence[Sentence] = attrs.field(order=False)
@@ -304,7 +307,7 @@ class Word:
             (other.word, other.meaning),
         )
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         # Must agree with __eq__: equal words hash equal only if this hashes
         # the same normalized fields that __eq__ compares.
         return hash(
