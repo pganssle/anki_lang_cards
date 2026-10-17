@@ -2,7 +2,9 @@
 
 The client is replaced with a fake that answers the way Anki would: an
 exact-spelling search misses a deck note written with a different
-shorthand, while the related-words search finds it.
+shorthand, while the related-words search finds it. The run stops at the
+duplicate check, before anything is sent to a model, so the model backend is
+stubbed out rather than requiring a plugin to be installed.
 """
 
 import asyncio
@@ -11,12 +13,13 @@ import json
 import pathlib
 import sys
 from collections.abc import AsyncIterator, Mapping, Sequence
+from typing import Self
 
 import pytest
 
 from anki_lang_cards import __main__ as main_module
 from anki_lang_cards import _types as types
-from anki_lang_cards import anki_import
+from anki_lang_cards import anki_import, model_selection
 
 DECK_NOTE = types.Word(
     rank=500,
@@ -60,6 +63,20 @@ async def fake_create_client(*args: object, **kwargs: object) -> AsyncIterator:
     yield FakeAnkiClient()
 
 
+class UnreachableRunner:
+    """Stands in for the query runner on a run that must stop before it."""
+
+    async def __aenter__(self) -> Self:
+        pytest.fail("The run reached the model; the deck note was not a duplicate")
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        pass
+
+
+def make_unreachable_runner(*args: object, **kwargs: object) -> tuple[None, object]:
+    return None, UnreachableRunner()
+
+
 def test_variant_spelling_in_deck_reaches_dedup(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -74,10 +91,11 @@ def test_variant_spelling_in_deck_reaches_dedup(
         encoding="utf-8",
     )
     config = tmp_path / "config.toml"
-    config.write_text('[models]\ndefault_model="fake-cards"\n', encoding="utf-8")
+    config.write_text('[models]\ndefault_model="stub"\n', encoding="utf-8")
     pending = tmp_path / "pending.json"
 
     monkeypatch.setattr(anki_import, "create_client", fake_create_client)
+    monkeypatch.setattr(model_selection, "make_runner", make_unreachable_runner)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -87,8 +105,6 @@ def test_variant_spelling_in_deck_reaches_dedup(
             str(inputs),
             "--output",
             str(tmp_path / "output.csv"),
-            "--model-name",
-            "fake-cards",
             "--config",
             str(config),
             "--no-ui",
