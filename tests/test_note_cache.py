@@ -1,4 +1,5 @@
-"""Tests for the mod-time note cache and the batched, cached fetch."""
+"""Tests for the mod-time note cache, the batched, cached fetch, and the
+parsing of the AnkiConnect notes that fetch returns into `Word`s."""
 
 import asyncio
 from collections.abc import Mapping
@@ -154,13 +155,14 @@ class TestWordFromAnkiConnectResponse:
         return anki_import.AnkiConnectClient(session=None)  # type: ignore[arg-type]
 
     @pytest.mark.parametrize("extra_sentences", ["", EXTRA])
+    @pytest.mark.parametrize("spanish", ["", " ", "\n", " \t\n"])
     def test_an_empty_spanish_field_yields_no_first_sentence(
-        self, extra_sentences: str
+        self, spanish: str, extra_sentences: str
     ) -> None:
         note = _note(
             {
                 **self.BASE_FIELDS,
-                "Spanish": "",
+                "Spanish": spanish,
                 "English": "",
                 "Extra Sentences": extra_sentences,
             }
