@@ -525,7 +525,7 @@ class TestDecisionFile:
         assert "sentence_allocation[0]" in str(excinfo.value)
 
     @pytest.mark.parametrize(
-        "contents, expected",
+        ("contents", "expected"),
         [
             pytest.param(None, "No such file or directory", id="missing"),
             pytest.param("[1, 2", "is not JSON", id="not-json"),
