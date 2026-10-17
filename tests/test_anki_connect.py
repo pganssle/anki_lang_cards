@@ -345,3 +345,34 @@ def test_find_highest_rank_against_real_search(anki_setup: None) -> None:
             return await client.find_highest_rank(DECK, max_range=50)
 
     assert _run(find()) == 2112
+
+
+def test_suspend_unsuspend_roundtrip_through_client(anki_setup: None) -> None:
+    """Cards suspended over the API are reported suspended by the client, and
+    unsuspend_cards clears exactly the cards it was given."""
+    note_ids = [
+        _add_note(_nasty_word(rank, word=f"suspenso{rank}")) for rank in (2201, 2202)
+    ]
+    card_ids = tuple(
+        anki_import.CardId(card_id)
+        for note_id in note_ids
+        for card_id in _invoke("findCards", query=f"nid:{note_id}")
+    )
+    assert len(card_ids) == 2
+    _invoke("suspend", cards=list(card_ids))
+
+    async def are_suspended() -> Mapping[anki_import.CardId, bool]:
+        async with anki_import.create_client() as client:
+            return await client.are_suspended(card_ids)
+
+    async def unsuspend(to_unsuspend: Sequence[anki_import.CardId]) -> None:
+        async with anki_import.create_client() as client:
+            assert await client.unsuspend_cards(to_unsuspend) is None
+
+    assert _run(are_suspended()) == {card_ids[0]: True, card_ids[1]: True}
+
+    _run(unsuspend(card_ids[:1]))
+    assert _run(are_suspended()) == {card_ids[0]: False, card_ids[1]: True}
+
+    _run(unsuspend(card_ids[1:]))
+    assert _run(are_suspended()) == {card_ids[0]: False, card_ids[1]: False}

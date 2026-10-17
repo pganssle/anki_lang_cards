@@ -102,8 +102,9 @@ class FakeAnki:
         return {card_id: self.suspended[card_id] for card_id in card_ids}
 
     async def unsuspend_cards(self, card_ids):
+        # The real server errors on unknown card ids, so reject them here too
+        assert all(card_id in self.suspended for card_id in card_ids), card_ids
         self.unsuspended.extend(card_ids)
-        return True
 
     async def update_note_info_from_words(self, replacements):
         for note_id, replacement in replacements.items():
