@@ -6,7 +6,7 @@ import csv
 import itertools
 import json
 import re
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import AsyncIterator, Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Literal, TypeAlias, TypedDict, cast
 
@@ -509,6 +509,62 @@ def parse_llm_response(
     return output
 
 
+SourcesByRequest: TypeAlias = Mapping[
+    base.Request, Sequence[Mapping[int, BookCitation]]
+]
+
+
+def group_sources_by_request(
+    annotation_prompts: Iterable[AnnotationPrompt],
+) -> SourcesByRequest:
+    """Group the prompts' source mappings by their (distinct) request.
+
+    The same annotation text in two books makes two identical requests, since
+    the prompt numbers its sources from 1; the runner only sends such a request
+    once, so its response is parsed once per source mapping.
+    """
+    grouped: dict[base.Request, list[Mapping[int, BookCitation]]] = {}
+    for prompt in annotation_prompts:
+        grouped.setdefault(prompt.request, []).append(prompt.sources)
+    return {request: tuple(sources) for request, sources in grouped.items()}
+
+
+async def annotate(
+    query_runner: runner.QueryRunner,
+    sources_by_request: SourcesByRequest,
+    *,
+    model_used: str,
+    max_retries: int,
+    invalidate_cache: bool = False,
+    skip_cache: bool = False,
+) -> AsyncIterator[Sequence[Word]]:
+    """Run the requests and yield the words parsed from each response.
+
+    A response shared by several prompts yields the words of each of them, so
+    every book an annotation came from gets its citation.
+    """
+
+    def parse(request: base.Request, response: caches.ResponseData) -> Sequence[Word]:
+        return [
+            word
+            for sources in sources_by_request[request]
+            for word in parse_llm_response(
+                response["text"], model_used=model_used, source_mapping=sources
+            )
+        ]
+
+    async for _, words in runner.run_with_retries(
+        query_runner,
+        list(sources_by_request),
+        parse,
+        max_retries=max_retries,
+        describe=lambda request: f"prompt {request.key}",
+        invalidate_cache=invalidate_cache,
+        skip_cache=skip_cache,
+    ):
+        yield words
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(
         description="Convert extracted and combined annotations into Anki cards"
@@ -632,37 +688,25 @@ async def main() -> None:
         prompt_inputs = prompt_inputs[: args.limit]
 
     existing: dict[Word, Word] = {}
-    annotation_prompts = list(
+    sources_by_request = group_sources_by_request(
         generate_prompts(prompt_inputs, dialect=conf.sentences.dialect)
     )
-    requests = [prompt.request for prompt in annotation_prompts]
-    # The same annotation text in two books makes two identical requests,
-    # which share a response; its sentences cite the later book.
-    sources_by_request = {
-        prompt.request: prompt.sources for prompt in annotation_prompts
-    }
-
-    def parse(request: base.Request, response: caches.ResponseData) -> Sequence[Word]:
-        return parse_llm_response(
-            response["text"],
-            model_used=model.spec,
-            source_mapping=sources_by_request[request],
-        )
 
     mode = (
         "as a batch job"
         if query_runner.batch
         else f"with up to {query_runner.max_concurrency} parallel queries"
     )
-    print(f"Processing {len(requests)} prompts {mode}.")
+    print(f"Processing {len(sources_by_request)} prompts {mode}.")
     async with query_runner:
-        with tqdm.tqdm(total=len(requests), desc="Processing prompts") as progress:
-            async for _, words in runner.run_with_retries(
+        with tqdm.tqdm(
+            total=len(sources_by_request), desc="Processing prompts"
+        ) as progress:
+            async for words in annotate(
                 query_runner,
-                requests,
-                parse,
+                sources_by_request,
+                model_used=model.spec,
                 max_retries=args.max_retries,
-                describe=lambda request: f"prompt {request.key}",
                 invalidate_cache=args.invalidate_response_cache,
                 skip_cache=args.skip_response_cache,
             ):

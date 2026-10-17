@@ -1,8 +1,9 @@
 """Tests for packing annotation entries into prompts."""
 
+import asyncio
 import json
 import re
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from typing import Final
 
 import pytest
@@ -10,11 +11,27 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from anki_lang_cards import _types as types
-from anki_lang_cards import annotations_to_csv, prompts
+from anki_lang_cards import annotations_to_csv, prompts, runner
 from anki_lang_cards.backends import base
 
 _INPUT_RE: Final = re.compile(r"INPUT:\n-+\n(?P<json>.*)\n+OUTPUT:\n-+", re.DOTALL)
 MAX_TOKENS: Final = 2048
+
+_RESPONSE: Final = json.dumps(
+    {
+        "words": [
+            {
+                "headword": "palabra",
+                "part_of_speech": "nf",
+                "meaning": "word",
+                "examples": [
+                    {"spanish": "Una palabra.", "english": "A word.", "source_id": 1}
+                ],
+            }
+        ]
+    }
+)
+"""A model response citing the first source of whichever prompt it answers."""
 
 
 def _prompt_input(entry_id: int, context_size: int) -> annotations_to_csv.PromptInput:
@@ -101,7 +118,7 @@ def test_packing_properties(context_sizes: Sequence[int]) -> None:
         annotations_to_csv.generate_prompts(prompt_inputs, max_tokens=MAX_TOKENS)
     )
 
-    packed = [_entry_ids(prompt) for prompt in requests]
+    packed = [_entry_ids(prompt) for prompt in prompts]
     # Every entry is sent exactly once, in order.
     assert [entry_id for ids in packed for entry_id in ids] == list(
         range(len(context_sizes))
@@ -161,33 +178,75 @@ def test_response_maps_back_to_each_prompts_sources() -> None:
     first, second = annotations_to_csv.generate_prompts(
         [_prompt_input(0, 10), _prompt_input(1, 20_000)], max_tokens=MAX_TOKENS
     )
-    response = json.dumps(
-        {
-            "words": [
-                {
-                    "headword": "palabra",
-                    "part_of_speech": "nf",
-                    "meaning": "word",
-                    "examples": [
-                        {
-                            "spanish": "Una palabra.",
-                            "english": "A word.",
-                            "source_id": 1,
-                        }
-                    ],
-                }
-            ]
-        }
-    )
-
     citations = [
         sentence.source
         for prompt in (first, second)
         for word in annotations_to_csv.parse_llm_response(
-            response, model_used="m", source_mapping=prompt.sources
+            _RESPONSE, model_used="m", source_mapping=prompt.sources
         )
         for sentence in word.sentences
     ]
 
     assert citations == [first.sources[1], second.sources[1]]
     assert [citation.title for citation in citations] == ["Libro 0", "Libro 1"]
+
+
+class _FakeRunner:
+    """Answers each distinct request with the same response, like a runner
+    that found all of them in the cache."""
+
+    def __init__(self, response_text: str) -> None:
+        self.response_text = response_text
+        self.queried: list[base.Request] = []
+
+    async def run(
+        self,
+        requests: Sequence[base.Request],
+        *,
+        invalidate_cache: bool = False,
+        skip_cache: bool = False,
+    ) -> AsyncIterator[runner.Success | runner.Failure]:
+        for request in dict.fromkeys(requests):
+            self.queried.append(request)
+            yield runner.Success(request, {"text": self.response_text})
+
+
+def test_annotation_in_two_books_cites_both() -> None:
+    """Regression: the same highlight in two books makes two identical
+    prompts, which the runner sends once; the shared response was parsed with
+    only the last book's sources, so the first book's citation was lost."""
+    books = [
+        types.BookCitation(title=f"Libro {i}", authors=("Autora",)) for i in range(2)
+    ]
+    # Too big to share a prompt, so each book's copy gets its own.
+    prompt_inputs = [
+        annotations_to_csv.PromptInput(
+            rag_entries={},
+            annotation_entry={"highlights": ["palabra"], "context": "x" * 20_000},
+            source=book,
+        )
+        for book in books
+    ]
+    sources_by_request = annotations_to_csv.group_sources_by_request(
+        annotations_to_csv.generate_prompts(prompt_inputs, max_tokens=MAX_TOKENS)
+    )
+    fake_runner = _FakeRunner(_RESPONSE)
+
+    async def collect() -> Sequence[types.Word]:
+        return [
+            word
+            async for words in annotations_to_csv.annotate(
+                fake_runner,  # type: ignore[arg-type]
+                sources_by_request,
+                model_used="m",
+                max_retries=0,
+            )
+            for word in words
+        ]
+
+    words = asyncio.run(collect())
+
+    # One request for the two prompts, so the progress count is one.
+    assert len(sources_by_request) == 1
+    assert len(fake_runner.queried) == 1
+    assert [sentence.source for word in words for sentence in word.sentences] == books
