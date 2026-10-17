@@ -149,6 +149,15 @@ headword from an inflected form) and asks the LLM to determine the
 dictionary form of the word as used, a definition for that specific sense,
 and a pithy example sentence extracted from the context.
 
+A prompt whose response cannot be used is retried (`--max-retries`); one
+that still fails is dropped, and the run finishes with exit status 4, a
+list of the dropped prompts and the number of entries they held, and no
+`processed_pages.json`, since those pages were not all processed. Re-running
+only re-asks the dropped prompts. If every prompt fails, the run stops with
+an error instead, since that means the API, the local server or the model
+name is the problem. The sentence-generation step below reports dropped
+requests the same way.
+
 Things to know:
 
 - **Skip list**: `input/book_skip_list.json` (see the README for the DSL)

@@ -4,6 +4,8 @@ import random
 from collections.abc import AsyncIterator, Iterable, Mapping, Sequence
 from typing import Any, Protocol
 
+import attrs
+
 from . import _types as types
 from . import caches, prompts, runner
 from .backends import base
@@ -16,6 +18,14 @@ class PromptHandler(Protocol):
     def make_prompt(self, words: Sequence[types.Word]) -> str: ...
 
 
+@attrs.frozen
+class DroppedWords:
+    """Words whose request got no usable answer after its last retry."""
+
+    words: Sequence[types.Word]
+    reason: str
+
+
 async def generate_sentences(
     query_runner: runner.QueryRunner,
     words: Sequence[types.Word],
@@ -24,8 +34,11 @@ async def generate_sentences(
     model_name: str,
     words_per_prompt: int | None = None,
     max_invalid_output_retries: int = 0,
-) -> AsyncIterator[types.Word]:
+) -> AsyncIterator[types.Word | DroppedWords]:
     """Ask the model for example sentences, yielding words as they are filled.
+
+    A request the runner gives up on is yielded as :class:`DroppedWords`, so
+    that the caller can report which words got no sentences.
 
     :param model_name: Recorded as the source of each generated sentence.
     :param words_per_prompt: Defaults to what the runner's backend suggests.
@@ -54,6 +67,7 @@ async def generate_sentences(
         describe=describe,
     ):
         if isinstance(outcome, runner.Skipped):
+            yield DroppedWords(requests[outcome.request], outcome.reason)
             continue
         request, parsed = outcome.request, outcome.value
         parsed_with_sources = [
