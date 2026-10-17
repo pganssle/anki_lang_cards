@@ -392,14 +392,16 @@ class AnkiConnectClient:
 
         return dict(zip(card_ids, result, strict=True))
 
-    async def unsuspend_cards(self, card_ids: Sequence[CardId]) -> bool:
+    async def unsuspend_cards(self, card_ids: Sequence[CardId]) -> None:
         data = {
             "action": "unsuspend",
             "version": AC_VERSION,
             "params": {"cards": list(card_ids)},
         }
         result = await self._post(data=data)
-        return self._unwrap_result(result)
+        # The real ``unsuspend`` action returns null, so there is nothing to
+        # hand back; unwrapping is only for the error check.
+        self._unwrap_result(result)
 
     async def delete_notes(self, note_ids: Sequence[NoteId]) -> None:
         data = {

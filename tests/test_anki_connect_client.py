@@ -37,7 +37,7 @@ class _FakeSession:
         assert isinstance(cards, list), cards
         assert all(isinstance(card, int) for card in cards), cards
         assert set(cards) <= self.known_cards, cards
-        yield _FakeResponse({"result": True, "error": None})
+        yield _FakeResponse({"result": None, "error": None})
 
 
 def test_unsuspend_cards_sends_flat_card_list() -> None:
@@ -45,7 +45,7 @@ def test_unsuspend_cards_sends_flat_card_list() -> None:
     client = anki_import.AnkiConnectClient(session)  # type: ignore[arg-type]
     card_ids = (anki_import.CardId(5000), anki_import.CardId(5001))
 
-    assert asyncio.run(client.unsuspend_cards(card_ids)) is True
+    assert asyncio.run(client.unsuspend_cards(card_ids)) is None
     assert [request["params"] for request in session.requests] == [
         {"cards": [5000, 5001]}
     ]
