@@ -928,6 +928,40 @@ class TestRankValidation:
         assert set(outcome.words) == set(deck)
         assert [set(c.words) for c in outcome.unresolved] == [set(deck[:2])]
 
+    def test_identical_notes_merge_despite_a_stale_bad_decision(
+        self, comparer, decisions, deck
+    ) -> None:
+        """A refused decision must not strand a group the flow never asks about.
+
+        The decision was recorded when the notes still differed and carries a
+        rank from outside the group; the notes have since been edited into
+        agreement. Refusing it would leave the group unresolved forever, since
+        an identical group is never re-asked, so the decision is ignored and
+        the notes combine mechanically.
+        """
+        decide(
+            decisions,
+            deck[:2],
+            triage.Disposition.MERGE,
+            replacements=[make_word("gato", "nm", "cat, tomcat", 300)],
+        )
+        identical = (
+            make_word("gato", "nm", "cat", 100),
+            make_word("gato", "nm", "cat", 200),
+            deck[2],
+        )
+
+        outcome = apply_merges.apply_decisions(identical, decisions, comparer)
+
+        (merge,) = outcome.merges
+        assert merge.decided is False
+        assert merge.result.rank == 100
+        assert merge.result.meaning == "cat"
+        assert outcome.unresolved == ()
+        assert [w.rank for w in apply_merges.superseded_notes(outcome, identical)] == [
+            200
+        ]
+
     def test_split_cards_may_reassign_the_groups_ranks(
         self, comparer, decisions, deck
     ) -> None:

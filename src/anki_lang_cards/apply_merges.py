@@ -342,10 +342,12 @@ def apply_decisions(
     again, because a merge can bring a note into contact with one it did not
     previously touch.
 
-    Groups whose notes are identical are combined outright: there is only one
-    thing they can say. Every other group goes to `resolver` to have its
-    wording settled, and without one they are combined mechanically, which is
-    only appropriate when nobody is going to read the result.
+    Groups whose notes are identical are combined outright, whatever decision
+    may have been recorded about them: there is only one thing they can say,
+    and the flow does not ask about them. Every other group goes to `resolver`
+    to have its wording settled, and without one they are combined
+    mechanically, which is only appropriate when nobody is going to read the
+    result.
 
     A merge or split whose ranks fail `rank_problem` is not carried out; the
     group is reported as unresolved so the question is asked again.
@@ -375,6 +377,24 @@ def apply_decisions(
             # same note appears in a within-group candidate and a between-group
             # one — and merging both in a round would use a stale copy.
             if any(id(word) in consumed for word in candidate.words):
+                continue
+
+            if _identical(candidate.words):
+                # Nothing is left to decide, so no decision is consulted: one
+                # recorded before the notes were edited into agreement may
+                # carry stale wording or a bad rank, and the flow never asks
+                # about an identical group, so refusing it here would leave the
+                # group stuck rather than re-asked.
+                aligned, dropped = align_headwords(candidate.words)
+                consumed.update(id(word) for word in candidate.words)
+                round_merges.append(
+                    Merge(
+                        result=conflict_resolver.auto_merge_words(aligned),
+                        sources=tuple(candidate.words),
+                        decided=False,
+                        dropped_headwords=dropped,
+                    )
+                )
                 continue
 
             ranks = frozenset(w.rank for w in candidate.words if w.rank is not None)
@@ -407,13 +427,10 @@ def apply_decisions(
                 )
                 continue
 
-            decided = decision is not None and (
-                decision.disposition is triage.Disposition.MERGE
-            )
-            identical = _identical(candidate.words)
-            if not decided and not identical:
-                if decision is None:
-                    leftover.append(candidate)
+            if decision is None:
+                leftover.append(candidate)
+                continue
+            if decision.disposition is not triage.Disposition.MERGE:
                 continue
 
             aligned, dropped = align_headwords(candidate.words)
@@ -430,15 +447,6 @@ def apply_decisions(
                                 w.word for w in candidate.words if w.word != stored.word
                             )
                         ),
-                    )
-                )
-            elif identical:
-                round_merges.append(
-                    Merge(
-                        result=conflict_resolver.auto_merge_words(aligned),
-                        sources=tuple(candidate.words),
-                        decided=False,
-                        dropped_headwords=dropped,
                     )
                 )
             else:
