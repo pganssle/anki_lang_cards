@@ -181,11 +181,17 @@ class QueryRunner:
             yield outcome
 
     def _cache(self, request: base.Request, response: caches.ResponseData) -> None:
+        # A backend may answer some requests of a batch run outside the batch
+        # (the warm-up, for one), and says so in the response.
+        details = response["usage"].get("details") or {}
         self.cacher.cache_result(
             request.prompt,
             response,
             system_prompt=request.system_prompt,
-            query_params={**self.backend.query_params(), "batch": self.batch},
+            query_params={
+                **self.backend.query_params(),
+                "batch": bool(details.get("batch", self.batch)),
+            },
         )
 
 

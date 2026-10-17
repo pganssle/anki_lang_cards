@@ -312,11 +312,16 @@ class FakeBackend:
         *,
         max_concurrency: int | None = None,
         batch_failures: Mapping[str, str] | None = None,
+        details: Mapping[str, Mapping[str, object]] | None = None,
     ):
+        """
+        :param details: Usage details to attach to the replies to a prompt.
+        """
         self.model_name = "fake-model"
         self.max_concurrency = max_concurrency
         self.replies = dict(replies or {})
         self.batch_failures = dict(batch_failures or {})
+        self.details = dict(details or {})
         self.queried: list[str] = []
         self.resumed: list[Mapping[str, frozenset[str]]] = []
         self.entered = False
@@ -339,7 +344,10 @@ class FakeBackend:
             self.replies[request.prompt] = script[1:]
         if isinstance(reply, Exception):
             raise reply
-        return _response(reply)
+        response = _response(reply)
+        if request.prompt in self.details:
+            response["usage"]["details"] = self.details[request.prompt]
+        return response
 
     async def query(self, request: base.Request) -> caches.ResponseData:
         return self._reply(request)
@@ -427,6 +435,22 @@ def test_runner_caches_responses(tmp_path: pathlib.Path, batch: bool) -> None:
     assert cached is not None
     assert cached["input"]["system_prompt"] == "sys"
     assert cached["input"]["query_params"] == {"fake": True, "batch": batch}
+
+
+def test_runner_stamps_batch_from_the_response(tmp_path: pathlib.Path) -> None:
+    """A response the backend says it answered outside the batch is recorded
+    that way, so the usage report prices it right."""
+    backend = FakeBackend(details={"uno": {"batch": False}})
+    query_runner = runner.QueryRunner(backend, _cacher(tmp_path), batch=True)
+
+    _run(query_runner, REQUESTS)
+
+    uno = query_runner.cacher.load_from_cache("uno", system_prompt="sys")
+    dos = query_runner.cacher.load_from_cache("dos", system_prompt="sys")
+    assert uno is not None
+    assert dos is not None
+    assert uno["input"]["query_params"]["batch"] is False
+    assert dos["input"]["query_params"]["batch"] is True
 
 
 def test_runner_deduplicates_requests(tmp_path: pathlib.Path) -> None:
