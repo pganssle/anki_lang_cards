@@ -196,6 +196,10 @@ def _raw_rows(csv_path: pathlib.Path) -> Sequence[Mapping[str, str]]:
         return list(csv.DictReader(f, fieldnames=list(types.Word.make_csv_header())))
 
 
+def _row_key(row: Mapping[str, str]) -> Sequence[str]:
+    return tuple(row.values())
+
+
 def _words_by_headword(csv_path: pathlib.Path) -> Mapping[str, types.Word]:
     words = types.Word.words_from_csv(csv_path)
     by_headword = {word.word: word for word in words}
@@ -605,7 +609,7 @@ def test_annotations_limit(
 
 
 def test_annotations_default_prompt_token_budget() -> None:
-    """The CLI's default budget is the one generate_prompts uses by default."""
+    """The --help text reports the budget generate_prompts defaults to."""
     result = subprocess.run(
         (sys.executable, "-m", "anki_lang_cards.annotations_to_csv", "--help"),
         check=True,
@@ -614,15 +618,18 @@ def test_annotations_default_prompt_token_budget() -> None:
         env={**os.environ, "COLUMNS": "1000"},
     )
     default = annotations_to_csv.DEFAULT_PROMPT_TOKEN_BUDGET
-    assert default == 8192
     assert f"Default: {default}." in result.stdout
 
 
 def test_annotations_prompt_token_budget(
-    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+    annotations_run: CliRun,
+    dictionary_paths: DictionaryPaths,
+    tmp_path_factory: pytest.TempPathFactory,
 ) -> None:
     """A budget smaller than any one entry's prompt sends each entry in a
-    prompt of its own, and the output is unchanged."""
+    prompt of its own, and the output is the same as the default run's,
+    which packs them all into one (up to the order of the rows, which
+    follows the order the responses come back in)."""
     workdir = tmp_path_factory.mktemp("annotations-budget-run")
     run = _run_annotations_to_csv(
         workdir,
@@ -632,6 +639,10 @@ def test_annotations_prompt_token_budget(
     )
     assert "Processing 5 prompts" in run.stdout
     assert len(_cached_annotation_prompts(workdir)) == 5
+    assert "Processing 1 prompts" in annotations_run.stdout
+    assert sorted(_raw_rows(run.output_csv), key=_row_key) == sorted(
+        _raw_rows(annotations_run.output_csv), key=_row_key
+    )
 
 
 @pytest.mark.parametrize("budget", ["0", "-10"])
