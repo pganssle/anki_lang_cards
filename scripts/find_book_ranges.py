@@ -77,16 +77,19 @@ def filter_csv(input_path, output_path, filter_spec, all_books):
     print(f"\nFiltering entries for book: {target_title}")
     print(f"Excluding pages {start_page}-{end_page}\n")
 
-    lines_to_keep = []
     total_lines = 0
     filtered_lines = 0
 
     with open(input_path, mode="r", encoding="utf-8") as f:
-        bad_lines = []
         reader = csv.DictReader(f)
 
-        # Iterate through both: raw lines and parsed rows
-        line_start = reader.line_num
+        # Reading fieldnames consumes the header, so line_num counts from the
+        # first data row. A quoted field may span several physical lines, so
+        # each row covers the lines from the end of the previous row up to the
+        # current line_num; record every physical line of an excluded row.
+        _ = reader.fieldnames
+        excluded_lines = set()
+        row_start = reader.line_num
         for row in reader:
             total_lines += 1
 
@@ -108,46 +111,12 @@ def filter_csv(input_path, output_path, filter_spec, all_books):
                     pass
 
             if should_exclude:
-                if bad_lines and bad_lines[-1][-1] == line_start - 1:
-                    bad_lines[-1][-1] == reader.line_num
-                else:
-                    bad_lines.append([line_start - 1, reader.line_num])
+                excluded_lines.update(range(row_start, reader.line_num))
                 filtered_lines += 1
-            line_start = reader.line_num + 1
+            row_start = reader.line_num
 
         f.seek(0)
-        lines_to_keep = []
-        bad_lines_iter = iter(bad_lines)
-        next_bad_line = None
-        next_good_line = None
-
-        current_line_bad = False
-
-        def _update_state():
-            nonlocal next_bad_line
-            nonlocal next_good_line
-            next_bad_lines = next(bad_lines_iter, None)
-            if next_bad_lines is not None:
-                if len(next_bad_lines) == 1:
-                    next_bad_line = next_bad_lines[0]
-                    next_good_line = None
-                else:
-                    next_bad_line, next_good_line = next_bad_lines
-
-        _update_state()
-        for ii, line in enumerate(f):
-            if current_line_bad:
-                if next_good_line is None:
-                    break
-                if ii == next_good_line:
-                    current_line_bad = False
-                    _update_state()
-            else:
-                if ii == next_bad_line:
-                    current_line_bad = True
-
-            if not current_line_bad:
-                lines_to_keep.append(line)
+        lines_to_keep = [line for ii, line in enumerate(f) if ii not in excluded_lines]
 
     # Write all kept lines to output file
     with open(output_path, mode="w", encoding="utf-8") as f:
