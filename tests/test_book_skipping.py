@@ -1,9 +1,9 @@
 """Tests for filtering annotations with a book skip list."""
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 
@@ -31,29 +31,35 @@ def _book(title: str) -> types.CombinedBookAnnotations:
     )
 
 
-def _skip(tmp_path: Path, rules: Sequence[dict[str, Any]]) -> dict[str, Sequence[str]]:
+def _skip(
+    tmp_path: Path, rules: Sequence[Mapping[str, Any]]
+) -> Mapping[str, Sequence[str]]:
     skip_list = tmp_path / "skip.json"
     skip_list.write_text(json.dumps(rules))
     result = annotations_to_csv.handle_book_skipping(
         skip_list, [_book("Harry Potter"), _book("Otro libro")]
     )
     return {
-        book.book.title: [
+        book.book.title: tuple(
             highlight
             for annotation in book.annotations
             for highlight in annotation.highlights
-        ]
+        )
         for book in result
     }
 
 
-_ALL_WORDS = ["prólogo", "varita", "escoba", "gracias"]
+_ALL_WORDS: Final = ("prólogo", "varita", "escoba", "gracias")
 
 
 @pytest.mark.parametrize(
     ("rules", "expected"),
     [
-        pytest.param([], {"Harry Potter": _ALL_WORDS, "Otro libro": _ALL_WORDS}),
+        pytest.param(
+            [],
+            {"Harry Potter": _ALL_WORDS, "Otro libro": _ALL_WORDS},
+            id="no-rules",
+        ),
         pytest.param(
             [{"title": "Harry Potter"}],
             {"Otro libro": _ALL_WORDS},
@@ -66,13 +72,40 @@ _ALL_WORDS = ["prólogo", "varita", "escoba", "gracias"]
                     "chapters": {"pattern": "Acknowledgements|Prologue"},
                 }
             ],
-            {"Harry Potter": ["varita", "escoba"], "Otro libro": _ALL_WORDS},
+            {"Harry Potter": ("varita", "escoba"), "Otro libro": _ALL_WORDS},
             id="chapters-only",
         ),
         pytest.param(
             [{"title": "Harry Potter", "page_numbers": [{"range": [5, 25]}]}],
-            {"Harry Potter": ["prólogo", "gracias"], "Otro libro": _ALL_WORDS},
+            {"Harry Potter": ("prólogo", "gracias"), "Otro libro": _ALL_WORDS},
             id="page-range",
+        ),
+        pytest.param(
+            [
+                {
+                    "title": "Harry Potter",
+                    "chapters": {"pattern": "Prologue"},
+                    "page_numbers": [30],
+                }
+            ],
+            {"Harry Potter": ("varita", "escoba"), "Otro libro": _ALL_WORDS},
+            id="chapters-and-pages",
+        ),
+        pytest.param(
+            [
+                {
+                    "title": "Harry Potter",
+                    "author": "Autora",
+                    "page_numbers": [1, {"range": [10, 20]}, 25],
+                }
+            ],
+            {"Harry Potter": ("gracias",), "Otro libro": _ALL_WORDS},
+            id="title-and-author",
+        ),
+        pytest.param(
+            [{"title": "Harry Potter", "author": "Otra autora"}],
+            {"Harry Potter": _ALL_WORDS, "Otro libro": _ALL_WORDS},
+            id="title-and-author-mismatch",
         ),
         pytest.param(
             [{"title": "Harry Potter", "chapters": {"pattern": ".*"}}],
@@ -83,7 +116,7 @@ _ALL_WORDS = ["prólogo", "varita", "escoba", "gracias"]
 )
 def test_handle_book_skipping(
     tmp_path: Path,
-    rules: Sequence[dict[str, Any]],
-    expected: dict[str, Sequence[str]],
+    rules: Sequence[Mapping[str, Any]],
+    expected: Mapping[str, Sequence[str]],
 ) -> None:
     assert _skip(tmp_path, rules) == expected
