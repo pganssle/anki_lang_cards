@@ -558,6 +558,22 @@ def test_load_anki_export_repairs_ampersands() -> None:
     assert ampersand.english == "Bread & wine."
 
 
+@pytest.mark.parametrize(
+    ("headword", "article"),
+    [
+        pytest.param("existente", "el", id="article"),
+        pytest.param("solitario", None, id="no-article"),
+    ],
+)
+def test_load_anki_export_keeps_article(headword: str, article: str | None) -> None:
+    """The Article field of a deck export is loaded, and an empty one is None."""
+    words = {
+        word.word: word
+        for word in anki_import.load_anki_words(CARDS_DIR / "exported_deck.txt")
+    }
+    assert words[headword].article == article
+
+
 def test_annotations_csv_has_no_header_by_default(annotations_run: CliRun) -> None:
     with annotations_run.output_csv.open(encoding="utf-8", newline="") as f:
         first_row = next(csv.reader(f))
@@ -857,7 +873,7 @@ def test_main_replays_a_recorded_answer_headlessly(
         word="existente",
         meaning="existing word",
         part_of_speech="nm",
-        article=None,
+        article="el",
         sentences=(),
     )
     incoming = types.Word(
