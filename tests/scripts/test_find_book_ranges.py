@@ -58,9 +58,9 @@ def _words(path: pathlib.Path) -> Sequence[str]:
                 ("dos", "Libro", 10),
                 ("tres", "Otro", 10),
                 ("cuatro", "Libro", 12),
-                ("cinco", "Libro", 13),
+                ("cinco", "Libro", 30),
             ],
-            ["uno", "tres"],
+            ["uno", "tres", "cinco"],
             id="separated",
         ),
         pytest.param(
