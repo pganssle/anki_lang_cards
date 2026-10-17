@@ -104,7 +104,8 @@ options:
   --exported-deck EXPORTED_DECK
                         Path to a text export of the deck.
   --diff-output DIFF_OUTPUT
-                        Path to output a CSV only including new and updated words.
+                        Path to output a CSV only including the words this run added or updated; removed when there
+                        are none, so a stale one is never left to import.
   --conflict-cache-path CONFLICT_CACHE_PATH
                         Legacy merge-wording cache, consulted for merges decided before decisions carried their
                         wording.
@@ -120,8 +121,8 @@ options:
                         duplicates are resolved. Groups still marked "review" stay unanswered and are written back to
                         the pending file.
   --superseded-output SUPERSEDED_OUTPUT
-                        Where to list existing notes a merge replaced, which importing cannot delete; written only
-                        when there are any.
+                        Where to list existing notes a merge replaced, which importing cannot delete; removed when
+                        there are none.
   --no-ui               Never open the duplicate-resolution screen; write unanswered groups to the pending file and
                         exit 3 instead.
   --deck-name DECK_NAME

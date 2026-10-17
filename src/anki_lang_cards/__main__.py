@@ -209,7 +209,9 @@ async def main():
         "--diff-output",
         type=pathlib.Path,
         default="output/diff_from_existing.csv",
-        help="Path to output a CSV only including new and updated words.",
+        help="Path to output a CSV only including the words this run added "
+        "or updated; removed when there are none, so a stale one is never "
+        "left to import.",
     )
 
     parser.add_argument(
@@ -256,7 +258,7 @@ async def main():
         type=pathlib.Path,
         default=pathlib.Path("output/superseded_notes.csv"),
         help="Where to list existing notes a merge replaced, which importing "
-        "cannot delete; written only when there are any.",
+        "cannot delete; removed when there are none.",
     )
 
     parser.add_argument(
