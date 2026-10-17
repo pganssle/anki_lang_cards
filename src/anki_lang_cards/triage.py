@@ -283,8 +283,10 @@ class DecisionCache:
     def save(self) -> None:
         if not self.cache_path.parent.exists():
             self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-        # Sort on the CSV text so the order is total: sorting the items
-        # directly falls through to comparing Decisions when two keys tie.
+        # Sort on the CSV text rather than on the keys: Word ordering ignores
+        # the part of speech, so keys differing only in, say, gender would tie
+        # and come out in insertion order, making the file order depend on
+        # the order the decisions were made in.
         entries = sorted(
             (
                 (words_to_csv(words), decision)

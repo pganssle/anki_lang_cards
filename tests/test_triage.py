@@ -554,8 +554,9 @@ class TestDecisionCache:
     def test_keys_that_sort_as_ties_are_both_saved(
         self, tmp_path: pathlib.Path
     ) -> None:
-        """These keys differ only in gender, which Word ordering ignores, so
-        they tie when sorted even though neither equals the other."""
+        """These keys differ only in gender, which Word ordering ignores but
+        equality does not, so they are distinct entries that must both survive
+        a round trip through the file."""
         cache = triage.DecisionCache(tmp_path / "decisions.json")
         other = make_word("cura", "n", "priest", rank=1)
         self.remember(
