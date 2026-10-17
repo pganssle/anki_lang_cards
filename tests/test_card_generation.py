@@ -533,6 +533,22 @@ def test_main_invalid_json_response_retried(
     assert "inocente" in words
 
 
+def test_main_bare_list_response_accepted(
+    dictionary_paths: DictionaryPaths, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """A model that cannot enforce the schema may answer with a bare list
+    instead of a ``{"words": [...]}`` object; the pipeline accepts it."""
+    run = _run_main(
+        tmp_path_factory.mktemp("barelist-run"),
+        CARDS_DIR / "words_barelist.csv",
+        dictionary_paths,
+    )
+    assert "Retrying" not in run.stdout
+    words = _words_by_headword(run.output_csv)
+    assert "barelistero" in words
+    assert "inocente" in words
+
+
 def test_load_anki_export_repairs_mangled_json() -> None:
     """load_anki_words repairs the &quot; damage in real deck exports."""
     words = {

@@ -12,6 +12,8 @@ Trigger words embedded in a highlight/term switch on specific misbehaviors
 so tests can exercise the error-handling paths:
 
 - ``fence``: the response is wrapped in a ```` ```json ```` fence.
+- ``barelist``: the response is a bare list of words rather than the
+  ``{"words": [...]}`` object the schema asks for.
 - ``badjson``: the first response to a given prompt is not JSON at all;
   subsequent identical prompts get a valid response.
 - ``badsource``: examples cite a ``source_id`` that does not exist.
@@ -176,7 +178,10 @@ def _generate_response(prompt_text: str) -> str:
     else:
         response = _respond_sentences(entries)
 
-    text = json.dumps({"words": response}, ensure_ascii=False, indent=2)
+    if any("barelist" in term for term in flat_terms):
+        text = json.dumps(response, ensure_ascii=False, indent=2)
+    else:
+        text = json.dumps({"words": response}, ensure_ascii=False, indent=2)
     if any("fence" in term for term in flat_terms):
         text = f"```json\n{text}\n```"
     return text
