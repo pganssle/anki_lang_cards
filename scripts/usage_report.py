@@ -64,8 +64,17 @@ PRICES: Final[Mapping[str, Price]] = {
 }
 
 
+ALIASES: Final[Mapping[str, str]] = {
+    # The `llm` library's names for models, from before the pipelines called
+    # the API directly; each is the one model of that version.
+    "claude-sonnet-4.5": "claude-sonnet-4-5",
+    "claude-3.7-sonnet-latest": "claude-3-7-sonnet-20250219",
+}
+
+
 def price_for(model: str) -> Price | None:
-    return PRICES.get(model.removeprefix("anthropic/"))
+    name = model.removeprefix("anthropic/")
+    return PRICES.get(ALIASES.get(name, name))
 
 
 @attrs.frozen

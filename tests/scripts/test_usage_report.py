@@ -159,6 +159,9 @@ def test_entry_cost(
         ("anthropic/claude-fable-5-1", (10.0, 50.0, 0.25)),
         ("anthropic/claude-opus-5-5", (4.0, 20.0, 0.20)),
         ("claude-3-5-sonnet-20241022", (3.0, 15.0, 0.3)),
+        # The llm library's spellings, as older runs recorded them.
+        ("claude-sonnet-4.5", (3.0, 15.0, 0.3)),
+        ("anthropic/claude-3.7-sonnet-latest", (3.0, 15.0, 0.3)),
     ],
 )
 def test_price_for(script, model: str, price: tuple[float, float, float]) -> None:
@@ -170,14 +173,14 @@ def test_cache_read_defaults_to_a_tenth_of_input(script) -> None:
 
 
 def test_unknown_model_is_not_priced(script, tmp_path: pathlib.Path) -> None:
-    write_entry(tmp_path, "a", model="claude-3.7-sonnet-latest")
+    write_entry(tmp_path, "a", model="claude-sonnet-9")
     write_entry(tmp_path, "b")
 
     loaded = script.load_entries(tmp_path)
     runs = script.group_runs(loaded.entries, datetime.timedelta(minutes=30))
     totals = script.Totals.of(loaded.entries)
 
-    unknown = next(run for run in runs if run.model == "claude-3.7-sonnet-latest")
+    unknown = next(run for run in runs if run.model == "claude-sonnet-9")
     assert unknown.totals().to_json()["cost"] is None
     assert totals.unpriced == 1
     assert totals.cost == pytest.approx((2 * 1000 + 10 * 100) / 1e6)
