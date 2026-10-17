@@ -65,7 +65,7 @@ max_tokens = 32000
                 batch=False,
                 prompt_caching=True,
             ),
-            config.AnthropicConfig(effort="medium", max_tokens=32000),
+            config.AnthropicConfig(effort=config.Effort.MEDIUM, max_tokens=32000),
         ),
         ("[models]\n", config.ModelsConfig(), None),
     ],
@@ -83,3 +83,28 @@ def test_models_config(
 
     assert conf.models == expected_models
     assert conf.anthropic == expected_anthropic
+
+
+@pytest.mark.parametrize("effort", [level.value for level in config.Effort])
+def test_anthropic_effort_levels(tmp_path: pathlib.Path, effort: str) -> None:
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(f'[anthropic]\neffort = "{effort}"\n', encoding="utf-8")
+
+    conf = config.Config.from_file(config_path)
+
+    assert conf.anthropic is not None
+    assert conf.anthropic.effort == config.Effort(effort)
+    # The level is sent to the API as its plain string.
+    assert conf.anthropic.effort == effort
+
+
+@pytest.mark.parametrize("effort", ["", "Low", "highest", "x-high"])
+def test_anthropic_effort_rejects_unknown_levels(
+    tmp_path: pathlib.Path, effort: str
+) -> None:
+    """A typo fails at config load, not as an API error mid-run."""
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(f'[anthropic]\neffort = "{effort}"\n', encoding="utf-8")
+
+    with pytest.raises(ValueError, match=rf"effort must be one of low, .*{effort!r}"):
+        config.Config.from_file(config_path)

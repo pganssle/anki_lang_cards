@@ -1,5 +1,6 @@
 """Config handler"""
 
+import enum
 import pathlib
 import tomllib
 from collections.abc import Mapping, Sequence
@@ -10,6 +11,26 @@ import attrs
 from . import _types as types
 
 
+class Effort(enum.StrEnum):
+    """The ``output_config.effort`` levels the Anthropic API accepts."""
+
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    XHIGH = "xhigh"
+    MAX = "max"
+
+
+def _effort(value: str) -> Effort:
+    try:
+        return Effort(value)
+    except ValueError:
+        choices = ", ".join(level.value for level in Effort)
+        raise ValueError(
+            f"[anthropic] effort must be one of {choices}, not {value!r}"
+        ) from None
+
+
 @attrs.frozen
 class AnthropicConfig:
     api_key: str | None = None
@@ -18,7 +39,9 @@ class AnthropicConfig:
     default_model: str | None = None
     """Deprecated in favor of ``[models] default_model``, which wins if set."""
 
-    effort: str | None = None
+    effort: Effort | None = attrs.field(
+        default=None, converter=attrs.converters.optional(_effort)
+    )
     """The ``output_config.effort`` level; unset leaves the model's default."""
 
     max_tokens: int | None = None

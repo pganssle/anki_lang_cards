@@ -82,7 +82,9 @@ def resolve(spec: str, service: str | None = None) -> ResolvedModel:
     """
     if service is None:
         prefix, slash, _ = spec.partition("/")
-        claimed = slash and prefix in backends.names() and _load(prefix).claims_prefix
+        claimed = (
+            bool(slash) and prefix in backends.names() and _load(prefix).claims_prefix
+        )
         service = prefix if claimed else backends.FALLBACK
 
     if _load(service).claims_prefix:
