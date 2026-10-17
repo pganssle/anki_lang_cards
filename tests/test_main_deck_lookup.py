@@ -13,15 +13,15 @@ import json
 import pathlib
 import sys
 from collections.abc import AsyncIterator, Mapping, Sequence
-from typing import Self
+from typing import Final, Self
 
 import pytest
 
 from anki_lang_cards import __main__ as main_module
 from anki_lang_cards import _types as types
-from anki_lang_cards import anki_import, model_selection
+from anki_lang_cards import anki_import, model_selection, triage
 
-DECK_NOTE = types.Word(
+DECK_NOTE: Final = types.Word(
     rank=500,
     word="mirón/ona",
     meaning="onlooker",
@@ -41,7 +41,10 @@ class FakeAnkiClient:
         *,
         cache: anki_import.NoteCache | None = None,
     ) -> Mapping[int, types.Word]:
-        # Exact spellings only: "mirón/a" is not "mirón/ona".
+        # The pipeline no longer calls this; it is here so that a regression
+        # to the exact-spelling search fails on the assertion below rather
+        # than with an AttributeError. Exact spellings only: "mirón/a" is not
+        # "mirón/ona".
         spellings = {word.word for word in words}
         return {1: DECK_NOTE} if DECK_NOTE.word in spellings else {}
 
@@ -54,12 +57,11 @@ class FakeAnkiClient:
     ) -> Mapping[int, types.Word]:
         return {1: DECK_NOTE}
 
-    async def find_highest_rank(self, deck_name: str, max_range: int) -> int:
-        return DECK_NOTE.rank or 0
-
 
 @contextlib.asynccontextmanager
-async def fake_create_client(*args: object, **kwargs: object) -> AsyncIterator:
+async def fake_create_client(
+    *args: object, **kwargs: object
+) -> AsyncIterator[FakeAnkiClient]:
     yield FakeAnkiClient()
 
 
@@ -116,6 +118,9 @@ def test_variant_spelling_in_deck_reaches_dedup(
             str(tmp_path / "conflicts.json"),
             "--pending-file",
             str(pending),
+            # Given a rank, the run has no reason to ask the deck for one.
+            "--start-rank-at",
+            "600",
         ],
     )
 
@@ -123,6 +128,9 @@ def test_variant_spelling_in_deck_reaches_dedup(
         asyncio.run(main_module.main())
 
     assert excinfo.value.code == main_module.EXIT_DECISIONS_NEEDED
-    # The deck note is one side of an unanswered duplicate group.
-    entries = json.loads(pending.read_text(encoding="utf-8"))
-    assert "mirón/ona" in json.dumps(entries, ensure_ascii=False)
+    # The deck note is one side of the single unanswered duplicate group.
+    (entry,) = json.loads(pending.read_text(encoding="utf-8"))
+    assert {w.word for w in triage.words_from_csv(entry["words"])} == {
+        "mirón/a",
+        "mirón/ona",
+    }
