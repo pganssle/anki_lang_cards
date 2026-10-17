@@ -286,6 +286,74 @@ def propose_merge(words: Sequence[types.Word]) -> types.Word | None:
         return None
 
 
+@attrs.frozen
+class RankProblem:
+    """A rank a merge or split would assign that cannot be carried out."""
+
+    position: int
+    """Index of the offending replacement, for an editor to point at."""
+
+    message: str
+
+
+def find_rank_problem(
+    disposition: triage.Disposition,
+    sources: Iterable[types.Word],
+    replacements: Sequence[types.Word],
+) -> RankProblem | None:
+    """What is wrong with the ranks a merge or split assigns, or None.
+
+    A rank is a note's identity on import: the row with rank 300 overwrites
+    note 300, whatever it says. A merge result or a split card may therefore
+    only keep a rank that one of its own sources had, or none at all — none
+    meaning the lowest for a merge and a new note for a split card. Anything
+    else is a typo that would silently overwrite an unrelated note. A split's
+    cards must also not share a rank, since two rows for one note leave only
+    one of them in the deck; the later of the two is the one reported.
+
+    Other dispositions do not create notes and are not checked.
+    """
+    if disposition not in (triage.Disposition.MERGE, triage.Disposition.SPLIT):
+        return None
+    allowed = sorted({word.rank for word in sources if word.rank is not None})
+    fix = (
+        f"use one of the group's ranks ({', '.join(map(str, allowed))}) or "
+        "leave it blank"
+        if allowed
+        else "leave it blank, since no note in the group has one"
+    )
+    what = "merged note" if disposition is triage.Disposition.MERGE else "card"
+    for position, word in enumerate(replacements):
+        if word.rank is not None and word.rank not in allowed:
+            return RankProblem(
+                position,
+                f"the {what}'s rank {word.rank} is not in the group; {fix}",
+            )
+    if disposition is triage.Disposition.SPLIT:
+        seen: set[int] = set()
+        for position, card in enumerate(replacements):
+            if card.rank is None:
+                continue
+            if card.rank in seen:
+                return RankProblem(
+                    position,
+                    f"split cards cannot share rank {card.rank}; give each card "
+                    "a different rank, or leave extra cards blank",
+                )
+            seen.add(card.rank)
+    return None
+
+
+def rank_problem(
+    disposition: triage.Disposition,
+    sources: Iterable[types.Word],
+    replacements: Sequence[types.Word],
+) -> str | None:
+    """The message from `find_rank_problem`, for callers that only report it."""
+    problem = find_rank_problem(disposition, sources, replacements)
+    return None if problem is None else problem.message
+
+
 def apply_decisions(
     words: Iterable[types.Word],
     decisions: triage.DecisionCache,
@@ -301,10 +369,16 @@ def apply_decisions(
     again, because a merge can bring a note into contact with one it did not
     previously touch.
 
-    Groups whose notes are identical are combined outright: there is only one
-    thing they can say. Every other group goes to `resolver` to have its
-    wording settled, and without one they are combined mechanically, which is
-    only appropriate when nobody is going to read the result.
+    Groups whose notes are identical are combined outright, whatever decision
+    may have been recorded about them: there is only one thing they can say,
+    and the flow does not ask about them. Every other group goes to `resolver`
+    to have its wording settled, and without one they are combined
+    mechanically, which is only appropriate when nobody is going to read the
+    result.
+
+    A merge or split whose ranks fail `rank_problem` is not carried out,
+    whether the ranks came from a decision or from the resolver; the group is
+    reported as unresolved so the question is asked again.
     """
     by_rank = _decisions_by_rank(decisions)
     current, revised = _apply_revisions(tuple(words), decisions)
@@ -333,8 +407,39 @@ def apply_decisions(
             if any(id(word) in consumed for word in candidate.words):
                 continue
 
+            if _identical(candidate.words):
+                # Nothing is left to decide, so no decision is consulted: one
+                # recorded before the notes were edited into agreement may
+                # carry stale wording or a bad rank, and the flow never asks
+                # about an identical group, so refusing it here would leave the
+                # group stuck rather than re-asked.
+                aligned, dropped = align_headwords(candidate.words)
+                consumed.update(id(word) for word in candidate.words)
+                round_merges.append(
+                    Merge(
+                        result=conflict_resolver.auto_merge_words(aligned),
+                        sources=tuple(candidate.words),
+                        decided=False,
+                        dropped_headwords=dropped,
+                    )
+                )
+                continue
+
             ranks = frozenset(w.rank for w in candidate.words if w.rank is not None)
             decision = by_rank.get(ranks) or decisions.get(candidate.words)
+
+            if (
+                decision is not None
+                and decision.replacements is not None
+                and rank_problem(
+                    decision.disposition, candidate.words, decision.replacements
+                )
+                is not None
+            ):
+                # Carrying this out would overwrite or lose a note, so the
+                # group goes back to be answered again rather than guessed at.
+                leftover.append(candidate)
+                continue
 
             if (
                 decision is not None
@@ -350,13 +455,10 @@ def apply_decisions(
                 )
                 continue
 
-            decided = decision is not None and (
-                decision.disposition is triage.Disposition.MERGE
-            )
-            identical = _identical(candidate.words)
-            if not decided and not identical:
-                if decision is None:
-                    leftover.append(candidate)
+            if decision is None:
+                leftover.append(candidate)
+                continue
+            if decision.disposition is not triage.Disposition.MERGE:
                 continue
 
             aligned, dropped = align_headwords(candidate.words)
@@ -375,15 +477,6 @@ def apply_decisions(
                         ),
                     )
                 )
-            elif identical:
-                round_merges.append(
-                    Merge(
-                        result=conflict_resolver.auto_merge_words(aligned),
-                        sources=tuple(candidate.words),
-                        decided=False,
-                        dropped_headwords=dropped,
-                    )
-                )
             else:
                 pending.append((candidate, aligned, dropped))
 
@@ -398,6 +491,16 @@ def apply_decisions(
             for (candidate, _, dropped), result in zip(pending, results, strict=True):
                 if result is None:
                     declined.append(candidate)
+                    consumed.difference_update(id(w) for w in candidate.words)
+                    continue
+                if (
+                    rank_problem(triage.Disposition.MERGE, candidate.words, (result,))
+                    is not None
+                ):
+                    # The resolver replays wording recorded elsewhere, and a
+                    # rank from there is no more trustworthy than one in a
+                    # decision: refuse it the same way.
+                    leftover.append(candidate)
                     consumed.difference_update(id(w) for w in candidate.words)
                     continue
                 round_merges.append(

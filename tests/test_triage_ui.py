@@ -916,12 +916,32 @@ class TestMergedNoteEditor:
 
     def test_an_explicit_rank_edit_is_kept(self) -> None:
         async def act(app, pilot):
-            app.screen.query_one("#rank", Input).value = "7"
+            app.screen.query_one("#rank", Input).value = "2"
             await pilot.press("ctrl+s")
             await pilot.pause()
 
         resolved = run(self._run_editor([make_candidate()], act, "a"))
-        assert resolved[0].replacements[0].rank == 7
+        assert resolved[0].replacements[0].rank == 2
+
+    def test_a_rank_outside_the_group_is_rejected(self) -> None:
+        """A typo in the rank would overwrite an unrelated note on import."""
+
+        async def act(app, pilot):
+            heard: list[str] = []
+            app.notify = lambda message, **_: heard.append(message)
+            app.screen.query_one("#rank", Input).value = "7"
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+            assert isinstance(app.screen, triage_ui.MergedNoteEditor)
+            assert heard == [
+                "The merged note's rank 7 is not in the group; use one of "
+                "the group's ranks (1, 2) or leave it blank"
+            ]
+            await pilot.press("ctrl+x")
+            await pilot.pause()
+
+        resolved = run(self._run_editor([make_candidate()], act, "a"))
+        assert resolved[0].replacements[0].rank == 1
 
     def test_pull_copies_the_focused_field_from_a_numbered_note(self) -> None:
         async def act(app, pilot):
@@ -1038,6 +1058,63 @@ class TestSplitEditor:
                 await pilot.press("ctrl+s")
                 await pilot.pause()
                 assert isinstance(app.screen, triage_ui.SplitEditor)
+                await pilot.press("ctrl+x")
+                await pilot.pause()
+                await pilot.press("q")
+                await pilot.pause()
+            return app.return_value
+
+        resolved = run(scenario())
+        assert resolved[0].disposition is triage.Disposition.REVIEW
+
+    @pytest.mark.parametrize(
+        ("ranks", "message", "focused"),
+        [
+            pytest.param(
+                ("1", "1"),
+                "Split cards cannot share rank 1; give each card a different "
+                "rank, or leave extra cards blank",
+                "rank-1",
+                id="shared",
+            ),
+            pytest.param(
+                ("1", "7"),
+                "The card's rank 7 is not in the group; use one of the "
+                "group's ranks (1, 2) or leave it blank",
+                "rank-1",
+                id="unrelated",
+            ),
+            pytest.param(
+                ("7", "1"),
+                "The card's rank 7 is not in the group; use one of the "
+                "group's ranks (1, 2) or leave it blank",
+                "rank-0",
+                id="unrelated-first-card",
+            ),
+        ],
+    )
+    def test_bad_ranks_keep_the_editor_open(
+        self, ranks: tuple[str, str], message: str, focused: str
+    ) -> None:
+        """The editor stays up, says what is wrong and points at the rank."""
+
+        async def scenario() -> Sequence[triage.Candidate]:
+            app = triage_ui.TriageApp([colliding_candidate()])
+            async with app.run_test(size=(160, 60)) as pilot:
+                await pilot.press("s")
+                await pilot.pause()
+                await pilot.press("enter")
+                await pilot.pause()
+                heard: list[str] = []
+                app.notify = lambda message, **_: heard.append(message)
+                for index, rank in enumerate(ranks):
+                    app.screen.query_one(f"#rank-{index}", Input).value = rank
+                await pilot.press("ctrl+s")
+                await pilot.pause()
+                assert isinstance(app.screen, triage_ui.SplitEditor)
+                assert heard == [message]
+                assert app.screen.focused is not None
+                assert app.screen.focused.id == focused
                 await pilot.press("ctrl+x")
                 await pilot.pause()
                 await pilot.press("q")
