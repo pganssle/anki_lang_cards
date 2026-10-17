@@ -4,6 +4,7 @@ It talks to TGW's OpenAI-style completions API. Model specs written
 ``tgw/<model>`` go here.
 """
 
+import http
 import urllib.parse
 from collections.abc import Mapping
 from typing import Any, ClassVar, Final, Self
@@ -23,13 +24,22 @@ def _backoff_logger(details: Mapping[str, Any]) -> None:
     )
 
 
-MAX_TRIES: Final[int] = 5
-"""Attempts per query before an HTTP error is passed on to the runner."""
+_MAX_TRIES: Final[int] = 8
+"""Attempts per query before the HTTP error is raised out of :meth:`query`."""
 
-_RETRYABLE_CLIENT_STATUSES: Final[frozenset[int]] = frozenset({408, 429})
+_MAX_TIME: Final[float] = 120.0
+"""Seconds of retrying per query before the HTTP error is raised.
+
+A local server can be busy reloading a model for a while, so this is well
+beyond what the exponential waits alone would allow.
+"""
+
+_RETRYABLE_CLIENT_STATUSES: Final[frozenset[int]] = frozenset(
+    {http.HTTPStatus.REQUEST_TIMEOUT, http.HTTPStatus.TOO_MANY_REQUESTS}
+)
 
 
-def gives_up(error: Exception) -> bool:
+def _gives_up(error: Exception) -> bool:
     """Whether an HTTP error is not worth retrying.
 
     A 4xx means the request itself is wrong, so sending it again cannot
@@ -37,7 +47,9 @@ def gives_up(error: Exception) -> bool:
     """
     return (
         isinstance(error, aiohttp.ClientResponseError)
-        and 400 <= error.status < 500
+        and http.HTTPStatus.BAD_REQUEST
+        <= error.status
+        < http.HTTPStatus.INTERNAL_SERVER_ERROR
         and error.status not in _RETRYABLE_CLIENT_STATUSES
     )
 
@@ -102,11 +114,21 @@ class TGWBackend:
     @backoff.on_exception(
         backoff.expo,
         aiohttp.ClientResponseError,
-        max_tries=MAX_TRIES,
-        giveup=gives_up,
+        max_tries=_MAX_TRIES,
+        max_time=_MAX_TIME,
+        giveup=_gives_up,
         on_backoff=[_backoff_logger],
     )
     async def query(self, request: base.Request) -> caches.ResponseData:
+        """Send one completion request and return its text and token usage.
+
+        Server-side (5xx) errors, timeouts and rate limiting are retried with
+        exponential backoff until ``_MAX_TRIES`` attempts or ``_MAX_TIME``
+        seconds, after which the ``aiohttp.ClientResponseError`` is raised.
+        Any other 4xx is raised at once, since resending the same request
+        cannot fix it. A response cut off at the token limit raises
+        :class:`base.IncompleteResponseError` instead of being returned.
+        """
         data = {"prompt": request.system_prompt + request.prompt, **self._params}
         async with self._session.post(
             self._endpoint("completions"), json=data
