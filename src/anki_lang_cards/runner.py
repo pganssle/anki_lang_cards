@@ -9,12 +9,15 @@ import asyncio
 import json
 import pathlib
 from collections.abc import AsyncIterator, Callable, Mapping, Sequence
-from typing import Self, cast
+from typing import Final, Self, cast
 
 import attrs
 
 from . import caches
 from .backends import base
+
+BATCH_JOURNAL_DIR: Final = "batch-jobs"
+"""The directory under a model's cache directory that holds its batch journal."""
 
 
 @attrs.frozen
@@ -94,7 +97,7 @@ class QueryRunner:
 
     @property
     def journal(self) -> BatchJournal:
-        return BatchJournal(self.cacher.cache_dir / "batch-jobs")
+        return BatchJournal(self.cacher.cache_dir / BATCH_JOURNAL_DIR)
 
     async def __aenter__(self) -> Self:
         await self.backend.__aenter__()

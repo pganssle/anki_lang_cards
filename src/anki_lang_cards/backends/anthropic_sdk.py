@@ -283,6 +283,21 @@ def _response_data(
             f"The response stopped early (stop_reason={message.stop_reason!r})."
         )
     usage = message.usage
+    details: dict[str, Any] = {
+        "cache_creation_input_tokens": usage.cache_creation_input_tokens,
+        "cache_read_input_tokens": usage.cache_read_input_tokens,
+        "batch": batch,
+        "message_id": message.id,
+    }
+    if usage.cache_creation is not None:
+        # Cache writes cost more for the longer lifetime, so the split is
+        # needed to price a run exactly.
+        details["cache_creation_5m_input_tokens"] = (
+            usage.cache_creation.ephemeral_5m_input_tokens
+        )
+        details["cache_creation_1h_input_tokens"] = (
+            usage.cache_creation.ephemeral_1h_input_tokens
+        )
     return {
         "text": "".join(
             block.text for block in message.content if block.type == "text"
@@ -290,11 +305,6 @@ def _response_data(
         "usage": {
             "input": usage.input_tokens,
             "output": usage.output_tokens,
-            "details": {
-                "cache_creation_input_tokens": usage.cache_creation_input_tokens,
-                "cache_read_input_tokens": usage.cache_read_input_tokens,
-                "batch": batch,
-                "message_id": message.id,
-            },
+            "details": details,
         },
     }

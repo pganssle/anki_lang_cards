@@ -27,6 +27,7 @@ def _message(
     *,
     stop_reason: str = "end_turn",
     thinking: bool = False,
+    cache_creation: Mapping[str, int] | None = None,
 ) -> Mapping[str, Any]:
     content: list[Mapping[str, Any]] = [{"type": "text", "text": text}]
     if thinking:
@@ -44,6 +45,7 @@ def _message(
             "output_tokens": 5,
             "cache_creation_input_tokens": 100,
             "cache_read_input_tokens": 0,
+            "cache_creation": cache_creation,
         },
     }
 
@@ -188,6 +190,37 @@ def test_query_sends_cached_system_prompt() -> None:
     assert response["usage"]["output"] == 5
     assert response["usage"]["details"]["cache_creation_input_tokens"] == 100
     assert response["usage"]["details"]["batch"] is False
+
+
+@pytest.mark.parametrize(
+    ("cache_creation", "expected"),
+    [
+        (
+            {"ephemeral_5m_input_tokens": 30, "ephemeral_1h_input_tokens": 70},
+            {
+                "cache_creation_5m_input_tokens": 30,
+                "cache_creation_1h_input_tokens": 70,
+            },
+        ),
+        (None, {}),
+    ],
+)
+def test_query_records_cache_write_lifetimes(
+    cache_creation: Mapping[str, int] | None, expected: Mapping[str, int]
+) -> None:
+    """Writes at the hour-long lifetime cost more, so the split is kept when
+    the API reports it."""
+    api = FakeAPI(message=_message(cache_creation=cache_creation))
+
+    details = _query(_backend(api), REQUEST)["usage"]["details"]
+
+    assert details == {
+        "cache_creation_input_tokens": 100,
+        "cache_read_input_tokens": 0,
+        "batch": False,
+        "message_id": "msg_1",
+        **expected,
+    }
 
 
 def test_query_options() -> None:
