@@ -91,3 +91,32 @@ def test_unsuspend_cards_raises_on_error() -> None:
 
     with pytest.raises(ValueError, match="unsupported action: unsuspend"):
         asyncio.run(client.unsuspend_cards(_card_ids(5000)))
+
+
+@pytest.mark.parametrize(
+    "card_ids",
+    [
+        pytest.param(_card_ids(5000, 5001, 5002), id="tuple"),
+        pytest.param(frozenset(_card_ids(5000, 5001, 5002)), id="frozenset"),
+    ],
+)
+def test_are_suspended_sends_flat_card_list(
+    card_ids: Sequence[anki_import.CardId],
+) -> None:
+    sent = list(card_ids)
+    suspended = {card_id: card_id != 5001 for card_id in sent}
+    session = _FakeSession({"areSuspended": [suspended[c] for c in sent]})
+    client = _client(session)
+
+    assert asyncio.run(client.are_suspended(card_ids)) == suspended
+    assert session.requests == [_Request("areSuspended", {"cards": sent})]
+    (request,) = session.requests
+    assert isinstance(request.params["cards"], list)
+
+
+def test_are_suspended_empty() -> None:
+    session = _FakeSession({"areSuspended": []})
+    client = _client(session)
+
+    assert asyncio.run(client.are_suspended(())) == {}
+    assert session.requests == [_Request("areSuspended", {"cards": []})]
