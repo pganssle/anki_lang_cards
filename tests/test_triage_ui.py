@@ -1068,25 +1068,36 @@ class TestSplitEditor:
         assert resolved[0].disposition is triage.Disposition.REVIEW
 
     @pytest.mark.parametrize(
-        ("ranks", "message"),
+        ("ranks", "message", "focused"),
         [
             pytest.param(
                 ("1", "1"),
                 "Split cards cannot share rank 1; give each card a different "
                 "rank, or leave extra cards blank",
+                "rank-1",
                 id="shared",
             ),
             pytest.param(
                 ("1", "7"),
                 "The card's rank 7 is not in the group; use one of the "
                 "group's ranks (1, 2) or leave it blank",
+                "rank-1",
                 id="unrelated",
+            ),
+            pytest.param(
+                ("7", "1"),
+                "The card's rank 7 is not in the group; use one of the "
+                "group's ranks (1, 2) or leave it blank",
+                "rank-0",
+                id="unrelated-first-card",
             ),
         ],
     )
     def test_bad_ranks_keep_the_editor_open(
-        self, ranks: tuple[str, str], message: str
+        self, ranks: tuple[str, str], message: str, focused: str
     ) -> None:
+        """The editor stays up, says what is wrong and points at the rank."""
+
         async def scenario() -> Sequence[triage.Candidate]:
             app = triage_ui.TriageApp([colliding_candidate()])
             async with app.run_test(size=(160, 60)) as pilot:
@@ -1102,6 +1113,8 @@ class TestSplitEditor:
                 await pilot.pause()
                 assert isinstance(app.screen, triage_ui.SplitEditor)
                 assert heard == [message]
+                assert app.screen.focused is not None
+                assert app.screen.focused.id == focused
                 await pilot.press("ctrl+x")
                 await pilot.pause()
                 await pilot.press("q")

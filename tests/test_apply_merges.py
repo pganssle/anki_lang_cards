@@ -1049,6 +1049,32 @@ def test_rank_problem(
     assert apply_merges.rank_problem(disposition, sources, replacements) == expected
 
 
+@pytest.mark.parametrize(
+    ("ranks", "position"),
+    [
+        pytest.param((7, 100), 0, id="unrelated-first"),
+        pytest.param((100, 200, 7), 2, id="unrelated-last"),
+        pytest.param((100, None, 100), 2, id="shared-points-at-the-repeat"),
+        pytest.param((100, 100, 7), 2, id="unrelated-before-shared"),
+    ],
+)
+def test_find_rank_problem_points_at_the_offending_card(
+    ranks: Sequence[int | None], position: int
+) -> None:
+    sources = (make_word("gato", "nm", "cat", 100), make_word("gato", "nm", "cat", 200))
+    replacements = tuple(make_word("gato", "nm", "cat", rank) for rank in ranks)
+
+    problem = apply_merges.find_rank_problem(
+        triage.Disposition.SPLIT, sources, replacements
+    )
+
+    assert problem is not None
+    assert problem.position == position
+    assert problem.message == apply_merges.rank_problem(
+        triage.Disposition.SPLIT, sources, replacements
+    )
+
+
 def test_rank_problem_when_the_group_has_no_ranks() -> None:
     sources = (make_word("gato", "nm", "cat", None),)
     replacements = (make_word("gato", "nm", "cat", 5),)

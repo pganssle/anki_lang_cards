@@ -141,6 +141,15 @@ def describe_source(citation: types.Citation | None) -> str:
 _shared_rank = apply_merges.shared_rank
 
 
+def _sentence_case(message: str) -> str:
+    """Upper-case the first letter only.
+
+    `str.capitalize` would also lower-case the rest, which is wrong for a
+    message that quotes a headword or a proper noun.
+    """
+    return message[:1].upper() + message[1:]
+
+
 def _sentence_block(sentence: types.Sentence, width: int) -> Sequence[str]:
     """One sentence as the lines it will actually occupy at a given width."""
     wrap = functools.partial(textwrap.wrap, width=max(width, 20))
@@ -513,7 +522,7 @@ class MergedNoteEditor(Screen):
             triage.Disposition.MERGE, self.sources, (revised,)
         )
         if problem is not None:
-            self.app.notify(problem.capitalize(), severity="warning", timeout=8)
+            self.app.notify(_sentence_case(problem), severity="warning", timeout=8)
             self.query_one("#rank", Input).focus()
             return
         self.dismiss(revised)
@@ -925,9 +934,14 @@ class SplitEditor(Screen):
                     f"Card {index + 1}: {error}", severity="error", timeout=8
                 )
                 return
-        problem = apply_merges.rank_problem(triage.Disposition.SPLIT, self.words, cards)
+        problem = apply_merges.find_rank_problem(
+            triage.Disposition.SPLIT, self.words, cards
+        )
         if problem is not None:
-            self.app.notify(problem.capitalize(), severity="warning", timeout=8)
+            self.app.notify(
+                _sentence_case(problem.message), severity="warning", timeout=8
+            )
+            self.query_one(f"#rank-{problem.position}", Input).focus()
             return
         self.dismiss(tuple(cards))
 

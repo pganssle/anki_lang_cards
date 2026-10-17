@@ -286,11 +286,21 @@ def propose_merge(words: Sequence[types.Word]) -> types.Word | None:
         return None
 
 
-def rank_problem(
+@attrs.frozen
+class RankProblem:
+    """A rank a merge or split would assign that cannot be carried out."""
+
+    position: int
+    """Index of the offending replacement, for an editor to point at."""
+
+    message: str
+
+
+def find_rank_problem(
     disposition: triage.Disposition,
     sources: Iterable[types.Word],
     replacements: Sequence[types.Word],
-) -> str | None:
+) -> RankProblem | None:
     """What is wrong with the ranks a merge or split assigns, or None.
 
     A rank is a note's identity on import: the row with rank 300 overwrites
@@ -299,7 +309,7 @@ def rank_problem(
     meaning the lowest for a merge and a new note for a split card. Anything
     else is a typo that would silently overwrite an unrelated note. A split's
     cards must also not share a rank, since two rows for one note leave only
-    one of them in the deck.
+    one of them in the deck; the later of the two is the one reported.
 
     Other dispositions do not create notes and are not checked.
     """
@@ -313,18 +323,35 @@ def rank_problem(
         else "leave it blank, since no note in the group has one"
     )
     what = "merged note" if disposition is triage.Disposition.MERGE else "card"
-    for word in replacements:
+    for position, word in enumerate(replacements):
         if word.rank is not None and word.rank not in allowed:
-            return f"the {what}'s rank {word.rank} is not in the group; {fix}"
-    if disposition is triage.Disposition.SPLIT:
-        ranks = [card.rank for card in replacements if card.rank is not None]
-        repeated = sorted({rank for rank in ranks if ranks.count(rank) > 1})
-        if repeated:
-            return (
-                f"split cards cannot share rank {repeated[0]}; give each card "
-                "a different rank, or leave extra cards blank"
+            return RankProblem(
+                position,
+                f"the {what}'s rank {word.rank} is not in the group; {fix}",
             )
+    if disposition is triage.Disposition.SPLIT:
+        seen: set[int] = set()
+        for position, card in enumerate(replacements):
+            if card.rank is None:
+                continue
+            if card.rank in seen:
+                return RankProblem(
+                    position,
+                    f"split cards cannot share rank {card.rank}; give each card "
+                    "a different rank, or leave extra cards blank",
+                )
+            seen.add(card.rank)
     return None
+
+
+def rank_problem(
+    disposition: triage.Disposition,
+    sources: Iterable[types.Word],
+    replacements: Sequence[types.Word],
+) -> str | None:
+    """The message from `find_rank_problem`, for callers that only report it."""
+    problem = find_rank_problem(disposition, sources, replacements)
+    return None if problem is None else problem.message
 
 
 def apply_decisions(
