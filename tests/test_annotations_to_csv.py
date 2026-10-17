@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -21,14 +22,14 @@ class FakeEngine:
 
     def __init__(
         self, entries: Mapping[str, Sequence[dictionary_entries.DictionaryEntry]]
-    ):
+    ) -> None:
         self.entries = entries
 
     def lookup(self, word: str) -> Sequence[dictionary_entries.DictionaryEntry]:
         return self.entries.get(word, ())
 
 
-ENGINE = FakeEngine(
+ENGINE: Final = FakeEngine(
     {
         "zanja": (_entry("zanja", "trench"),),
         "llama": (_entry("llama", "flame"),),
@@ -71,14 +72,14 @@ def test_every_highlight_gets_its_dictionary_entries(
     highlights: Sequence[str | types.HighlightWithNote],
 ) -> None:
     books = _book(highlights)
-    word_map = annotations_to_csv.lookup_words(ENGINE, books)  # type: ignore[arg-type]
+    word_map = annotations_to_csv.lookup_words(ENGINE, books)
     (prompt_input,) = annotations_to_csv.prepare_prompt_inputs(books, word_map)
     assert set(prompt_input.rag_entries) == {"zanja", "llama"}
 
 
 def test_highlights_without_entries_are_skipped() -> None:
     books = _book((types.HighlightWithNote(highlight="desconocida", note="K"), "zanja"))
-    word_map = annotations_to_csv.lookup_words(ENGINE, books)  # type: ignore[arg-type]
+    word_map = annotations_to_csv.lookup_words(ENGINE, books)
     assert set(word_map) == {"zanja"}
     (prompt_input,) = annotations_to_csv.prepare_prompt_inputs(books, word_map)
     assert set(prompt_input.rag_entries) == {"zanja"}

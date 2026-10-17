@@ -8,7 +8,7 @@ import json
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Literal, TypeAlias, TypedDict, cast
+from typing import Any, Literal, Protocol, TypeAlias, TypedDict, cast
 
 import attrs
 import tqdm
@@ -34,6 +34,12 @@ from ._types import (
 from .backends import base
 
 WordMap: TypeAlias = Mapping[str, Sequence[dictionary_entries.DictionaryEntry]]
+
+
+class DictionaryLookup(Protocol):
+    """The part of a dictionary engine that `lookup_words` needs."""
+
+    def lookup(self, word: str) -> Sequence[dictionary_entries.DictionaryEntry]: ...
 
 
 class AnnotationEntry(TypedDict):
@@ -105,7 +111,7 @@ def _highlight_text(highlight: str | HighlightWithNote) -> str:
 
 
 def lookup_words(
-    engine: dictionary_entries.DictionaryEngine,
+    engine: DictionaryLookup,
     combined_annotations: Sequence[CombinedBookAnnotations],
 ) -> Mapping[str, Sequence[dictionary_entries.DictionaryEntry]]:
     output: dict[str, Sequence[dictionary_entries.DictionaryEntry]] = {}
