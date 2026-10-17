@@ -198,11 +198,37 @@ def test_make_anki_directives() -> None:
     assert "#separator:Comma" in directives
     assert "#html:true" in directives
     assert "#deck:My::Deck" in directives
-    assert f"#tags column:{len(types.ANKI_NOTETYPE_FIELDS) + 1}" in directives
     columns = next(d for d in directives if d.startswith("#columns:"))
-    assert columns == "#columns:" + ",".join((*types.ANKI_NOTETYPE_FIELDS, "tags"))
+    assert columns == "#columns:" + ",".join(types.ANKI_IMPORT_COLUMNS)
 
     assert not any(d.startswith("#deck:") for d in types.Word.make_anki_directives())
+
+
+def test_anki_directives_leave_unwritten_fields_alone() -> None:
+    """Anki's importer overwrites every mapped field (and the tags, if a tags
+    column is set) of a note it updates, so a column that to_csv_line always
+    leaves empty must map onto nothing, or importing the diff wipes the
+    deck's Freq, Image, Note and tags."""
+    directives = types.Word.make_anki_directives("My::Deck")
+    columns = next(d for d in directives if d.startswith("#columns:"))
+    names = columns.removeprefix("#columns:").split(",")
+    tags_column = next(
+        int(d.removeprefix("#tags column:"))
+        for d in directives
+        if d.startswith("#tags column:")
+    )
+    # Every attribute of this word is populated, so its empty cells are the
+    # ones the pipeline never writes.
+    row = _nasty_word().to_csv_line(require_rank=True)
+    assert len(names) == len(row)
+
+    unwritten = {name for name, cell in zip(names, row, strict=True) if cell == ""}
+    written = {name for name, cell in zip(names, row, strict=True) if cell != ""}
+    assert unwritten.isdisjoint(types.ANKI_NOTETYPE_FIELDS)
+    assert written <= set(types.ANKI_NOTETYPE_FIELDS)
+    assert {"Freq", "Image", "Note"}.isdisjoint(names)
+    # 1-based; past the last column means no column is imported as tags.
+    assert tags_column > len(names)
 
 
 def test_words_from_csv_skips_anki_directives() -> None:

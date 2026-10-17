@@ -234,7 +234,9 @@ This part is still manual: in Anki, import `output/diff_from_existing.csv`
 into the deck (default deck name is `Spanish::Vocab by Frequency`). The
 first field is the rank, so Anki's default duplicate handling (match on
 first field) makes updated words overwrite the existing notes rather than
-creating duplicates.
+creating duplicates. Only the fields the pipeline writes are overwritten:
+the Freq, Image and Note fields and the note's tags are left as they are
+in the deck.
 
 The CSVs start with Anki file directives (`#separator:Comma`,
 `#html:true`, `#deck:...`, `#columns:...`) that configure the importer
