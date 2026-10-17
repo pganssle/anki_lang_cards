@@ -247,6 +247,53 @@ def test_make_anki_directives_import_is_faithful(
     assert "&#" not in fields["English"]
 
 
+def test_update_keeps_unmanaged_fields_and_tags(
+    collection, tmp_path: pathlib.Path
+) -> None:
+    """Updating an existing note through the generated directives leaves
+    the fields the pipeline never fills in (Freq, Image, Note) and the
+    note's tags alone, even though the CSV carries empty columns for them.
+
+    The #tags column: directive points one past the last column, which is
+    undocumented importer behaviour, so this guards against an anki bump
+    quietly going back to wiping tags.
+    """
+    seeded = {
+        "Rank": "1407",
+        "Word": "gato",
+        "Definition": "stale definition",
+        "Freq": "99",
+        "Image": '<img src="gato.png">',
+        "Note": "my note",
+    }
+    note = collection.new_note(collection.models.by_name("Spanish Vocab Test"))
+    for index, name in enumerate(NOTETYPE_FIELDS):
+        note.fields[index] = seeded.get(name, "")
+    note.tags = ["keep"]
+    collection.add_note(note, collection.decks.id("update"))
+
+    word = _nasty_word(rank=1407)
+    directives = "\n".join(
+        (*types.Word.make_anki_directives("update"), "#notetype:Spanish Vocab Test")
+    )
+    csv_path = tmp_path / "words.csv"
+    csv_path.write_text(
+        directives + "\n" + _word_csv([word], header=False), encoding="utf-8"
+    )
+
+    metadata = collection.get_csv_metadata(str(csv_path), None)
+    log = collection.import_csv(ImportCsvRequest(path=str(csv_path), metadata=metadata))
+    assert not log.log.new
+    assert len(log.log.first_field_match) == 1
+
+    updated = collection.get_note(note.id)
+    fields = dict(zip(NOTETYPE_FIELDS, updated.fields, strict=True))
+    assert fields["Definition"] == word.meaning
+    for name in ("Freq", "Image", "Note"):
+        assert fields[name] == seeded[name], f"field {name!r} blanked"
+    assert updated.tags == ["keep"]
+
+
 def test_reimport_is_idempotent(collection, tmp_path: pathlib.Path) -> None:
     """Importing the same file twice must not double-escape anything."""
     word = _nasty_word(rank=1405)
