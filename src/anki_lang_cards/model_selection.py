@@ -19,11 +19,13 @@ from .backends import base
 _FEATURE_DESCRIPTIONS: Final[Mapping[base.Feature, str]] = {
     base.Feature.BATCH: "Batching",
     base.Feature.PROMPT_CACHING: "Prompt caching",
+    base.Feature.STRUCTURED_OUTPUT: "Structured output",
 }
 
 _FEATURE_FLAGS: Final[Mapping[base.Feature, str]] = {
     base.Feature.BATCH: "batch",
     base.Feature.PROMPT_CACHING: "prompt-caching",
+    base.Feature.STRUCTURED_OUTPUT: "structured-output",
 }
 
 
@@ -176,6 +178,13 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         "where the backend supports it.",
     )
     group.add_argument(
+        "--structured-output",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Have the model's API enforce the response format, so responses "
+        "always parse. On by default where the model supports it.",
+    )
+    group.add_argument(
         "--max-simultaneous-queries",
         type=int,
         default=5,
@@ -233,8 +242,13 @@ def make_runner(
                 args.prompt_caching,
                 conf.models.prompt_caching,
             ),
+            _feature_request(
+                base.Feature.STRUCTURED_OUTPUT,
+                args.structured_output,
+                conf.models.structured_output,
+            ),
         ),
-        backend_class.features,
+        backend_class.supported_features(resolved.model_name),
         backend_description=(
             f"the {resolved.service} backend (model {resolved.model_name!r})"
         ),

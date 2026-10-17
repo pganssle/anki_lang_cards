@@ -4,7 +4,7 @@ interactions:
       (n)\\n  0. cat\\n  1. jack (for a car)\\n\\n\\nINPUT:\\n------\\n[\\n  {\\n
       \   \\\"highlights\\\": [\\n      \\\"gatos\\\"\\n    ],\\n    \\\"context\\\":
       \\\"Los gatos dorm\xEDan al sol mientras los ni\xF1os jugaban.\\\",\\n    \\\"source_id\\\":
-      3\\n  }\\n]\\n\\nOUTPUT:\\n-------\\n\"}],\"model\":\"claude-sonnet-5\",\"system\":[{\"type\":\"text\",\"text\":\"\\nYou
+      3\\n  }\\n]\\n\\nOUTPUT:\\n-------\\n\"}],\"model\":\"claude-sonnet-5\",\"output_config\":{\"format\":{\"type\":\"json_schema\",\"schema\":{\"type\":\"object\",\"properties\":{\"words\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"highlight\":{\"type\":\"string\"},\"headword\":{\"type\":\"string\"},\"part_of_speech\":{\"type\":\"string\"},\"meaning\":{\"type\":\"string\"},\"article\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"null\"}]},\"examples\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"spanish\":{\"type\":\"string\"},\"english\":{\"type\":\"string\"},\"source_id\":{\"type\":\"integer\"}},\"required\":[\"spanish\",\"english\",\"source_id\"],\"additionalProperties\":false}}},\"required\":[\"highlight\",\"headword\",\"part_of_speech\",\"meaning\",\"article\",\"examples\"],\"additionalProperties\":false}}},\"required\":[\"words\"],\"additionalProperties\":false}}},\"system\":[{\"type\":\"text\",\"text\":\"\\nYou
       are an expert Spanish teacher and lexicographer, whose speciality is designing
       excellent sample sentences that show off the range of uses of a given word in
       context.\\n\\nTASK:\\n-----\\n\\nI have a number of snippets of text in Spanish
@@ -53,27 +53,23 @@ interactions:
       sense of the\\nword when selecting sentences. In this example, only use meanings
       of \\\"fiambre\\\" that refer\\nto food, and the \\\"headword\\\" output should
       be \\\"fiambre (comida)\\\". The note should always be\\nin a single set of
-      parentheses after the headword.\\n\\nThe output format should also be JSON,
-      and be structured like so, as a list of JSON objects:\\n\\n```json\\n[\\n    {\\n
-      \     // Required fields for each dictionary entry\\n      \\\"highlight\\\":
-      \\\"string - the word as it appears in text\\\",\\n      \\\"headword\\\": \\\"string
-      - the dictionary form of the word\\\",\\n      \\\"part_of_speech\\\": \\\"string
-      - grammatical category (e.g., 'nf' for feminine noun)\\\",\\n      \\\"meaning\\\":
-      \\\"string - English translation\\\",\\n      \\\"article\\\": \\\"string -
-      Spanish article (la/el/los/las)\\\",\\n      \\\"examples\\\": [\\n        {\\n
-      \         \\\"spanish\\\": \\\"string - example sentence in Spanish\\\",\\n
-      \         \\\"english\\\": \\\"string - English translation of the example\\\"\\n
-      \         \\\"source_id\\\": \\\"int - The source_id value for the input word\\\"\\n
-      \       }\\n        // ... can have multiple examples\\n      ]\\n    }\\n    //
-      One entry for each unique highlighted word\\n]\\n```\\n\\nUse EXACTLY the format
-      above, do not try wrapping it in a top-level dictionary.\\nDo not include the
-      markdown (```json\\\"/\\\"```\\\") wrapper, I want to directly parse\\nthe output
-      as JSON.\\n\\nOnly populate \\\"article\\\" for nouns. Valid parts of speech
-      are:\\n\\nnm = masculine noun\\nnf = feminine noun\\nnm/f = masculine/feminine
-      noun (varies depending on the gender of the subject)\\nvtr = transitive verb\\nvi
-      = intransitive verb\\nv phr = verbal phrase\\nadv = adverb\\nadj = adjective\\nadj
-      mf = adjective using one form for both masculine and feminine\\ninterj = interjection\\nconj
-      = conjunction\\npron = prounoun\\nprep = preposition\\n\\nBACKGROUND:\\n-----------\\n\\nHere
+      parentheses after the headword.\\n\\nThe output should also be JSON: an object
+      whose \\\"words\\\" list holds one entry for each unique highlighted word, structured
+      like so:\\n\\n{\\\"words\\\": [\\n  {\\n    \\\"highlight\\\": \\\"the word
+      as it appears in the text\\\",\\n    \\\"headword\\\": \\\"the dictionary form
+      of the word\\\",\\n    \\\"part_of_speech\\\": \\\"grammatical category (e.g.
+      'nf' for a feminine noun)\\\",\\n    \\\"meaning\\\": \\\"English translation\\\",\\n
+      \   \\\"article\\\": \\\"Spanish article (el/la/los/las), or null\\\",\\n    \\\"examples\\\":
+      [\\n      {\\\"spanish\\\": \\\"example sentence in Spanish\\\", \\\"english\\\":
+      \\\"English translation of the example\\\", \\\"source_id\\\": <the integer
+      source_id of the input entry>}\\n    ]\\n  }\\n]}\\n\\nWrite the JSON compactly,
+      without indentation, and do not wrap it in a markdown code block: I want to
+      parse the output directly as JSON.\\n\\nOnly populate \\\"article\\\" for nouns.
+      Valid parts of speech are:\\n\\nnm = masculine noun\\nnf = feminine noun\\nnm/f
+      = masculine/feminine noun (varies depending on the gender of the subject)\\nvtr
+      = transitive verb\\nvi = intransitive verb\\nv phr = verbal phrase\\nadv = adverb\\nadj
+      = adjective\\nadj mf = adjective using one form for both masculine and feminine\\ninterj
+      = interjection\\nconj = conjunction\\npron = prounoun\\nprep = preposition\\n\\nBACKGROUND:\\n-----------\\n\\nHere
       are some potential dictionary headwords for highlighted words found in this
       text, along with entries from a Spanish-English dictionary corresponding to
       their meanings. The correct meaning in context may be one of these, or it may
@@ -88,7 +84,7 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '5937'
+      - '6394'
       content-type:
       - application/json
       host:
@@ -119,38 +115,34 @@ interactions:
     uri: https://api.anthropic.com/v1/messages
   response:
     body:
-      string: "{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011CftmAxzBAzDrf6WvYaDqS\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"\",\"signature\":\"EtIDCscCCBIYAipASNUo/qA7RbAOBtzYNt7sbYkGfbzLoD4cKW0Q+IjQRVGUu/0ffX7EepFKtwxlMZSIUdrMxjCTHpsw3ktZiTlSaTIPY2xhdWRlLXNvbm5ldC01OABCCHRoaW5raW5nWiQwYTk5M2IyZS1kNWZlLTRjYWItYjg0ZS0yMmEyY2JhNGVjNDKaAREKD2NsYXVkZS1zb25uZXQtNagBm6ip1gbCAT0IBRAAGg8BPYUC2ooDTzcFxhUEJq0gAjIEEnHPJToELV6Hm0IEODMjikoEODMjilAAWgTZBeFWYAJoAXAB2gFgChZwcmVmaXhfYmVmb3JlX2Jsb2NrX3YxEiBFxBYtLzZxn9gkwaQNF0JWfwBcC4UJb1I72PD6GX8LsSIAMiDCwBPIapyS4i+Wbz2GF3aPi3pEyQKtzAl7+h4JivtOH0gDEgx+LqpJNe3zZ4S8YwgaDN89Ha5H3y+Rnd6iNyIwxZ0BWjYPJ/hu2C8/RR1ZHorpqf7mxad1V1xWwUy8ei3J3zm5VDCw1qb38Fi2plnNKjg3gYAXgmAijY+3c5IH1/6ZUcnM/bB+L4DzBHnCCMmSXD1MmpNvBsOda3Y7hiNrtPNvcfe76bNejBgB\"},{\"type\":\"text\",\"text\":\"[\\n
-        \ {\\n    \\\"highlight\\\": \\\"gatos\\\",\\n    \\\"headword\\\": \\\"gato/a\\\",\\n
-        \   \\\"part_of_speech\\\": \\\"nm/f\\\",\\n    \\\"meaning\\\": \\\"cat\\\",\\n
-        \   \\\"article\\\": \\\"los\\\",\\n    \\\"examples\\\": [\\n      {\\n        \\\"spanish\\\":
-        \\\"Los gatos dorm\xEDan al sol mientras los ni\xF1os jugaban.\\\",\\n        \\\"english\\\":
-        \\\"The cats slept in the sun while the children played.\\\",\\n        \\\"source_id\\\":
-        3\\n      }\\n    ]\\n  }\\n]\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":111,\"cache_creation_input_tokens\":1733,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":1733,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":167,\"output_tokens_details\":{\"thinking_tokens\":19},\"service_tier\":\"standard\",\"inference_geo\":\"global\"},\"diagnostics\":null}"
+      string: "{\"model\":\"claude-sonnet-5\",\"id\":\"msg_011Cftpu1FNLLwfdxaWraGAh\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"words\\\":[{\\\"highlight\\\":\\\"gatos\\\",\\\"headword\\\":\\\"gato/a\\\",\\\"part_of_speech\\\":\\\"nm/f\\\",\\\"meaning\\\":\\\"cat\\\",\\\"article\\\":\\\"el\\\",\\\"examples\\\":[{\\\"spanish\\\":\\\"Los
+        gatos dorm\xEDan al sol mientras los ni\xF1os jugaban.\\\",\\\"english\\\":\\\"The
+        cats were sleeping in the sun while the children played.\\\",\\\"source_id\\\":3}]}]}\"}],\"container\":null,\"stop_reason\":\"end_turn\",\"stop_sequence\":null,\"stop_details\":null,\"usage\":{\"input_tokens\":111,\"cache_creation_input_tokens\":2205,\"cache_read_input_tokens\":0,\"cache_creation\":{\"ephemeral_5m_input_tokens\":2205,\"ephemeral_1h_input_tokens\":0},\"output_tokens\":118,\"output_tokens_details\":{\"thinking_tokens\":0},\"service_tier\":\"standard\",\"inference_geo\":\"global\"},\"diagnostics\":null}"
     headers:
       anthropic-ratelimit-input-tokens-limit:
       - '5000000'
       anthropic-ratelimit-input-tokens-remaining:
       - '4999000'
       anthropic-ratelimit-input-tokens-reset:
-      - '2026-10-10T15:04:59Z'
+      - '2026-10-10T15:53:51Z'
       anthropic-ratelimit-output-tokens-limit:
       - '1000000'
       anthropic-ratelimit-output-tokens-remaining:
       - '1000000'
       anthropic-ratelimit-output-tokens-reset:
-      - '2026-10-10T15:05:00Z'
+      - '2026-10-10T15:53:52Z'
       anthropic-ratelimit-requests-limit:
       - '5000'
       anthropic-ratelimit-requests-remaining:
       - '4999'
       anthropic-ratelimit-requests-reset:
-      - '2026-10-10T15:04:58Z'
+      - '2026-10-10T15:53:49Z'
       anthropic-ratelimit-tokens-limit:
       - '6000000'
       anthropic-ratelimit-tokens-remaining:
       - '5999000'
       anthropic-ratelimit-tokens-reset:
-      - '2026-10-10T15:04:59Z'
+      - '2026-10-10T15:53:51Z'
       anthropic-workspace-id:
       - wrkspc_01WEqvBaz9Q5fHQxmeEZdvdQ
       cf-cache-status:
@@ -158,21 +150,21 @@ interactions:
       connection:
       - keep-alive
       content-length:
-      - '1607'
+      - '841'
       content-security-policy:
       - default-src 'none'; frame-ancestors 'none'
       content-type:
       - application/json
       date:
-      - Sat, 10 Oct 2026 15:05:00 GMT
+      - Sat, 10 Oct 2026 15:53:52 GMT
       request-id:
-      - req_011CftmAxBK5YkTZ2jHw7HDX
+      - req_011CftptzYiCoHENwwr6Hg1p
       server:
       - cloudflare
       strict-transport-security:
       - max-age=31536000; includeSubDomains; preload
       traceresponse:
-      - 00-4a498a3e2c6b28be31aec19c56237c36-822af96b7c3cd200-01
+      - 00-7b322defcb69c2507d3a9fe46024b819-6671946ca22ad737-01
       transfer-encoding:
       - chunked
       vary:

@@ -1,5 +1,7 @@
 # ruff: noqa E501
-from typing import Final
+import json
+from collections.abc import Mapping, Sequence
+from typing import Any, Final
 
 SENTENCE_PROMPT: Final[str] = """\
 You are an expert Spanish teacher and lexicographer, whose specialty is designing excellent example sentences that show off the range of uses of a given word.
@@ -132,7 +134,7 @@ OUTPUT:
 --------------
 """
 
-MULTI_SENTENCE_SYSTEM_PROMPT: Final[str] = """\
+_MULTI_SENTENCE_SYSTEM_TEMPLATE: Final[str] = """\
 You are an expert Spanish teacher and lexicographer, whose specialty is designing excellent example sentences that show off the range of uses of a given word.
 
 I am going to give you valid JSON representing a list of mappings containing terms ("term") in Spanish and their meaning in English ("meaning"). For each term, I would like you to generate valid JSON containing 4 example sentences in idiomatic Spanish that use the term accompanied by a translation from the original Spanish into English; the example sentences should use the sense of the term that has the meaning specified by the English meaning. If multiple English meanings are provided, provide sentences that sample all the meanings. When the word is a verb, select different moods and tenses in the different sentences. The translations do not need to be word-for-word translations, it is more important that they capture the general spirit of the original Spanish.
@@ -149,128 +151,177 @@ In some of your example sentences, it would be a bonus if they contain useful or
 
 After you have come up with the example sentences, look over your work and see if you can make the original sentences more creative or interesting.
 
-Remember that you must include ONLY valid JSON, and nothing else. Do not explain your choices.
+Respond with a JSON object whose "words" list holds one entry per input term, in the order the terms were given, each with the "term" exactly as given and its "examples". Include ONLY the JSON, and nothing else: no markdown code block, and no explanation of your choices.
 
 Example:
 ========
 INPUT:
 ----------
-[
-    {
-        "term": "casa",
-        "part_of_speech": "nf",
-        "meaning": "house"
-    },
-    {
-        "term": "rebotar",
-        "part_of_speech": "vi",
-        "meaning": "bounce"
-    },
-    {
-        "term": "piso",
-        "part_of_speech": "nm",
-        "meaning": "apartment"
-    },
-    {
-        "term": "muñeca",
-        "part_of_speech": "nf",
-        "meaning": "doll, wrist"
-    }
-]
+%(example_input)s
 
 OUTPUT:
 --------------
-[
+%(example_output)s
+"""
+
+_MULTI_SENTENCE_EXAMPLE_INPUT: Final = (
+    {"term": "casa", "part_of_speech": "nf", "meaning": "house"},
+    {"term": "rebotar", "part_of_speech": "vi", "meaning": "bounce"},
+    {"term": "piso", "part_of_speech": "nm", "meaning": "apartment"},
+    {"term": "muñeca", "part_of_speech": "nf", "meaning": "doll, wrist"},
+)
+
+_MULTI_SENTENCE_EXAMPLE_OUTPUT: Final = (
     {
         "term": "casa",
-        "meaning": "house",
         "examples": [
             {
                 "spanish": "La casa de mi abuela está en el campo.",
-                "english": "My grandmother's house is in the country."
+                "english": "My grandmother's house is in the country.",
             },
             {
                 "spanish": "En la Edad Media, las casas se construían a menudo con bahareque, que consistía en revestir ramas y paja con arcilla, barro y estiércol.",
-                "english": "In the Middle Ages, houses were often made of wattle and daub, which involved plastering branches and straw with clay, mud and dung."
+                "english": "In the Middle Ages, houses were often made of wattle and daub, which involved plastering branches and straw with clay, mud and dung.",
             },
             {
                 "spanish": "Voy a limpiar mi casa este fin de semana.",
-                "english": "I am going to clean my house this weekend."
+                "english": "I am going to clean my house this weekend.",
             },
             {
                 "spanish": "Me gusta pasar tiempo en casa de mis padres.",
-                "english": "I like to spend time at my parents' house."
+                "english": "I like to spend time at my parents' house.",
             },
-        ]
-    },
-    {
-        "word": "piso",
-        "meaning": "apartment",
-        "examples": [
-            {
-                "spanish": "—Vivo en un piso en el centro de la ciudad —dijo María.",
-                "english": "\\"I live in an apartment in the city center,\\" said María."
-            },
-            {
-                "spanish": "El piso de mi hermano tiene tres dormitorios.",
-                "english": "My brother's apartment has three bedrooms."
-            },
-            {
-                "spanish": "Necesito arreglar el fregadero del piso.",
-                "english": "I need to fix the sink in my apartment."
-            },
-            {
-                "spanish": "El piso de al lado está alquilado.",
-                "english": "The apartment next door is rented."
-            }
-        ]
+        ],
     },
     {
         "term": "rebotar",
-        "meaning": "bounce",
         "examples": [
             {
                 "spanish": "El balón rebota contra el suelo.",
-                "english": "The ball is bouncing on the ground."
+                "english": "The ball is bouncing on the ground.",
             },
+            {"spanish": "¡Rebota más alto!", "english": "Bounce higher!"},
             {
-                "spanish": "¡Rebota más alto!",
-                "english": "Bounce higher!"
-            },
-            {
-                "spanish": "Los delfines pueden «ver» rebotando ondas sonoras en su entorno."
-                "english": "Dolphins can 'see' by bouncing sound waves off their surroundings."
+                "spanish": "Los delfines pueden «ver» rebotando ondas sonoras en su entorno.",
+                "english": "Dolphins can 'see' by bouncing sound waves off their surroundings.",
             },
             {
                 "spanish": "Rebotaremos la luz en la luna.",
-                "english": "We will bounce the light off the moon."
+                "english": "We will bounce the light off the moon.",
             },
-        ]
-    }
+        ],
+    },
+    {
+        "term": "piso",
+        "examples": [
+            {
+                "spanish": "—Vivo en un piso en el centro de la ciudad —dijo María.",
+                "english": '"I live in an apartment in the city center," said María.',
+            },
+            {
+                "spanish": "El piso de mi hermano tiene tres dormitorios.",
+                "english": "My brother's apartment has three bedrooms.",
+            },
+            {
+                "spanish": "Necesito arreglar el fregadero del piso.",
+                "english": "I need to fix the sink in my apartment.",
+            },
+            {
+                "spanish": "El piso de al lado está alquilado.",
+                "english": "The apartment next door is rented.",
+            },
+        ],
+    },
     {
         "term": "muñeca",
-        "meaning": "doll, wrist",
         "examples": [
             {
                 "spanish": "Le regalaron una muñeca preciosa por su cumpleaños.",
-                "english": "They gave her a pretty doll for her birthday."
+                "english": "They gave her a pretty doll for her birthday.",
             },
             {
                 "spanish": "Se cayó patinando y se rompió la muñeca.",
-                "english": "She fell when she was skating and broke her wrist."
+                "english": "She fell when she was skating and broke her wrist.",
             },
             {
                 "spanish": "Se puso una pulsera en la muñeca izquierda.",
-                "english": "She put the bracelet on her left wrist."
+                "english": "She put the bracelet on her left wrist.",
             },
             {
                 "spanish": "La pequeña María nunca dormía sin su muñeca favorita.",
-                "english": "Little Maria never slept without her favorite doll."
-            }
-        ]
+                "english": "Little Maria never slept without her favorite doll.",
+            },
+        ],
+    },
+)
+
+
+def _compact_words(entries: Sequence[Mapping[str, Any]]) -> str:
+    """A ``{"words": [...]}`` object, compact but with one entry per line.
+
+    The model follows the layout of the examples, and every byte of
+    indentation it copies is billed as output.
+    """
+    lines = ",\n".join(json.dumps(entry, ensure_ascii=False) for entry in entries)
+    return f'{{"words": [\n{lines}\n]}}'
+
+
+def fill_examples(
+    template: str,
+    *,
+    example_input: Sequence[Mapping[str, Any]],
+    example_output: Sequence[Mapping[str, Any]],
+) -> str:
+    """Substitute the worked example into a system prompt template.
+
+    The result is still a ``%``-template taking ``dialect``, so any ``%`` in
+    the example text is escaped to survive that second substitution.
+    """
+    return template % {
+        "dialect": "%(dialect)s",
+        "example_input": json.dumps(
+            example_input, ensure_ascii=False, indent=4
+        ).replace("%", "%%"),
+        "example_output": _compact_words(example_output).replace("%", "%%"),
     }
-]
-"""
+
+
+MULTI_SENTENCE_SYSTEM_PROMPT: Final[str] = fill_examples(
+    _MULTI_SENTENCE_SYSTEM_TEMPLATE,
+    example_input=_MULTI_SENTENCE_EXAMPLE_INPUT,
+    example_output=_MULTI_SENTENCE_EXAMPLE_OUTPUT,
+)
+
+MULTI_SENTENCE_RESPONSE_SCHEMA: Final[Mapping[str, Any]] = {
+    "type": "object",
+    "properties": {
+        "words": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "term": {"type": "string"},
+                    "examples": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "spanish": {"type": "string"},
+                                "english": {"type": "string"},
+                            },
+                            "required": ["spanish", "english"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": ["term", "examples"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["words"],
+    "additionalProperties": False,
+}
 
 MULTI_SENTENCE_PROMPT_TEMPLATE: Final[str] = """\
 Prompt:
@@ -381,33 +432,22 @@ word when selecting sentences. In this example, only use meanings of "fiambre" t
 to food, and the "headword" output should be "fiambre (comida)". The note should always be
 in a single set of parentheses after the headword.
 
-The output format should also be JSON, and be structured like so, as a list of JSON objects:
+The output should also be JSON: an object whose "words" list holds one entry for each unique highlighted word, structured like so:
 
-```json
-[
-    {
-      // Required fields for each dictionary entry
-      "highlight": "string - the word as it appears in text",
-      "headword": "string - the dictionary form of the word",
-      "part_of_speech": "string - grammatical category (e.g., 'nf' for feminine noun)",
-      "meaning": "string - English translation",
-      "article": "string - Spanish article (la/el/los/las)",
-      "examples": [
-        {
-          "spanish": "string - example sentence in Spanish",
-          "english": "string - English translation of the example"
-          "source_id": "int - The source_id value for the input word"
-        }
-        // ... can have multiple examples
-      ]
-    }
-    // One entry for each unique highlighted word
-]
-```
+{"words": [
+  {
+    "highlight": "the word as it appears in the text",
+    "headword": "the dictionary form of the word",
+    "part_of_speech": "grammatical category (e.g. 'nf' for a feminine noun)",
+    "meaning": "English translation",
+    "article": "Spanish article (el/la/los/las), or null",
+    "examples": [
+      {"spanish": "example sentence in Spanish", "english": "English translation of the example", "source_id": <the integer source_id of the input entry>}
+    ]
+  }
+]}
 
-Use EXACTLY the format above, do not try wrapping it in a top-level dictionary.
-Do not include the markdown (```json"/"```") wrapper, I want to directly parse
-the output as JSON.
+Write the JSON compactly, without indentation, and do not wrap it in a markdown code block: I want to parse the output directly as JSON.
 
 Only populate "article" for nouns. Valid parts of speech are:
 
@@ -446,3 +486,46 @@ INPUT:
 OUTPUT:
 -------
 """
+
+BOOK_ANNOTATION_RESPONSE_SCHEMA: Final[Mapping[str, Any]] = {
+    "type": "object",
+    "properties": {
+        "words": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "highlight": {"type": "string"},
+                    "headword": {"type": "string"},
+                    "part_of_speech": {"type": "string"},
+                    "meaning": {"type": "string"},
+                    "article": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+                    "examples": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "spanish": {"type": "string"},
+                                "english": {"type": "string"},
+                                "source_id": {"type": "integer"},
+                            },
+                            "required": ["spanish", "english", "source_id"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": [
+                    "highlight",
+                    "headword",
+                    "part_of_speech",
+                    "meaning",
+                    "article",
+                    "examples",
+                ],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["words"],
+    "additionalProperties": False,
+}

@@ -231,6 +231,52 @@ def test_query_params() -> None:
         "max_tokens": anthropic_sdk.DEFAULT_MAX_TOKENS,
         "effort": "medium",
         "prompt_caching": False,
+        "structured_output": True,
+    }
+
+
+SCHEMA: Final = {
+    "type": "object",
+    "properties": {"words": {"type": "array", "items": {"type": "string"}}},
+    "required": ["words"],
+    "additionalProperties": False,
+}
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected_output_config"),
+    [
+        ({}, {"format": {"type": "json_schema", "schema": SCHEMA}}),
+        (
+            {"effort": "low"},
+            {"effort": "low", "format": {"type": "json_schema", "schema": SCHEMA}},
+        ),
+        ({"structured_output": False}, None),
+    ],
+)
+def test_query_structured_output(
+    kwargs: Mapping[str, Any], expected_output_config: Mapping[str, Any] | None
+) -> None:
+    api = FakeAPI()
+
+    _query(
+        _backend(api, **kwargs),
+        base.Request("the prompt", system_prompt="system", json_schema=SCHEMA),
+    )
+
+    (body,) = api.bodies("POST", "/v1/messages")
+    assert body.get("output_config") == expected_output_config
+
+
+def test_batch_structured_output() -> None:
+    api = FakeAPI()
+
+    _query_batch(_backend(api), [base.Request("uno", json_schema=SCHEMA)])
+
+    (body,) = api.bodies("POST", "/v1/messages/batches")
+    (item,) = body["requests"]
+    assert item["params"]["output_config"] == {
+        "format": {"type": "json_schema", "schema": SCHEMA}
     }
 
 

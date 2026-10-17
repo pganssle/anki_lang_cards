@@ -4,10 +4,11 @@ import argparse
 import asyncio
 import importlib.metadata
 import pathlib
-from collections.abc import Callable, Mapping, Sequence
-from typing import ClassVar, Self
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
+from typing import Any, ClassVar, Self
 
 import attrs
+import llm
 import pytest
 
 from anki_lang_cards import backends, caches, config, model_selection, runner
@@ -671,6 +672,10 @@ class PluginBackend(FakeBackend):
     claims_prefix: ClassVar[bool] = True
 
     @classmethod
+    def supported_features(cls, model_name: str) -> frozenset[base.Feature]:
+        return cls.features
+
+    @classmethod
     def from_config(
         cls, model_name: str, conf: config.Config, features: frozenset[base.Feature]
     ) -> Self:
@@ -738,6 +743,7 @@ def test_anthropic_from_config() -> None:
         "max_tokens": 1234,
         "effort": "low",
         "prompt_caching": False,
+        "structured_output": False,
     }
 
 
@@ -746,6 +752,7 @@ def test_llm_from_config_passes_the_anthropic_key(
 ) -> None:
     class Model:
         needs_key = "anthropic"
+        supports_schema = False
         key: str | None = None
 
     model = Model()
@@ -755,3 +762,131 @@ def test_llm_from_config_passes_the_anthropic_key(
     backends.load("llm").from_config("anthropic/claude-sonnet-5", conf, frozenset())
 
     assert model.key == "secret"
+
+
+#####
+# Structured output
+
+
+@pytest.mark.parametrize(
+    ("argv", "models", "expected"),
+    [
+        ((), config.ModelsConfig(), True),
+        (("--no-structured-output",), config.ModelsConfig(), False),
+        ((), config.ModelsConfig(structured_output=False), False),
+    ],
+)
+def test_make_runner_anthropic_structured_output(
+    argv: Sequence[str], models: config.ModelsConfig, expected: bool
+) -> None:
+    conf = _config(
+        models=attrs.evolve(models, default_model="anthropic/claude-sonnet-5"),
+        anthropic=config.AnthropicConfig(api_key="key"),
+    )
+
+    _, query_runner = model_selection.make_runner(
+        _parse(*argv), conf, caches.CacheTypes.SENTENCES, confirm=_never_asked
+    )
+
+    assert query_runner.backend.structured_output is expected  # type: ignore[attr-defined]
+
+
+class RecordingModel(llm.AsyncModel):
+    """An ``llm`` model that records the schema each prompt was given."""
+
+    model_id = "recording"
+    can_stream = False
+
+    def __init__(self, *, supports_schema: bool = True) -> None:
+        self.supports_schema = supports_schema
+        self.schemas: list[Mapping[str, Any] | None] = []
+
+    async def execute(
+        self,
+        prompt: llm.Prompt,
+        stream: bool,
+        response: llm.AsyncResponse,
+        conversation: llm.AsyncConversation | None,
+    ) -> AsyncIterator[str]:
+        self.schemas.append(prompt.schema)
+        response.set_usage(input=3, output=5)
+        yield '{"words": []}'
+
+
+@pytest.fixture
+def recording_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Callable[[bool], RecordingModel]:
+    """Register a RecordingModel as the only model ``llm`` can find."""
+
+    def register(supports_schema: bool) -> RecordingModel:
+        model = RecordingModel(supports_schema=supports_schema)
+        monkeypatch.setattr(llm_fallback.llm, "get_async_model", lambda name: model)
+        return model
+
+    return register
+
+
+@pytest.mark.parametrize("supports_schema", [True, False])
+def test_llm_structured_output_follows_the_model(
+    recording_model: Callable[[bool], RecordingModel], supports_schema: bool
+) -> None:
+    """Whether the llm fallback can enforce a schema depends on the model."""
+    recording_model(supports_schema)
+    expected = frozenset({base.Feature.STRUCTURED_OUTPUT} if supports_schema else ())
+
+    assert llm_fallback.LLMBackend.supported_features("recording") == expected
+    backend = llm_fallback.LLMBackend("recording")
+    assert backend.structured_output is supports_schema
+    assert backend.query_params() == {"structured_output": supports_schema}
+    assert not llm_fallback.LLMBackend(
+        "recording", structured_output=False
+    ).structured_output
+
+
+@pytest.mark.parametrize(
+    ("supports_schema", "structured_output", "expected"),
+    [
+        (True, True, {"type": "object"}),
+        (True, False, None),
+        (False, True, None),
+    ],
+)
+def test_llm_passes_the_schema(
+    recording_model: Callable[[bool], RecordingModel],
+    supports_schema: bool,
+    structured_output: bool,
+    expected: Mapping[str, Any] | None,
+) -> None:
+    """The schema reaches llm only when structured output is on and supported."""
+    model = recording_model(supports_schema)
+    backend = llm_fallback.LLMBackend("recording", structured_output=structured_output)
+    request = base.Request("prompt", json_schema={"type": "object"})
+
+    response = asyncio.run(backend.query(request))
+
+    assert model.schemas == [expected]
+    assert response["text"] == '{"words": []}'
+    assert response["usage"]["input"] == 3
+    assert response["usage"]["output"] == 5
+
+
+def test_required_structured_output_unavailable() -> None:
+    pytest.importorskip("llm_fake_cards")
+    questions: list[str] = []
+
+    def accept(question: str) -> bool:
+        questions.append(question)
+        return True
+
+    _, query_runner = model_selection.make_runner(
+        _parse("--model", "fake-cards", "--structured-output"),
+        _config(),
+        caches.CacheTypes.SENTENCES,
+        confirm=accept,
+    )
+
+    (question,) = questions
+    assert "Structured output was requested (--structured-output)" in question
+    assert query_runner.backend.features == frozenset()
+    assert not query_runner.backend.structured_output  # type: ignore[attr-defined]

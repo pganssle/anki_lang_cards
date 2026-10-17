@@ -37,3 +37,26 @@ def test_templates_format_cleanly(template: str, keys: Mapping[str, str]) -> Non
 
     for value in keys.values():
         assert value in formatted
+
+
+def test_fill_examples_keeps_percent_signs() -> None:
+    """A ``%`` in an example sentence must survive the later dialect substitution."""
+    template = "In %(dialect)s:\n%(example_input)s\n%(example_output)s\n"
+
+    prompt = prompts.fill_examples(
+        template,
+        example_input=({"term": "por ciento", "meaning": "percent"},),
+        example_output=(
+            {
+                "term": "por ciento",
+                "examples": [
+                    {"spanish": "Subió un 20%.", "english": "It rose 20%."},
+                ],
+            },
+        ),
+    )
+    formatted = prompt % {"dialect": "zz-dialect-zz"}
+
+    assert "In zz-dialect-zz:" in formatted
+    assert '"Subió un 20%."' in formatted
+    assert '"It rose 20%."' in formatted
