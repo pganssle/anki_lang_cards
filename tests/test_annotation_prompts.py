@@ -14,7 +14,7 @@ from anki_lang_cards import annotations_to_csv, prompts
 from anki_lang_cards.backends import base
 
 _INPUT_RE: Final = re.compile(r"INPUT:\n-+\n(?P<json>.*)\n+OUTPUT:\n-+", re.DOTALL)
-MAX_TOKENS: Final = 2048
+BUDGET: Final = 2048
 
 
 def _prompt_input(source_id: int, context_size: int) -> annotations_to_csv.PromptInput:
@@ -44,7 +44,7 @@ def test_last_entry_overflowing_is_not_sent_twice() -> None:
     prompt used to repeat every entry of the prompt before it."""
     requests = list(
         annotations_to_csv.generate_prompts(
-            [_prompt_input(i, 600) for i in range(5)], max_tokens=MAX_TOKENS
+            [_prompt_input(i, 600) for i in range(5)], prompt_token_budget=BUDGET
         )
     )
 
@@ -55,7 +55,7 @@ def test_oversized_entry_gets_its_own_prompt() -> None:
     requests = list(
         annotations_to_csv.generate_prompts(
             [_prompt_input(0, 100), _prompt_input(1, 20_000), _prompt_input(2, 100)],
-            max_tokens=MAX_TOKENS,
+            prompt_token_budget=BUDGET,
         )
     )
 
@@ -89,7 +89,7 @@ def test_packing_properties(context_sizes: Sequence[int]) -> None:
     ]
 
     requests = list(
-        annotations_to_csv.generate_prompts(prompt_inputs, max_tokens=MAX_TOKENS)
+        annotations_to_csv.generate_prompts(prompt_inputs, prompt_token_budget=BUDGET)
     )
 
     packed = [_source_ids(request) for request in requests]
@@ -99,11 +99,65 @@ def test_packing_properties(context_sizes: Sequence[int]) -> None:
     )
     for request, ids in zip(requests, packed):
         # Only an entry alone in its prompt may go over the budget.
-        assert len(ids) == 1 or _estimated_tokens(request) <= MAX_TOKENS
+        assert len(ids) == 1 or _estimated_tokens(request) <= BUDGET
     # A prompt is only closed when the next entry would not have fit in it.
     for request_ids, next_ids in zip(packed, packed[1:]):
         combined = annotations_to_csv.generate_prompts(
             [prompt_inputs[i] for i in (*request_ids, next_ids[0])],
-            max_tokens=10**9,
+            prompt_token_budget=10**9,
         )
-        assert _estimated_tokens(next(iter(combined))) > MAX_TOKENS
+        assert _estimated_tokens(next(iter(combined))) > BUDGET
+
+
+def _entries_that_fit(budget: int, context_size: int) -> int:
+    """How many entries of ``context_size`` characters fit in one prompt of
+    ``budget`` tokens, measured from the prompts themselves."""
+    count = 0
+    while True:
+        (request,) = annotations_to_csv.generate_prompts(
+            [_prompt_input(i, context_size) for i in range(count + 1)],
+            prompt_token_budget=10**9,
+        )
+        if _estimated_tokens(request) > budget:
+            return count
+        count += 1
+
+
+def test_generate_prompts_defaults_to_the_shared_budget() -> None:
+    """Leaving the budget off is the same as passing
+    DEFAULT_PROMPT_TOKEN_BUDGET, which the CLI defaults to as well."""
+    prompt_inputs = [_prompt_input(i, 600) for i in range(60)]
+
+    default = annotations_to_csv.generate_prompts(prompt_inputs)
+    explicit = annotations_to_csv.generate_prompts(
+        prompt_inputs,
+        prompt_token_budget=annotations_to_csv.DEFAULT_PROMPT_TOKEN_BUDGET,
+    )
+
+    assert [_source_ids(r) for r in default] == [_source_ids(r) for r in explicit]
+
+
+def test_default_budget_packs_more_than_the_old_one() -> None:
+    """The budget used to be 2048 tokens, most of which the system prompt
+    took up, so only a few entries went in each request."""
+    old_budget = 2048
+    new_budget = annotations_to_csv.DEFAULT_PROMPT_TOKEN_BUDGET
+    prompt_inputs = [_prompt_input(i, 600) for i in range(60)]
+    per_old_prompt = _entries_that_fit(old_budget, 600)
+    per_new_prompt = _entries_that_fit(new_budget, 600)
+
+    old = list(
+        annotations_to_csv.generate_prompts(
+            prompt_inputs, prompt_token_budget=old_budget
+        )
+    )
+    new = list(annotations_to_csv.generate_prompts(prompt_inputs))
+
+    # The system prompt eats most of the old budget, so the new one fits
+    # many times more entries per prompt than the ratio of the budgets alone.
+    assert per_new_prompt > per_old_prompt * new_budget // old_budget
+    # Entries are all the same size, so every prompt but the last is full.
+    assert [len(_source_ids(r)) for r in old[:-1]] == [per_old_prompt] * (len(old) - 1)
+    assert [len(_source_ids(r)) for r in new[:-1]] == [per_new_prompt] * (len(new) - 1)
+    for request in new:
+        assert _estimated_tokens(request) <= new_budget
