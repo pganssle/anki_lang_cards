@@ -100,6 +100,10 @@ def _get_next_id() -> int:
 @attrs.frozen
 @typing.runtime_checkable
 class Citation(Protocol):
+    # TODO: Nothing reads this any more (prompts number their sources
+    # themselves), but it is still serialized into the Anki source JSON and
+    # takes part in equality; dropping it changes the stored format, so that
+    # is left for a separate change.
     id: int = attrs.field(factory=_get_next_id, kw_only=True)
 
     @property
