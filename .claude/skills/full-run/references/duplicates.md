@@ -66,13 +66,43 @@ merge would lose information you think matters. When you ask, give your
 recommendation and the reason in a sentence or two; the user should be able
 to answer with "yes" or a short correction.
 
+## What an answer does
+
+An answer is not a note to the user; it is acted on. Answers are recorded
+for good in `.cache/merges/decisions.json`, shared by every tool, so the
+same group is never asked about again, and a `merge` puts the merged
+wording into the diff as an update of the existing deck note: importing the
+diff rewrites that note's headword, part of speech and meaning (and
+combines its sentences with the input's). The user sees none of that
+happen, so the report has to show it. For every group you answered
+yourself, `output/runs/<run>/duplicates.md` and the report's "Duplicates
+you answered" section list the disposition and, for a merge or split, the
+existing note's headword, part of speech and meaning before and after.
+
+## Changing an answer
+
+Do not edit `.cache/merges/decisions.json` by hand: its entries are keyed
+on the notes' exact CSV text, and a mis-edit either leaves the old answer in
+place or breaks every tool that reads the file. The supported way to change
+an answer is the same decision file: take your copy of the answered file
+(`output/runs/<run>/merge_candidates.answered.json`), change the entry's
+`disposition` (or `replacements`), and pass the file to the pipeline again
+with `--decision-file`. Recording a group that already has an answer
+replaces the old answer with the new one (the run reports it as "0 new
+answers", which is right), and the diff is regenerated from the new
+decisions. Nothing in the deck has changed until the user imports, so until
+then this is a full undo; after an import, a changed answer is a new update
+of the note, not a restoration of the old one — say so if it comes to that.
+
 ## Mechanics
 
 - If the run rejects the file (exit status 2), it lists every problem at
   once and records nothing; fix them and pass the file again.
 - Write each answer and its reason to `output/runs/<run>/duplicates.md` as
-  you go: the pending file is rewritten on each run, so it does not keep a
-  history.
-- Answers land in `.cache/merges/decisions.json`, shared by every tool, so
-  the same group is never asked about again — get them right rather than
-  fast.
+  you go, and keep a copy of the answered file as
+  `output/runs/<run>/merge_candidates.answered.json`: the pending file is
+  rewritten on each run, so it does not keep a history, and the copy is
+  what changing an answer starts from.
+- Get the answers right rather than fast; a wrong `keep-separate` leaves two
+  cards for one word in the deck and is never asked again, and a wrong
+  `merge` rewrites a note the user may have been happy with.

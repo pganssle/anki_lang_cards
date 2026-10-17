@@ -100,7 +100,10 @@ in the report, since it is the starting point for updating
 `input/book_skip_list.json` so the next run skips them. It records one range
 per book, from the first highlighted page to the last, so copying it in also
 skips any later highlights on the pages in between; say so. `--limit N` processes
-only the first N entries if the user wants a trial run first.
+only the first N entries if the user wants a trial run first, and a limited
+run does not write `processed_pages.json` at all — so after one, any
+`processed_pages.json` lying around is from an earlier run, and must not be
+reported as this one's.
 
 ## 4. Review the word CSV
 
@@ -116,8 +119,10 @@ python scripts/review_words.py export output/words_from_annotations.csv \
 ```
 
 Every row in the chunks lists `deck_matches` — existing notes that are
-probably the same word — and `csv_matches`, other rows of this run that
-probably are, and `--annotations` adds the reading passages its sentences
+probably the same word, found by loose matching against the whole deck
+(`--anki` fetches every note, through `.cache/anki_notes.json`, so the first
+export after a deck change takes a moment) — and `csv_matches`, other rows
+of this run that probably are, and `--annotations` adds the reading passages its sentences
 came from (leave it out if the run started from a word CSV), which is what
 you need to judge the sense used in context. Read
 `references/review-checklist.md` before reviewing; it is what to check and
@@ -181,8 +186,10 @@ any tool. Groups you left as `review` come straight back with exit status 3,
 and the run cannot generate anything until every group has an answer — so
 ask the user about those now, with your reasoning for each, fold their
 answers into the file, and re-run. Record what you decided and why in
-`output/runs/<run>/duplicates.md`, since the pending file is rewritten on
-every run.
+`output/runs/<run>/duplicates.md`, and keep a copy of the answered file as
+`output/runs/<run>/merge_candidates.answered.json`, since the pending file
+is rewritten on every run and the copy is how an answer gets changed later
+(see the "Mechanics" section of `references/duplicates.md`).
 
 When it gets past the duplicates, it generates sentences (a second batch job)
 and writes `output/diff_from_existing.csv` (new and updated notes — the file
@@ -194,7 +201,9 @@ every row this and earlier runs emitted.
 Same mechanics as step 4, on `output/diff_from_existing.csv`. The diff's rows
 all have ranks, so key corrections by `rank` and apply the same corrections
 to `output/output.csv` too, which is how later runs know what was already
-emitted:
+emitted (`apply` refuses `row` keys without `--index`, since a row number
+means nothing in a second file; a rank that recurs in `output.csv` names
+its last row, the one this diff was made from):
 
 ```console
 cp output/diff_from_existing.csv output/output.csv output/runs/<run>/
@@ -244,6 +253,13 @@ updated notes in the diff, and what the LLM steps cost.>
 <Anything you were not confident enough to change: suspect definitions,
 duplicates of deck notes at other ranks, content the user may not want in
 their deck. Most important first; say what you would do.>
+
+## Duplicates you answered
+<One item per group you answered without asking, as duplicates.md
+describes: the disposition, and for a merge the existing note's headword,
+part of speech and meaning before and after. These are recorded for good
+and a merge rewrites the deck note on import, so the user needs to see each
+one here, not a count.>
 
 ## What changed
 <Counts by kind, with links to words-changelog.md, diff-changelog.md and
