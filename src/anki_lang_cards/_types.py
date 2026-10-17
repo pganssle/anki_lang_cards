@@ -431,7 +431,11 @@ class Word:
         # fields, and "#tags column:0" does not override that guess. Either
         # way the empty column would wipe the tags of every updated note.
         # Pointing the importer one past the last column leaves tags unset,
-        # which keeps an existing note's tags (checked against anki 26.9.3).
+        # which keeps an existing note's tags. This was checked against anki
+        # 26.5 and 26.9.3 through the Python API only (get_csv_metadata +
+        # import_csv, see tests/test_anki_import.py); the GUI import
+        # dialog's tags-column dropdown has no such entry, and whether it
+        # passes the value through untouched has not been verified.
         directives.append(f"#tags column:{len(ANKI_IMPORT_COLUMNS) + 1}")
         return tuple(directives)
 
