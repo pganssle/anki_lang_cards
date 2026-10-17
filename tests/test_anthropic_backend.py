@@ -214,10 +214,13 @@ def test_query_records_cache_write_lifetimes(
 
     details = _query(_backend(api), REQUEST)["usage"]["details"]
 
-    lifetimes = {
-        key: value for key, value in details.items() if "_5m_" in key or "_1h_" in key
+    assert details == {
+        "cache_creation_input_tokens": 100,
+        "cache_read_input_tokens": 0,
+        "batch": False,
+        "message_id": "msg_1",
+        **expected,
     }
-    assert lifetimes == expected
 
 
 def test_query_options() -> None:
