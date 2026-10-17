@@ -5,7 +5,7 @@ import csv
 import importlib.util
 import json
 import pathlib
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from typing import Any, Final
 
 import pytest
@@ -526,21 +526,54 @@ def test_export_with_an_exported_deck(
     assert [match["rank"] for match in first["deck_matches"]] == [100]
 
 
+class FakeAnkiClient:
+    """Enough of Anki Connect for the export, with Anki's exact-match search.
+
+    A ``Word:`` search term only finds that spelling, so a fake that handed
+    back whatever it liked would not notice an export asking Anki for the
+    words under review instead of fetching the deck.
+    """
+
+    def __init__(self, deck: Mapping[int, types.Word]):
+        self.deck = dict(deck)
+        self.queries: list[tuple[str, str | None]] = []
+
+    async def get_note_ids(
+        self, deck_name: str, query: str | None = None
+    ) -> Sequence[int]:
+        self.queries.append((deck_name, query))
+        return [
+            note_id
+            for note_id, word in self.deck.items()
+            if query is None or "Word:" not in query or f'"Word:{word.word}"' in query
+        ]
+
+    async def notes_mod_times(self, note_ids: Sequence[int]) -> Mapping[int, int]:
+        return dict.fromkeys(note_ids, 1)
+
+    async def get_anki_notes(
+        self, note_ids: Sequence[int], batch_size: int = 1
+    ) -> AsyncIterator[Mapping[str, Any]]:
+        for note_id in note_ids:
+            yield {"noteId": note_id}
+
+    def word_from_anki_connect_response(self, note: Mapping[str, Any]) -> types.Word:
+        return self.deck[note["noteId"]]
+
+
 def test_export_with_the_live_deck(
     script: Any, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    asked: list[str] = []
-
-    class FakeClient:
-        async def retrieve_matching_words(
-            self, deck_name: str, words: Sequence[types.Word], *, cache: Any
-        ) -> Mapping[int, types.Word]:
-            asked.append(deck_name)
-            return {1: make_word("despedirse", rank=200, part_of_speech="vi")}
+    client = FakeAnkiClient(
+        {
+            1: make_word("gatos", rank=100),
+            2: make_word("despedirse", rank=200, part_of_speech="vi"),
+        }
+    )
 
     @contextlib.asynccontextmanager
-    async def create_client() -> Iterator[FakeClient]:
-        yield FakeClient()
+    async def create_client() -> AsyncIterator[FakeAnkiClient]:
+        yield client
 
     monkeypatch.setattr(anki_import, "create_client", create_client)
     monkeypatch.chdir(tmp_path)
@@ -549,8 +582,11 @@ def test_export_with_the_live_deck(
     run(script, "export", source, "--out-dir", "chunks", "--anki", "--deck-name", "D")
 
     chunk = json.loads((tmp_path / "chunks" / "chunk-001.json").read_text())
-    assert asked == ["D"]
+    assert [deck_name for deck_name, _ in client.queries] == ["D"]
+    # Variant spellings are only found by fetching the whole deck.
+    assert [match["rank"] for match in chunk[0]["deck_matches"]] == [100]
     assert [match["rank"] for match in chunk[1]["deck_matches"]] == [200]
+    assert (tmp_path / anki_import.DEFAULT_NOTE_CACHE).exists()
 
 
 def test_export_rows_names_other_sources(script: Any) -> None:

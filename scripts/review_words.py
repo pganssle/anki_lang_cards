@@ -423,12 +423,21 @@ def format_changelog(source: pathlib.Path, changes: Sequence[Change]) -> str:
     return "\n".join(lines) + "\n"
 
 
-async def _load_live_deck(
-    deck_name: str, words: Sequence[types.Word]
-) -> Sequence[types.Word]:
+async def _load_live_deck(deck_name: str) -> Sequence[types.Word]:
+    """Every note in the deck, mostly read back from the note cache.
+
+    The deck has to be fetched whole: Anki's search is for exact spellings,
+    so asking it for the words under review would never turn up the variant
+    spellings that ``fold_keys`` exists to point out. The note cache makes
+    this cheap after the first run, since only notes that changed since are
+    fetched again.
+    """
     note_cache = anki_import.NoteCache(anki_import.DEFAULT_NOTE_CACHE)
     async with anki_import.create_client() as client:
-        notes = await client.retrieve_matching_words(deck_name, words, cache=note_cache)
+        note_ids = await client.get_note_ids(deck_name, '"Rank:re:.*"')
+        notes = await anki_import.fetch_note_words(
+            client, note_ids, cache=note_cache, description="Fetching deck notes"
+        )
     return list(notes.values())
 
 
@@ -500,7 +509,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.exported_deck is not None:
             deck_words = anki_import.load_anki_words(args.exported_deck)
         elif args.anki:
-            deck_words = asyncio.run(_load_live_deck(args.deck_name, words))
+            deck_words = asyncio.run(_load_live_deck(args.deck_name))
         else:
             print(
                 "No deck given (--anki or --exported-deck): deck_matches will "
