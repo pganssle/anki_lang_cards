@@ -29,22 +29,45 @@ sentences*, since that is what the card teaches.
   word written two ways; make them agree.
 - **Notes and qualifiers** go in one parenthetical after the headword:
   `fiambre (comida)`, `sortear (obstáculo)`.
-- **Phrases.** If the word only appears inside a fixed expression, the
-  expression is the headword: `de tapadillo` rather than a noun `tapadillo`
-  whose definition admits it is only used in that phrase; `hincar el diente
-  (a)`. Conversely, an ellipsis from one sentence is not an idiom (`bastante
-  con que`).
+- **Phrases and idioms.** Which fix applies depends on what the sentences
+  use:
+  - Only the fixed expression: the expression is the headword, `de
+    tapadillo` rather than a noun `tapadillo` whose definition admits it is
+    only used in that phrase; `hincar el diente (a)`.
+  - The literal sense as well, or the idiom is one of the word's common
+    uses: keep the word, name the idiom in the meaning (`toque`: "touch,
+    ringing; *toque de queda* = curfew"), and make sure the main sentence
+    shows the literal sense. `sarna` had the proverb "Sarna con gusto no
+    pica" as its main sentence, which teaches nothing about mange; that
+    belongs as an extra with a gloss, behind a sentence about mange.
+  - The expression already has a deck note, or a row of its own in this
+    run: the word row is a duplicate of it (see "Whether it should be a card
+    at all").
+  An ellipsis from one sentence is not an idiom (`bastante con que`).
 - **Typos and accents**: `apañárselas`, not `apañarselas`.
 - **Plurals and inflected forms.** The headword is the singular and the
-  infinitive, even when the highlight was `gatos` or `vayamos`.
+  infinitive, even when the highlight was `gatos` or `vayamos`. The
+  exception is a noun that is only used in the plural (`albores`,
+  `cagarrinas`): keep the plural headword and give it a plural code (see
+  below).
 
 ## Part of speech and article
 
 Valid codes are the ones the prompts list: `nm`, `nf`, `nm/f`, `vtr`, `vi`,
-`v phr`, `adv`, `adj`, `adj mf`, `interj`, `conj`, `pron`, `prep`. Check the
-code against the sentence (`no obstante` is `conj`/`adv`, not both on two
-rows; `candil` is a noun, not an adjective). Nouns have an article (`el`,
-`la`, `el/la` for `nm/f`); nothing else does.
+`v phr`, `adv`, `adj`, `adj mf`, `interj`, `conj`, `pron`, `prep`, plus
+`nm pl` and `nf pl` for a noun only used in the plural. Check the code
+against the sentence (`no obstante` is `conj`/`adv`, not both on two rows;
+`candil` is a noun, not an adjective). Nouns have an article (`el`, `la`,
+`el/la` for `nm/f`, `los`/`las` for a plural code); nothing else does.
+
+- **One code per row.** `nm/f, adj` is not a code and `apply` will reject
+  it. A word that is both an adjective and a noun (`escrito/a`, `guacho/a`)
+  gets the code for the way the sentences use it — both were nouns in
+  theirs, so `nm` and `nm/f` — and the other use goes in the meaning:
+  "writing, document; (adj) written".
+- **Number.** A plural headword with a singular code (`cagarrinas` as `nf`)
+  is one or the other: either the word is plural-only, so `nf pl` with
+  `las`, or the headword should be the singular.
 
 ## The meaning
 
@@ -60,7 +83,19 @@ trap.
   because the author used it oddly. When the book's usage is nonstandard,
   define the standard sense and say so.
 - **Missing the everyday sense.** `remangarse` without *to roll up one's
-  sleeves*; `tropezón` without *a stumble*; `asta` without *horn, flagpole*.
+  sleeves*; `tropezón` without *a stumble*; `asta` without *horn, flagpole*;
+  `techo` as only "roof" (it is *ceiling* first; *tejado* is the usual word
+  for an exterior roof).
+- **A sense the sentences use but the meaning lacks.** The extra sentences
+  often show a second sense the definition never mentions: `acceder` ("to
+  access" with only *to agree, consent*), `comprometer` (*comprometerse*,
+  "to commit oneself", with only *to compromise, endanger*), `marcador`
+  (also "marker"), `llevarse` (*llevarse bien/mal*, "to get along"),
+  `carril` (also "track"). If the second sense is common, widen the meaning
+  to cover it, as in each of these; if it is not, replace the sentence (see
+  "Sentences"). A correction cannot create a row, so if the second sense
+  deserves a card of its own, or already has a row in this run, say so in
+  your notes.
 - **Invented detail.** `florete` as "foil, a helmet with a pointed spike" —
   the second half came from one ambiguous scene.
 - **Typos in the English** ("unncessary", "grop", "glothing") and leftover
@@ -68,25 +103,6 @@ trap.
 
 If you are not sure of a meaning, do not guess a correction: flag it in your
 notes for the user, saying what you suspect.
-
-## Problems the owner has flagged by hand
-
-These came up again and again in the cards the owner red-flagged, and no
-script can catch them:
-
-- **Sentences using a sense the definition lacks.** `acceder`,
-  `comprometer`, `marcador` (also "marker"), `llevarse` (also "to get along
-  with"), `carril` (also "track"): the extra sentences show a second sense
-  the definition never mentions. Extend the definition, or move the sentence
-  to a card for that sense.
-- **Definitions that are wrong or off.** `techo` is "ceiling" more than
-  "roof"; `hurón` is "ferret"; "no pares de…" was translated as "stop".
-- **Part of speech and number.** `escrito/a` used as a noun in its sentence;
-  `guacho/a` adjective or noun; `albores` and `cagarrinas`, used only in the
-  plural.
-- **Idioms filed under the literal word.** "Sarna con gusto no pica" doesn't
-  use the literal meaning of `sarna`; "el toque de queda" is "curfew", which
-  `toque` alone doesn't teach. Flag these for a phrase card.
 
 ## Whether it should be a card at all
 
@@ -140,7 +156,9 @@ clearest. When removing weak sentences leaves fewer, write replacements.
   edit; if not, replace it. Leave faithful extracts alone apart from real
   errors — those are the user's reading, which is the point of the card.
 - **Translation** should carry the sense, not be word-for-word, and should
-  not change the meaning.
+  not change the meaning. Watch for dropped negation in particular: an
+  extra for `chacharear` rendered "no pares de…" as "stop…" when *no parar
+  de* + infinitive is *to keep on doing*. Fix the English in place.
 
 When you write a sentence, follow the rules the pipeline's own prompts use,
 so yours read like the rest of the deck:
