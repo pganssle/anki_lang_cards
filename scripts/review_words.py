@@ -37,6 +37,10 @@ duplicates by loose string matching (see ``fold_keys``); a row's
 ``deck_matches`` leave out the deck note with the row's own rank, which in a
 diff is the note the row updates. With ``--annotations``, each row also
 carries the reading passages its book sentences came from.
+
+Both commands read the CSV through ``Word.words_from_csv``, which skips rows
+with no word or no meaning, so ``apply`` drops such rows from its output
+even with no corrections.
 """
 
 import argparse
@@ -129,7 +133,7 @@ def _deck_entry(word: types.Word) -> Mapping[str, Any]:
     }
 
 
-ContextKey = tuple[str, tuple[int, ...]]
+type ContextKey = tuple[str, tuple[int, ...]]
 
 
 def _context_key(title: str, pages: Iterable[int] | None) -> ContextKey:

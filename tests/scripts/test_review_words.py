@@ -438,13 +438,30 @@ def test_apply_with_no_corrections_changes_nothing(
         max_size=5,
     )
 )
-def test_round_trip_keeps_sentences(script: Any, spanish: Sequence[str]) -> None:
-    """Whatever the sentences contain, an untouched row comes back intact."""
+def test_round_trip_keeps_sentences(
+    script: Any, tmp_path_factory: pytest.TempPathFactory, spanish: Sequence[str]
+) -> None:
+    """Whatever the sentences contain, a corrected row survives the CSV.
+
+    The sentences are written as JSON inside a CSV field, so this is the
+    path that quoting mistakes would show up on.
+    """
     word = make_word("gato", sentences=[sentence(text.strip()) for text in spanish])
+    corrections = [{"row": 0, "word": "gato", "reason": "x", "set": {"meaning": "cat"}}]
+    path = tmp_path_factory.mktemp("round-trip") / "words.csv"
 
-    (revised,), _ = apply(script, [], [word])
+    revised, _ = apply(script, corrections, [word])
+    header = ",".join(types.Word.make_csv_header()) + "\n"
+    script.write_csv(path, [header], revised)
+    (reloaded,) = types.Word.words_from_csv(path)
 
-    assert [s.spanish for s in revised.sentences] == [s.spanish for s in word.sentences]
+    assert reloaded.meaning == "cat"
+    assert [s.spanish for s in reloaded.sentences] == [
+        s.spanish for s in word.sentences
+    ]
+    assert [s.english for s in reloaded.sentences] == [
+        s.english for s in word.sentences
+    ]
 
 
 def test_header_row_is_kept(script: Any, tmp_path: pathlib.Path) -> None:
@@ -525,15 +542,15 @@ def test_apply_reports_problems(
     assert not (tmp_path / "out.csv").exists()
 
 
-def test_export_with_an_exported_deck(
-    script: Any, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    deck_file = tmp_path / "deck.txt"
-    deck_file.write_text("")
-    monkeypatch.setattr(
-        anki_import, "load_anki_words", lambda path: [make_word("gato", rank=100)]
-    )
-    source = write_words(tmp_path / "words.csv", WORDS)
+EXPORTED_DECK: Final = (
+    pathlib.Path(__file__).parent.parent / "data" / "cards" / "exported_deck.txt"
+)
+
+
+def test_export_with_an_exported_deck(script: Any, tmp_path: pathlib.Path) -> None:
+    # The fixture deck has "solitario" (adj) at rank 900.
+    words = (make_word("solitarios", part_of_speech="adj"), *WORDS)
+    source = write_words(tmp_path / "words.csv", words)
 
     run(
         script,
@@ -542,11 +559,12 @@ def test_export_with_an_exported_deck(
         "--out-dir",
         tmp_path / "chunks",
         "--exported-deck",
-        deck_file,
+        EXPORTED_DECK,
     )
 
-    first, *_ = json.loads((tmp_path / "chunks" / "chunk-001.json").read_text())
-    assert [match["rank"] for match in first["deck_matches"]] == [100]
+    first, *rest = json.loads((tmp_path / "chunks" / "chunk-001.json").read_text())
+    assert [match["rank"] for match in first["deck_matches"]] == [900]
+    assert all(row["deck_matches"] == [] for row in rest)
 
 
 class FakeAnkiClient:
