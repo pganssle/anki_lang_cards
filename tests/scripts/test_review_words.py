@@ -215,6 +215,24 @@ def test_drop_and_rank_lookup(script: Any) -> None:
     assert change.result is None
 
 
+def test_a_repeated_rank_names_the_last_row(script: Any) -> None:
+    """output.csv accumulates runs, so a rank can recur; the latest row wins."""
+    words = [
+        make_word("gato", rank=7, meaning="first run"),
+        make_word("perro", rank=8),
+        make_word("gato", rank=7, meaning="second run"),
+    ]
+
+    revised, (change,) = apply(
+        script,
+        [{"rank": 7, "word": "gato", "reason": "x", "set": {"meaning": "cat"}}],
+        words,
+    )
+
+    assert change.word.meaning == "second run"
+    assert [word.meaning for word in revised] == ["first run", "a meaning", "cat"]
+
+
 def test_sentence_edits(script: Any) -> None:
     (gato, *rest), _ = apply(
         script,

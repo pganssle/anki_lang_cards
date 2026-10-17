@@ -342,8 +342,16 @@ def apply_corrections(
     corrections: Sequence[Mapping[str, Any]],
     reviewer_model: str,
 ) -> tuple[Sequence[types.Word], Sequence[Change]]:
-    """Apply corrections in order, or raise naming every problem."""
-    by_rank = {word.rank: row for row, word in enumerate(words) if word.rank}
+    """Apply corrections in order, or raise naming every problem.
+
+    A rank names the last row that has it. ``output.csv`` accumulates every
+    run's rows, so a note updated in two runs is in it twice under one rank,
+    and the later row is the one the current diff was made from.
+    """
+    by_rank: dict[int, int] = {}
+    for row, word in enumerate(words):
+        if word.rank:
+            by_rank[word.rank] = row
     current: list[types.Word | None] = list(words)
     reviewer = types.ModelCitation(model=reviewer_model)
     changes: list[Change] = []
