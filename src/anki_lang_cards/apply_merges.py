@@ -349,8 +349,9 @@ def apply_decisions(
     mechanically, which is only appropriate when nobody is going to read the
     result.
 
-    A merge or split whose ranks fail `rank_problem` is not carried out; the
-    group is reported as unresolved so the question is asked again.
+    A merge or split whose ranks fail `rank_problem` is not carried out,
+    whether the ranks came from a decision or from the resolver; the group is
+    reported as unresolved so the question is asked again.
     """
     by_rank = _decisions_by_rank(decisions)
     current, revised = _apply_revisions(tuple(words), decisions)
@@ -463,6 +464,16 @@ def apply_decisions(
             for (candidate, _, dropped), result in zip(pending, results, strict=True):
                 if result is None:
                     declined.append(candidate)
+                    consumed.difference_update(id(w) for w in candidate.words)
+                    continue
+                if (
+                    rank_problem(triage.Disposition.MERGE, candidate.words, (result,))
+                    is not None
+                ):
+                    # The resolver replays wording recorded elsewhere, and a
+                    # rank from there is no more trustworthy than one in a
+                    # decision: refuse it the same way.
+                    leftover.append(candidate)
                     consumed.difference_update(id(w) for w in candidate.words)
                     continue
                 round_merges.append(

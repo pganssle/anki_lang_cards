@@ -928,6 +928,27 @@ class TestRankValidation:
         assert set(outcome.words) == set(deck)
         assert [set(c.words) for c in outcome.unresolved] == [set(deck[:2])]
 
+    def test_a_resolver_result_on_an_unrelated_rank_is_refused(
+        self, comparer, decisions, deck
+    ) -> None:
+        """Wording replayed from the legacy cache gets the same check."""
+        decide(decisions, deck[:2], triage.Disposition.MERGE)
+
+        outcome = apply_merges.apply_decisions(
+            deck,
+            decisions,
+            comparer,
+            resolver=lambda groups: [make_word("gato", "nm", "cat, tomcat", 300)],
+        )
+
+        assert outcome.merges == ()
+        assert outcome.declined == ()
+        assert set(outcome.words) == set(deck)
+        assert [set(c.words) for c in outcome.unresolved] == [set(deck[:2])]
+        assert apply_merges.superseded_notes(outcome, deck) == ()
+        to_import = apply_merges.words_to_import(outcome, deck[:2])
+        assert all(word.rank != 300 for word in to_import)
+
     def test_identical_notes_merge_despite_a_stale_bad_decision(
         self, comparer, decisions, deck
     ) -> None:
