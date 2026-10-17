@@ -266,13 +266,31 @@ def _compact_words(entries: Sequence[Mapping[str, Any]]) -> str:
     return f'{{"words": [\n{lines}\n]}}'
 
 
-MULTI_SENTENCE_SYSTEM_PROMPT: Final[str] = _MULTI_SENTENCE_SYSTEM_TEMPLATE % {
-    "dialect": "%(dialect)s",
-    "example_input": json.dumps(
-        _MULTI_SENTENCE_EXAMPLE_INPUT, ensure_ascii=False, indent=4
-    ),
-    "example_output": _compact_words(_MULTI_SENTENCE_EXAMPLE_OUTPUT),
-}
+def fill_examples(
+    template: str,
+    *,
+    example_input: Sequence[Mapping[str, Any]],
+    example_output: Sequence[Mapping[str, Any]],
+) -> str:
+    """Substitute the worked example into a system prompt template.
+
+    The result is still a ``%``-template taking ``dialect``, so any ``%`` in
+    the example text is escaped to survive that second substitution.
+    """
+    return template % {
+        "dialect": "%(dialect)s",
+        "example_input": json.dumps(
+            example_input, ensure_ascii=False, indent=4
+        ).replace("%", "%%"),
+        "example_output": _compact_words(example_output).replace("%", "%%"),
+    }
+
+
+MULTI_SENTENCE_SYSTEM_PROMPT: Final[str] = fill_examples(
+    _MULTI_SENTENCE_SYSTEM_TEMPLATE,
+    example_input=_MULTI_SENTENCE_EXAMPLE_INPUT,
+    example_output=_MULTI_SENTENCE_EXAMPLE_OUTPUT,
+)
 
 MULTI_SENTENCE_RESPONSE_SCHEMA: Final[Mapping[str, Any]] = {
     "type": "object",
